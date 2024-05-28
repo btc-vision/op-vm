@@ -1,0 +1,11 @@
+[package]
+name = "wasmer-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasmer = "4.3.1"
+wasmer-compiler-singlepass = "4.3.1"
+wasmer-middlewares = "4.3.1"
+anyhow = "1.0.86"
+bytemuck = "1.16.0"
