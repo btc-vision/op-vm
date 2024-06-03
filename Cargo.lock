@@ -150,6 +150,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bsi-wasmer-vm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "wasmer",
+ "wasmer-compiler-singlepass",
+ "wasmer-middlewares",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1849,17 +1860,6 @@ dependencies = [
  "wasmer",
  "wasmer-types",
  "wasmer-vm",
-]
-
-[[package]]
-name = "wasmer-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytemuck",
- "wasmer",
- "wasmer-compiler-singlepass",
- "wasmer-middlewares",
 ]
 
 [[package]]
