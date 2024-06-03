@@ -18,7 +18,7 @@ pub struct Contract {
     pub instance: Instance,
 }
 
-const MAX_GAS: u64 = 1000000000;
+const MAX_GAS: u64 = 300_000_000_000;
 
 impl Contract {
     pub fn new(bytecode: Vec<u8>, address: &str, deployer: &str) -> Self {
