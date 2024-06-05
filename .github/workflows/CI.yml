@@ -91,7 +91,7 @@ jobs:
         if: ${{ !matrix.settings.docker }}
         with:
           node-version: 20
-          cache: yarn
+          cache: npm
       - name: Install
         uses: dtolnay/rust-toolchain@stable
         if: ${{ !matrix.settings.docker }}
@@ -127,7 +127,7 @@ jobs:
         if: matrix.settings.target == 'i686-pc-windows-msvc'
         with:
           node-version: 20
-          cache: yarn
+          cache: npm
           architecture: x86
       - name: Build in docker
         uses: addnab/docker-run-action@v3
@@ -215,7 +215,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: yarn
+          cache: npm
           architecture: x64
       - name: Install dependencies
         run: yarn install
@@ -246,7 +246,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: yarn
+          cache: npm
       - name: Install dependencies
         run: yarn install
       - name: Download artifacts
@@ -276,7 +276,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: yarn
+          cache: npm
       - name: Install dependencies
         run: |
           yarn config set supportedArchitectures.libc "musl"
@@ -414,7 +414,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: yarn
+          cache: npm
       - name: Install dependencies
         run: yarn install
       - name: Download macOS x64 artifact
@@ -453,7 +453,7 @@ jobs:
 #        uses: actions/setup-node@v4
 #        with:
 #          node-version: 20
-#          cache: yarn
+#          cache: npm
 #      - name: Install dependencies
 #        run: yarn install
 #      - name: Download all artifacts
