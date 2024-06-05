@@ -1,0 +1,15 @@
+{
+  "name": "@btc-vision/bsi-wasmer-vm-darwin-universal",
+  "version": "0.0.0",
+  "os": [
+    "darwin"
+  ],
+  "main": "bsi-wasmer-vm.darwin-universal.node",
+  "files": [
+    "bsi-wasmer-vm.darwin-universal.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

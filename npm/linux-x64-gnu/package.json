@@ -1,0 +1,21 @@
+{
+  "name": "@btc-vision/bsi-wasmer-vm-linux-x64-gnu",
+  "version": "0.0.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "bsi-wasmer-vm.linux-x64-gnu.node",
+  "files": [
+    "bsi-wasmer-vm.linux-x64-gnu.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  },
+  "libc": [
+    "glibc"
+  ]
+}
