@@ -1,8 +1,25 @@
 {
   "name": "@btc-vision/bsi-wasmer-vm",
   "version": "0.1.0",
+  "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",
+  "homepage": "https://opnet.org/",
+  "keywords": [
+    "opnet",
+    "bsi",
+    "bsi-binary",
+    "bsi-bitcoin-rpc",
+    "bitcoin",
+    "btc",
+    "bitcoin smart contracts",
+    "smart inscriptions",
+    "ordinals"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/bsi-wasmer-vm.git"
+  },
   "napi": {
     "name": "bsi-wasmer-vm",
     "triples": {
@@ -23,7 +40,6 @@
       ]
     }
   },
-  "license": "",
   "engines": {
     "node": ">= 16"
   },
@@ -31,6 +47,7 @@
     "artifacts": "napi artifacts",
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
+    "test": "echo ''",
     "prepublishOnly": "napi prepublish -t npm",
     "universal": "napi universal",
     "version": "napi version"
