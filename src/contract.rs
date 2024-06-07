@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use wasmer::{
-    CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Module, Store, Value,
+    CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Module, RuntimeError,
+    Store, Value,
 };
 use wasmer::sys::EngineBuilder;
 use wasmer_compiler_singlepass::Singlepass;
@@ -56,7 +57,7 @@ impl Contract {
         }
     }
 
-    pub fn init(&mut self) {
+    pub fn init(&mut self) -> Result<Box<[Value]>, RuntimeError> {
         let __new = self.instance.exports.get_function("__new").unwrap();
         let __pin = self.instance.exports.get_function("__pin").unwrap();
         let memory = self.instance.exports.get_memory("memory").unwrap();
@@ -66,31 +67,34 @@ impl Contract {
         let deployer_address: i32 =
             lower_string(&mut self.store, &self.deployer, __new, __pin, memory).unwrap() as i32;
 
-        self.call_wasm_function("INIT", &[
-            Value::I32(contract_address),
-            Value::I32(deployer_address),
-        ]);
+        self.call_wasm_function(
+            "INIT",
+            &[Value::I32(contract_address), Value::I32(deployer_address)],
+        )
     }
 
-    pub fn call(&mut self, function: &str, params: &[Value]) {
-        self.call_wasm_function(function, params);
+    pub fn call(&mut self, function: &str, params: &[Value]) -> Result<Box<[Value]>, RuntimeError> {
+        self.call_wasm_function(function, params)
     }
 
-    fn call_wasm_function(&mut self, function: &str, params: &[Value]) {
+    fn call_wasm_function(
+        &mut self,
+        function: &str,
+        params: &[Value],
+    ) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
 
         let export = self.instance.exports.get_function(function).unwrap();
 
-        match export.call(
-            &mut self.store,
-            params,
-        ) {
-            Ok(results) => println!("Results: {:?}", results),
+        let response = export.call(&mut self.store, params);
+
+        match &response {
+            Ok(results) => println!("Results: {:?}", &results),
             Err(error) => {
                 println!("Execution failed");
                 let remaining_points = get_remaining_points(&mut self.store, &self.instance);
                 match remaining_points {
-                    MeteringPoints::Remaining(_) => eprintln!("{error}"),
+                    MeteringPoints::Remaining(_) => eprintln!("{}", &error),
                     MeteringPoints::Exhausted => (),
                 };
             }
@@ -104,5 +108,7 @@ impl Contract {
         };
 
         println!("Gas used: {gas_used}/{MAX_GAS}");
+
+        response
     }
 }
