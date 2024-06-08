@@ -13,7 +13,7 @@ wasmer-middlewares = "4.3.1"
 anyhow = "1.0.86"
 bytemuck = "1.16.0"
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
-napi = { version = "2.12.2", default-features = false, features = ["napi4"] }
+napi = { version = "2.12.2", default-features = false, features = ["napi4", "napi5", "napi6"] }
 napi-derive = "2.12.2"
 wasmer-types = "4.3.1"
 lazy_static = "1.4.0"

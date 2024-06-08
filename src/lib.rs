@@ -3,20 +3,13 @@
 #[macro_use]
 extern crate napi_derive;
 
-use std::fs;
-
-use napi::bindgen_prelude::Buffer;
-use wasmer::Value;
-use wasmer_types::RawValue;
-
-use contract::Contract;
-
 mod contract;
 mod vm;
+mod api;
 
 const CONTRACT_PATH: &str = "resources/release.wasm";
 
-#[napi]
+/*#[napi]
 pub fn test(contract_address: String, deployer_address: String) {
     let contract_bytecode = fs::read(CONTRACT_PATH).expect("Unable to read contract file");
     let mut contract = Contract::new(contract_bytecode, &contract_address, &deployer_address);
@@ -46,4 +39,4 @@ pub fn call_test_2(function: String, data: Buffer) {
     let raw_values: Vec<RawValue> = chunks.map(|chunk| RawValue { bytes: <[u8; 16]>::try_from(chunk).unwrap() }).collect();
 
     let _ = contract.call_raw(&function, raw_values);
-}
+}*/
