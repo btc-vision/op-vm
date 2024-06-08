@@ -8,6 +8,7 @@ use wasmer::sys::EngineBuilder;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 use wasmer_middlewares::Metering;
+use wasmer_types::RawValue;
 
 use crate::vm::{get_op_cost, lower_string};
 
@@ -77,17 +78,35 @@ impl Contract {
         self.call_wasm_function(function, params)
     }
 
+    pub fn call_raw(&mut self, function: &str, params: Vec<RawValue>) -> Result<Box<[Value]>, RuntimeError> {
+        self.call_wasm_function_raw(function, params)
+    }
+
     fn call_wasm_function(
         &mut self,
         function: &str,
         params: &[Value],
     ) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
-
         let export = self.instance.exports.get_function(function).unwrap();
-
         let response = export.call(&mut self.store, params);
+        self.print_results(&response);
+        response
+    }
 
+    fn call_wasm_function_raw(
+        &mut self,
+        function: &str,
+        params: Vec<RawValue>,
+    ) -> Result<Box<[Value]>, RuntimeError> {
+        println!("Calling {function}...");
+        let export = self.instance.exports.get_function(function).unwrap();
+        let response = export.call_raw(&mut self.store, params);
+        self.print_results(&response);
+        response
+    }
+
+    fn print_results(&mut self, response: &Result<Box<[Value]>, RuntimeError>) {
         match &response {
             Ok(results) => println!("Results: {:?}", &results),
             Err(error) => {
@@ -108,7 +127,5 @@ impl Contract {
         };
 
         println!("Gas used: {gas_used}/{MAX_GAS}");
-
-        response
     }
 }

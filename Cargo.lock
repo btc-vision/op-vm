@@ -115,12 +115,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "lazy_static",
  "napi",
  "napi-build",
  "napi-derive",
  "wasmer",
  "wasmer-compiler-singlepass",
  "wasmer-middlewares",
+ "wasmer-types",
 ]
 
 [[package]]
