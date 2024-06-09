@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use wasmer::{CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, Value};
+use wasmer::{
+    CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
+    MemoryAccessError, MemoryView, Module, RuntimeError, Store, Value,
+};
 use wasmer::sys::EngineBuilder;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
@@ -56,15 +59,34 @@ impl Contract {
         }
     }
 
+    pub fn init(&mut self) {
+        let new = self.instance.exports.get_function("__new").unwrap();
+        let pin = self.instance.exports.get_function("__pin").unwrap();
+        let memory = self.instance.exports.get_memory("memory").unwrap();
+
+        let contract_address: i32 =
+            lower_string(&mut self.store, &self.address, &new, &pin, &memory).unwrap() as i32;
+        let deployer_address: i32 =
+            lower_string(&mut self.store, &self.deployer, &new, &pin, &memory).unwrap() as i32;
+
+        self.call(
+            "INIT",
+            &[Value::I32(contract_address), Value::I32(deployer_address)],
+        )
+            .unwrap();
+    }
+
     pub fn get_memory(&self) -> &Memory {
         return self.instance.exports.get_memory("memory").unwrap();
     }
 
-    pub fn __new(&mut self, length: i32, id: i32) -> anyhow::Result<i32> {
-        let result = self.call_wasm_function(
-            "__new",
-            &[Value::I32(length << 1), Value::I32(id)],
-        )?;
+    pub fn get_function(&self, function: &str) -> &Function {
+        return self.instance.exports.get_function(function).unwrap();
+    }
+
+    pub fn __new(&mut self, size: i32, id: i32) -> anyhow::Result<i32> {
+        let params = &[Value::I32(size), Value::I32(id)];
+        let result = self.call("__new", params)?;
 
         let pointer = result
             .get(0)
@@ -83,22 +105,6 @@ impl Contract {
         lower_string(&mut self.store, value, &new, &pin, &memory)
     }
 
-    pub fn init(&mut self) {
-        let new = self.instance.exports.get_function("__new").unwrap();
-        let pin = self.instance.exports.get_function("__pin").unwrap();
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-
-        let contract_address: i32 =
-            lower_string(&mut self.store, &self.address, &new, &pin, &memory).unwrap() as i32;
-        let deployer_address: i32 =
-            lower_string(&mut self.store, &self.deployer, &new, &pin, &memory).unwrap() as i32;
-
-        self.call_wasm_function(
-            "INIT",
-            &[Value::I32(contract_address), Value::I32(deployer_address)],
-        ).unwrap();
-    }
-
     pub fn write_pointer(&mut self, offset: u64, value: Vec<u8>) -> Result<(), MemoryAccessError> {
         let memory = self.instance.exports.get_memory("memory").unwrap();
         let view = memory.view(&mut self.store);
@@ -113,11 +119,11 @@ impl Contract {
     }
 
     pub fn __unpin(&mut self, pointer: i32) -> Result<Box<[Value]>, RuntimeError> {
-        self.call_wasm_function("__unpin", &[Value::I32(pointer)])
+        self.call("__unpin", &[Value::I32(pointer)])
     }
 
     pub fn __pin(&mut self, pointer: i32) -> Result<Box<[Value]>, RuntimeError> {
-        self.call_wasm_function("__pin", &[Value::I32(pointer)])
+        self.call("__pin", &[Value::I32(pointer)])
     }
 
     pub fn read_pointer(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
@@ -156,19 +162,6 @@ impl Contract {
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> Result<Box<[Value]>, RuntimeError> {
-        self.call_wasm_function(function, params)
-    }
-
-    #[allow(dead_code)]
-    pub fn call_raw(&mut self, function: &str, params: Vec<RawValue>) -> Result<Box<[Value]>, RuntimeError> {
-        self.call_wasm_function_raw(function, params)
-    }
-
-    fn call_wasm_function(
-        &mut self,
-        function: &str,
-        params: &[Value],
-    ) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
         let export = self.instance.exports.get_function(function).unwrap();
         let response = export.call(&mut self.store, params);
@@ -176,7 +169,8 @@ impl Contract {
         response
     }
 
-    fn call_wasm_function_raw(
+    #[allow(dead_code)]
+    pub fn call_raw(
         &mut self,
         function: &str,
         params: Vec<RawValue>,
