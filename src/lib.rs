@@ -20,7 +20,7 @@ const CONTRACT_PATH: &str = "resources/release.wasm";
 #[napi]
 pub fn test(contract_address: String, deployer_address: String) {
     let contract_bytecode = fs::read(CONTRACT_PATH).expect("Unable to read contract file");
-    let mut contract = Contract::new(contract_bytecode, &contract_address, &deployer_address);
+    let mut contract = Contract::new(&contract_bytecode, &contract_address, &deployer_address);
     let _ = contract.init();
     let _ = contract.call("getContract", &[]);
 }
@@ -36,13 +36,13 @@ impl ContractAPI {
     #[napi(constructor)]
     pub fn new(contract_address: String, deployer_address: String) -> Self {
         let contract_bytecode = fs::read(CONTRACT_PATH).expect("Unable to read contract file");
-        let contract = Contract::new(contract_bytecode, &contract_address, &deployer_address);
+        let contract = Contract::new(&contract_bytecode, &contract_address, &deployer_address);
         Self { contract }
     }
 
     #[napi]
     pub fn init(&mut self) {
-        self.contract.init().unwrap();
+        self.contract.init();
     }
 
     #[napi(js_name = "__new")]
@@ -75,11 +75,6 @@ impl ContractAPI {
     pub fn call_test_2(&mut self, func_name: String, data: Buffer) {
         let bytes: Vec<u8> = data.into();
         let chunks = bytes.chunks(16);
-        // let raw_values: Vec<RawValue> = chunks
-        //     .map(|chunk| RawValue {
-        //         bytes: <[u8; 16]>::try_from(chunk),
-        //     })
-        //     .collect();
 
         let mut raw_values: Vec<RawValue> = Vec::new();
         for chunk in chunks {

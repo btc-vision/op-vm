@@ -1,19 +1,12 @@
-use std::sync::{Arc, Mutex};
-use std::thread;
-
-use napi::{Env, Error, JsBuffer, JsBufferValue, JsNumber, JsUnknown, Result};
-use napi::bindgen_prelude::{Array, BigInt, Buffer, JsValuesTupleIntoVec, Undefined};
+use napi::{Env, Error, JsNumber, JsUnknown, Result};
+use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use wasmer::Value;
 
 use crate::contract::Contract;
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
-    contract: Arc<Mutex<Option<Contract>>>,
-}
-
-fn get_undefined() -> Undefined {
-    ()
+    contract: Contract,
 }
 
 impl JsContract {
@@ -81,232 +74,167 @@ impl JsContract {
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    #[napi(factory)]
-    pub fn instanciate(bytecode: JsBuffer, address: String, deployer: String) -> Result<Self> {
-        let bytecode_value: Result<JsBufferValue> = bytecode.into_value();
-
-        match bytecode_value {
-            Ok(bytecode) => {
-                let vector_bytecode = bytecode.to_vec();
-                let contract_result = thread::spawn(move || {
-                    Contract::new(vector_bytecode, &address, &deployer)
-                }).join();
-
-                match contract_result {
-                    Ok(contract) => {
-                        match contract {
-                            Ok(contract_instance) => Ok(JsContract { contract: Arc::new(Mutex::new(Some(contract_instance))) }),
-                            Err(e) => Err(Error::from_reason(e)),
-                        }
-                    }
-                    Err(e) => Err(Error::from_reason(format!("Thread panicked: {:?}", e))),
-                }
-            }
-            Err(err) => Err(Error::from_reason(format!("Failed to convert JsBuffer to Vec<u8>: {:?}", err))),
-        }
+    #[napi(constructor)]
+    pub fn new(bytecode: Buffer, address: String, deployer: String) -> Self {
+        let bytecode_vec = bytecode.to_vec();
+        let contract = Contract::new(&bytecode_vec, &address, &deployer);
+        Self { contract }
     }
 
     #[napi]
-    pub fn read_memory(&mut self, env: Env, offset: BigInt, length: BigInt) -> Result<JsBuffer> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
+    pub fn init(&mut self) {
+        self.contract.init();
+    }
 
+    #[napi]
+    pub fn read_memory(&mut self, offset: BigInt, length: BigInt) -> Result<Buffer> {
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;
 
-        if let Some(contract) = contract.as_mut() {
-            let buffer = contract.read(offset, length);
+        let result = self.contract.read_memory(offset, length).unwrap();
 
-            if buffer.is_err() {
-                return Err(Error::from_reason(format!("{:?}", buffer.unwrap_err())));
-            }
-
-            let buffer = buffer.unwrap();
-            let buf = env.create_buffer_with_data(buffer).unwrap().into_raw();
-
-            return Ok(buf);
-        }
-
-        Err(Error::from_reason("Contract not initialized"))
+        return Ok(Buffer::from(result));
     }
 
     #[napi]
-    pub fn write_memory(&mut self, offset: BigInt, data: Buffer) -> Result<Undefined> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
-
+    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
         let data: Vec<u8> = data.into();
         let offset = offset.get_u64().1;
 
-        if let Some(contract) = contract.as_mut() {
-            let written = contract.write(offset, &data);
-            if written.is_err() {
-                return Err(Error::from_reason(format!("{:?}", written.unwrap_err())));
-            }
-
-            return Ok(get_undefined());
+        let result = self.contract.write_memory(offset, &data);
+        if result.is_err() {
+            return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
         }
 
-        Err(Error::from_reason("Contract not initialized"))
+        return Ok(());
     }
 
     #[napi]
-    pub fn init(&self) -> Result<Undefined> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
+    pub fn lower_string(&mut self, value: String) -> Result<u32> {
+        let result = self.contract
+            .lower_string(&value)
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
-        if let Some(contract) = contract.as_mut() {
-            contract.init().map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-        }
-
-        Ok(get_undefined())
+        return Ok(result);
     }
 
     #[napi]
-    pub fn lower_string(&self, env: Env, value: String) -> Result<JsNumber> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
+    pub fn write_buffer(
+        &mut self,
+        value: Buffer,
+        id: i32,
+        align: u32,
+    ) -> Result<i64> {
+        // Convert Buffer to Vec<u8>
+        let value = value.to_vec();
 
-        if let Some(contract) = contract.as_mut() {
-            let result = contract.lower_string(&value).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-            let js_number = env.create_int32(result as i32);
+        let contract = &mut self.contract;
 
-            return js_number;
-        } else {
-            Err(Error::from_reason("Contract not initialized"))
+        // Calculate the length and create a new buffer
+        let length = value.len();
+        let buffer_size = length << align;
+        let buffer = contract.__new(buffer_size as i32, 1);
+        if buffer.is_err() {
+            return Err(Error::from_reason(format!(
+                "Failed to get buffer from __new: {:?}",
+                buffer.unwrap_err()
+            )));
         }
+
+        let buffer_value = buffer.unwrap();
+
+        // Pin the buffer
+        let pinned_buffer = contract.__pin(buffer_value);
+        if pinned_buffer.is_err() {
+            return Err(Error::from_reason(format!(
+                "Failed to pin buffer: {:?}",
+                pinned_buffer.unwrap_err()
+            )));
+        }
+
+        let pin_value: Value = pinned_buffer.unwrap()[0].clone();
+        let pinned_buffer_value = pin_value.unwrap_i32() as u32;
+
+        // Create the header
+        let header = contract.__new(12, id);
+        if header.is_err() {
+            return Err(Error::from_reason(format!(
+                "Failed to get header from __new: {:?}",
+                header.unwrap_err()
+            )));
+        }
+
+        let header_value = header.unwrap();
+
+        // Set the header values
+        contract.set_u32(header_value, pinned_buffer_value).unwrap();
+        contract.set_u32(header_value + 4, pinned_buffer_value).unwrap();
+        contract.set_u32(header_value + 8, buffer_size as u32).unwrap();
+
+        // Write the buffer value to the contract's memory
+        contract.write_pointer(pinned_buffer_value as u64, value).unwrap();
+
+        // Unpin the buffer
+        contract.__unpin(pinned_buffer_value as i32).unwrap();
+
+        return Ok(header_value as i64);
     }
 
     #[napi]
-    pub fn write_buffer(&self, env: Env, value: JsBuffer, id: JsNumber, align: u32) -> Result<JsNumber> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
+    pub fn lift_typed_array(&self, offset: i32) -> Result<Buffer> {
+        let contract = &self.contract;
 
-        // Convert JsBuffer to Vec<u8>
-        let value = value.into_value()?.to_vec();
-
-        // Convert JsNumber to i32
-        let id = id.get_int32()?;
-
-        // Ensure the contract is initialized
-        if let Some(contract) = contract.as_mut() {
-            // Calculate the length and create a new buffer
-            let length = value.len();
-            let buffer_size = length << align;
-            let buffer = contract.__new(buffer_size as i32, 1);
-            if buffer.is_err() {
-                return Err(Error::from_reason(format!("Failed to get buffer from __new: {:?}", buffer.unwrap_err())));
-            }
-
-            let buffer_value = buffer.unwrap();
-
-            // Pin the buffer
-            let pinned_buffer = contract.__pin(buffer_value);
-            if pinned_buffer.is_err() {
-                return Err(Error::from_reason(format!("Failed to pin buffer: {:?}", pinned_buffer.unwrap_err())));
-            }
-
-            let pin_value: Value = pinned_buffer.unwrap()[0].clone();
-            let pinned_buffer_value = pin_value.unwrap_i32() as u32;
-
-            // Create the header
-            let header = contract.__new(12, id);
-            if header.is_err() {
-                return Err(Error::from_reason(format!("Failed to get header from __new: {:?}", header.unwrap_err())));
-            }
-
-            let header_value = header.unwrap();
-
-            // Set the header values
-            let set = contract.set_u32(header_value, pinned_buffer_value);
-            let set = contract.set_u32(header_value + 4, pinned_buffer_value);
-            let set = contract.set_u32(header_value + 8, buffer_size as u32);
-
-            // Write the buffer value to the contract's memory
-            let set = contract.write_pointer(pinned_buffer_value as u64, value);
-
-            // Unpin the buffer
-            let set = contract.__unpin(pinned_buffer_value as i32);
-
-            // Create a JsNumber from the header value
-            let result_pointer = env.create_int64(header_value as i64);
-
-            return result_pointer;
+        let pointer = contract.read_pointer((offset + 4) as u64, 4);
+        if pointer.is_err() {
+            return Err(Error::from_reason("Failed to read length"));
         }
 
-        Err(Error::from_reason("Contract not initialized"))
+        let pointer_buffer = pointer.unwrap();
+        let pointer = JsContract::bytes_to_u32_le(pointer_buffer);
+
+        println!("Pointer: {}", pointer);
+
+        let length = contract.read_pointer((offset + 8) as u64, 4);
+        if length.is_err() {
+            return Err(Error::from_reason("Failed to read length"));
+        }
+
+        let length_buffer = length.unwrap();
+        let length = JsContract::bytes_to_u32_le(length_buffer);
+
+        println!("Length: {}", length);
+        let result = contract.read_pointer(pointer as u64 + 4, length as u64);
+        if result.is_err() {
+            return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
+        }
+
+        let buffer = result.unwrap();
+
+        Ok(Buffer::from(buffer))
     }
 
     #[napi]
-    pub fn lift_typed_array(&self, env: Env, raw_offset: JsNumber) -> Result<JsBuffer> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
+    pub fn call(&mut self, env: Env, func_name: String, params: Vec<JsNumber>) -> Result<Array> {
+        let mut wasm_params = Vec::new();
 
-        let offset = raw_offset.get_int32();
-        if offset.is_err() {
-            return Err(Error::from_reason("Failed to read offset"));
+        for param in params {
+            let param_value = param.get_int32();
+            if param_value.is_err() {
+                return Err(Error::from_reason(format!(
+                    "{:?}",
+                    param_value.unwrap_err()
+                )));
+            }
+
+            let value = param_value.unwrap();
+            wasm_params.push(Value::I32(value));
         }
 
-        let offset = offset.unwrap();
+        let result = self.contract
+            .call(&func_name, &wasm_params)
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+        let js_array = JsContract::box_values_to_js_array(&env, result)?;
 
-        if let Some(contract) = contract.as_mut() {
-            let pointer = contract.read_pointer((offset + 4) as u64, 4);
-            if pointer.is_err() {
-                return Err(Error::from_reason("Failed to read length"));
-            }
-
-            let pointer_buffer = pointer.unwrap();
-            let pointer = JsContract::bytes_to_u32_le(pointer_buffer);
-
-            println!("Pointer: {}", pointer);
-
-            let length = contract.read_pointer((offset + 8) as u64, 4);
-            if length.is_err() {
-                return Err(Error::from_reason("Failed to read length"));
-            }
-
-            let length_buffer = length.unwrap();
-            let length = JsContract::bytes_to_u32_le(length_buffer);
-
-            println!("Length: {}", length);
-            let result = contract.read_pointer(pointer as u64 + 4, length as u64);
-            if result.is_err() {
-                return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
-            }
-
-            let buffer = result.unwrap();
-            let buf = env.create_buffer_with_data(buffer).unwrap().into_raw();
-
-            Ok(buf)
-        } else {
-            Err(Error::from_reason("Contract not initialized"))
-        }
-    }
-
-    #[napi]
-    pub fn call(&self, env: Env, func_name: String, params: Vec<JsNumber>) -> Result<Array> {
-        let contract = self.contract.clone();
-        let mut contract = contract.lock().unwrap();
-
-        if let Some(contract) = contract.as_mut() {
-            let mut wasm_params = Vec::new();
-
-            for param in params {
-                let param_value = param.get_int32();
-                if param_value.is_err() {
-                    return Err(Error::from_reason(format!("{:?}", param_value.unwrap_err())));
-                }
-
-                let value = param_value.unwrap();
-                wasm_params.push(Value::I32(value));
-            }
-
-            let result = contract.call(&func_name, &wasm_params).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-            let js_array = JsContract::box_values_to_js_array(&env, result)?;
-
-            Ok(js_array)
-        } else {
-            Err(Error::from_reason("Contract not initialized"))
-        }
+        Ok(js_array)
     }
 }

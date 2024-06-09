@@ -21,7 +21,7 @@ pub struct Contract {
 const MAX_GAS: u64 = 300_000_000_000;
 
 impl Contract {
-    pub fn new(bytecode: Vec<u8>, address: &str, deployer: &str) -> Result<Self, String> {
+    pub fn new(bytecode: &[u8], address: &str, deployer: &str) -> Self {
         let metering = Arc::new(Metering::new(MAX_GAS, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -47,13 +47,13 @@ impl Contract {
         let module = Module::new(&store, &bytecode).unwrap();
         let instance = Instance::new(&mut store, &module, &import_object).unwrap();
 
-        Ok(Self {
-            bytecode,
+        Self {
+            bytecode: bytecode.to_vec(),
             address: address.to_string(),
             deployer: deployer.to_string(),
             store,
             instance,
-        })
+        }
     }
 
     pub fn get_memory(&self) -> &Memory {
@@ -83,7 +83,7 @@ impl Contract {
         lower_string(&mut self.store, value, &new, &pin, &memory)
     }
 
-    pub fn init(&mut self) -> Result<Box<[Value]>, RuntimeError> {
+    pub fn init(&mut self) {
         let new = self.instance.exports.get_function("__new").unwrap();
         let pin = self.instance.exports.get_function("__pin").unwrap();
         let memory = self.instance.exports.get_memory("memory").unwrap();
@@ -96,11 +96,7 @@ impl Contract {
         self.call_wasm_function(
             "INIT",
             &[Value::I32(contract_address), Value::I32(deployer_address)],
-        )
-    }
-
-    pub fn ping(&mut self) -> Result<Box<[Value]>, RuntimeError> {
-        self.call_wasm_function("ping", &[])
+        ).unwrap();
     }
 
     pub fn write_pointer(&mut self, offset: u64, value: Vec<u8>) -> Result<(), MemoryAccessError> {
@@ -124,9 +120,9 @@ impl Contract {
         self.call_wasm_function("__pin", &[Value::I32(pointer)])
     }
 
-    pub fn read_pointer(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+    pub fn read_pointer(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
         let memory = self.instance.exports.get_memory("memory").unwrap();
-        let view: MemoryView = memory.view(&mut self.store);
+        let view: MemoryView = memory.view(&self.store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
         for i in 0..length {
@@ -143,9 +139,9 @@ impl Contract {
         Ok(buffer)
     }
 
-    pub fn read(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-        let view: MemoryView = memory.view(&mut self.store);
+    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+        let memory = self.get_memory();
+        let view = memory.view(&self.store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
         view.read(offset, &mut buffer).unwrap();
@@ -153,9 +149,9 @@ impl Contract {
         Ok(buffer)
     }
 
-    pub fn write(&mut self, offset: u64, data: &Vec<u8>) -> Result<(), MemoryAccessError> {
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-        let view = memory.view(&mut self.store);
+    pub fn write_memory(&self, offset: u64, data: &Vec<u8>) -> Result<(), MemoryAccessError> {
+        let memory = self.get_memory();
+        let view = memory.view(&self.store);
         return view.write(offset, data);
     }
 
@@ -163,6 +159,7 @@ impl Contract {
         self.call_wasm_function(function, params)
     }
 
+    #[allow(dead_code)]
     pub fn call_raw(&mut self, function: &str, params: Vec<RawValue>) -> Result<Box<[Value]>, RuntimeError> {
         self.call_wasm_function_raw(function, params)
     }
