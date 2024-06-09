@@ -1,6 +1,7 @@
 use napi::{Env, Error, JsNumber, JsUnknown, Result};
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use wasmer::Value;
+use wasmer_types::RawValue;
 
 use crate::contract::Contract;
 
@@ -236,5 +237,36 @@ impl JsContract {
         let js_array = JsContract::box_values_to_js_array(&env, result)?;
 
         Ok(js_array)
+    }
+
+    #[napi]
+    pub fn call_test_1(&mut self, func_name: String) -> i32 {
+        let response = self.contract.call(&func_name, &[]);
+        let boxed = response.unwrap();
+        let value: Value = boxed[0].clone();
+        value.unwrap_i32()
+    }
+
+    #[napi]
+    pub fn call_test_2(&mut self, func_name: String, data: Buffer) {
+        let bytes: Vec<u8> = data.into();
+        let chunks = bytes.chunks(16);
+
+        let mut raw_values: Vec<RawValue> = Vec::new();
+        for chunk in chunks {
+            if chunk.len() < 16 {
+                let mut padded_chunk = vec![0; 16];
+                padded_chunk[..chunk.len()].copy_from_slice(chunk);
+                raw_values.push(RawValue {
+                    bytes: padded_chunk.try_into().unwrap(),
+                });
+            } else {
+                raw_values.push(RawValue {
+                    bytes: chunk.try_into().unwrap(),
+                });
+            }
+        }
+
+        self.contract.call_raw(&func_name, raw_values).unwrap();
     }
 }
