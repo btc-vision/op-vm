@@ -13,6 +13,7 @@ use contract::Contract;
 
 mod contract;
 mod vm;
+mod api;
 
 const CONTRACT_PATH: &str = "resources/release.wasm";
 
