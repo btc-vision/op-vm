@@ -47,22 +47,14 @@ impl Contract {
         let module = Module::new(&store, &bytecode).unwrap();
         let instance = Instance::new(&mut store, &module, &import_object).unwrap();
 
-        Self {
-            store,
-            instance,
-        }
+        Self { store, instance }
     }
 
     pub fn init(&mut self, address: &str, deployer: &str) {
-        let contract_address: i32 =
-            AssemblyScript::lower_string(self, &address).unwrap() as i32;
-        let deployer_address: i32 =
-            AssemblyScript::lower_string(self, &deployer).unwrap() as i32;
+        let address_ptr: i32 = AssemblyScript::lower_string(self, &address).unwrap() as i32;
+        let deployer_ptr: i32 = AssemblyScript::lower_string(self, &deployer).unwrap() as i32;
 
-        self.call(
-            "INIT",
-            &[Value::I32(contract_address), Value::I32(deployer_address)],
-        )
+        self.call("INIT", &[Value::I32(address_ptr), Value::I32(deployer_ptr)])
             .unwrap();
     }
 
