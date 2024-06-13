@@ -13,7 +13,6 @@ use wasmer_types::RawValue;
 use crate::domain::vm::get_op_cost;
 
 pub struct Contract {
-    pub bytecode: Vec<u8>,
     pub store: Store,
     pub instance: Instance,
 }
@@ -48,7 +47,6 @@ impl Contract {
         let instance = Instance::new(&mut store, &module, &import_object).unwrap();
 
         Self {
-            bytecode: bytecode.to_vec(),
             store,
             instance,
         }
