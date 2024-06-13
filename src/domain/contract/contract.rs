@@ -55,7 +55,7 @@ impl Contract {
     }
 
     pub fn read_pointer(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = self.get_memory();
+        let memory = Self::get_memory(&self.instance);
         let view: MemoryView = memory.view(&self.store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
@@ -74,20 +74,20 @@ impl Contract {
     }
 
     pub fn write_pointer(&mut self, offset: u64, value: Vec<u8>) -> Result<(), MemoryAccessError> {
-        let memory = self.get_memory();
+        let memory = Self::get_memory(&self.instance);
         let view = memory.view(&mut self.store);
         return view.write(offset, &value);
     }
 
     pub fn set_u32(&mut self, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
-        let memory = self.get_memory();
+        let memory = Self::get_memory(&self.instance);
         let view = memory.view(&mut self.store);
 
         return view.write(offset as u64, &value.to_le_bytes());
     }
 
     pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = self.get_memory();
+        let memory = Self::get_memory(&self.instance);
         let view = memory.view(&self.store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
@@ -97,14 +97,14 @@ impl Contract {
     }
 
     pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
-        let memory = self.get_memory();
+        let memory = Self::get_memory(&self.instance);
         let view = memory.view(&self.store);
         return view.write(offset, data);
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
-        let export = self.get_function(&function);
+        let export = Self::get_function(&self.instance, &function);
         let response = export.call(&mut self.store, params);
         self.print_results(&response);
         response
@@ -117,18 +117,18 @@ impl Contract {
         params: Vec<RawValue>,
     ) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
-        let export = self.get_function(&function);
+        let export = Self::get_function(&self.instance, &function);
         let response = export.call_raw(&mut self.store, params);
         self.print_results(&response);
         response
     }
 
-    fn get_memory(&self) -> &Memory {
-        return self.instance.exports.get_memory("memory").unwrap();
+    fn get_memory(instance: &Instance) -> &Memory {
+        instance.exports.get_memory("memory").unwrap()
     }
 
-    fn get_function(&self, function: &str) -> &Function {
-        return self.instance.exports.get_function(function).unwrap();
+    fn get_function<'a>(instance: &'a Instance, function: &str) -> &'a Function {
+        instance.exports.get_function(function).unwrap()
     }
 
     fn print_results(&mut self, response: &Result<Box<[Value]>, RuntimeError>) {
