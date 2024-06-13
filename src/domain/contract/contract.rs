@@ -11,7 +11,7 @@ use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 use wasmer_middlewares::Metering;
 use wasmer_types::RawValue;
 
-use crate::vm::{get_op_cost, lower_string};
+use crate::domain::vm::{get_op_cost, lower_string};
 
 pub struct Contract {
     pub bytecode: Vec<u8>,

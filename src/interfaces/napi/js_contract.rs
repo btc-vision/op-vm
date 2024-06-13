@@ -3,7 +3,7 @@ use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use wasmer::Value;
 use wasmer_types::RawValue;
 
-use crate::contract::Contract;
+use crate::domain::Contract;
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {

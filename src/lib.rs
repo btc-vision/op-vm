@@ -5,11 +5,10 @@ extern crate napi_derive;
 
 use std::fs;
 
-use contract::Contract;
+use crate::domain::Contract;
 
-mod contract;
-mod vm;
-mod api;
+mod domain;
+mod interfaces;
 
 const CONTRACT_PATH: &str = "resources/release.wasm";
 
