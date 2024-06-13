@@ -76,7 +76,7 @@ impl JsContract {
 
     #[napi]
     pub fn init(&mut self, address: String, deployer: String) {
-        AssemblyScript::init(&mut self.contract, &address, &deployer);
+        self.contract.init(&address, &deployer);
     }
 
     #[napi]

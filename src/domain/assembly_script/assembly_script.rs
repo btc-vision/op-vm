@@ -7,20 +7,6 @@ use crate::domain::contract::Contract;
 pub struct AssemblyScript;
 
 impl AssemblyScript {
-    pub fn init(contract: &mut Contract, address: &str, deployer: &str) {
-        let contract_address: i32 =
-            AssemblyScript::lower_string(contract, &address).unwrap() as i32;
-        let deployer_address: i32 =
-            AssemblyScript::lower_string(contract, &deployer).unwrap() as i32;
-
-        contract
-            .call(
-                "INIT",
-                &[Value::I32(contract_address), Value::I32(deployer_address)],
-            )
-            .unwrap();
-    }
-
     pub fn __new(contract: &mut Contract, size: i32, id: i32) -> anyhow::Result<i32> {
         let params = &[Value::I32(size), Value::I32(id)];
         let result = contract.call("__new", params)?;

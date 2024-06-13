@@ -10,6 +10,7 @@ use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 use wasmer_middlewares::Metering;
 use wasmer_types::RawValue;
 
+use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::get_op_cost;
 
 pub struct Contract {
@@ -50,6 +51,19 @@ impl Contract {
             store,
             instance,
         }
+    }
+
+    pub fn init(&mut self, address: &str, deployer: &str) {
+        let contract_address: i32 =
+            AssemblyScript::lower_string(self, &address).unwrap() as i32;
+        let deployer_address: i32 =
+            AssemblyScript::lower_string(self, &deployer).unwrap() as i32;
+
+        self.call(
+            "INIT",
+            &[Value::I32(contract_address), Value::I32(deployer_address)],
+        )
+            .unwrap();
     }
 
     pub fn read_pointer(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
