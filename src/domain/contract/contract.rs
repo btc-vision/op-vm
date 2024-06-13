@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use wasmer::{
     CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
     MemoryAccessError, MemoryView, Module, RuntimeError, Store, Value,
@@ -11,12 +10,10 @@ use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 use wasmer_middlewares::Metering;
 use wasmer_types::RawValue;
 
-use crate::domain::vm::{get_op_cost, lower_string};
+use crate::domain::vm::get_op_cost;
 
 pub struct Contract {
     pub bytecode: Vec<u8>,
-    pub address: String,
-    pub deployer: String,
     pub store: Store,
     pub instance: Instance,
 }
@@ -24,7 +21,7 @@ pub struct Contract {
 const MAX_GAS: u64 = 300_000_000_000;
 
 impl Contract {
-    pub fn new(bytecode: &[u8], address: &str, deployer: &str) -> Self {
+    pub fn new(bytecode: &[u8]) -> Self {
         let metering = Arc::new(Metering::new(MAX_GAS, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -52,82 +49,13 @@ impl Contract {
 
         Self {
             bytecode: bytecode.to_vec(),
-            address: address.to_string(),
-            deployer: deployer.to_string(),
             store,
             instance,
         }
     }
 
-    pub fn init(&mut self) {
-        let new = self.instance.exports.get_function("__new").unwrap();
-        let pin = self.instance.exports.get_function("__pin").unwrap();
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-
-        let contract_address: i32 =
-            lower_string(&mut self.store, &self.address, &new, &pin, &memory).unwrap() as i32;
-        let deployer_address: i32 =
-            lower_string(&mut self.store, &self.deployer, &new, &pin, &memory).unwrap() as i32;
-
-        self.call(
-            "INIT",
-            &[Value::I32(contract_address), Value::I32(deployer_address)],
-        )
-            .unwrap();
-    }
-
-    pub fn get_memory(&self) -> &Memory {
-        return self.instance.exports.get_memory("memory").unwrap();
-    }
-
-    pub fn get_function(&self, function: &str) -> &Function {
-        return self.instance.exports.get_function(function).unwrap();
-    }
-
-    pub fn __new(&mut self, size: i32, id: i32) -> anyhow::Result<i32> {
-        let params = &[Value::I32(size), Value::I32(id)];
-        let result = self.call("__new", params)?;
-
-        let pointer = result
-            .get(0)
-            .ok_or(anyhow!("can't get pointer"))?
-            .i32()
-            .ok_or(anyhow!("can't get pointer"))?;
-
-        return Ok(pointer);
-    }
-
-    pub fn lower_string(&mut self, value: &str) -> anyhow::Result<u32> {
-        let new = self.instance.exports.get_function("__new").unwrap();
-        let pin = self.instance.exports.get_function("__pin").unwrap();
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-
-        lower_string(&mut self.store, value, &new, &pin, &memory)
-    }
-
-    pub fn write_pointer(&mut self, offset: u64, value: Vec<u8>) -> Result<(), MemoryAccessError> {
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-        let view = memory.view(&mut self.store);
-        return view.write(offset, &value);
-    }
-
-    pub fn set_u32(&mut self, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
-        let memory = self.instance.exports.get_memory("memory").unwrap();
-        let view = memory.view(&mut self.store);
-
-        return view.write(offset as u64, &value.to_le_bytes());
-    }
-
-    pub fn __unpin(&mut self, pointer: i32) -> Result<Box<[Value]>, RuntimeError> {
-        self.call("__unpin", &[Value::I32(pointer)])
-    }
-
-    pub fn __pin(&mut self, pointer: i32) -> Result<Box<[Value]>, RuntimeError> {
-        self.call("__pin", &[Value::I32(pointer)])
-    }
-
     pub fn read_pointer(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = self.instance.exports.get_memory("memory").unwrap();
+        let memory = self.get_memory();
         let view: MemoryView = memory.view(&self.store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
@@ -145,6 +73,19 @@ impl Contract {
         Ok(buffer)
     }
 
+    pub fn write_pointer(&mut self, offset: u64, value: Vec<u8>) -> Result<(), MemoryAccessError> {
+        let memory = self.get_memory();
+        let view = memory.view(&mut self.store);
+        return view.write(offset, &value);
+    }
+
+    pub fn set_u32(&mut self, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
+        let memory = self.get_memory();
+        let view = memory.view(&mut self.store);
+
+        return view.write(offset as u64, &value.to_le_bytes());
+    }
+
     pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
         let memory = self.get_memory();
         let view = memory.view(&self.store);
@@ -155,7 +96,7 @@ impl Contract {
         Ok(buffer)
     }
 
-    pub fn write_memory(&self, offset: u64, data: &Vec<u8>) -> Result<(), MemoryAccessError> {
+    pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
         let memory = self.get_memory();
         let view = memory.view(&self.store);
         return view.write(offset, data);
@@ -163,7 +104,7 @@ impl Contract {
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
-        let export = self.instance.exports.get_function(function).unwrap();
+        let export = self.get_function(&function);
         let response = export.call(&mut self.store, params);
         self.print_results(&response);
         response
@@ -176,10 +117,18 @@ impl Contract {
         params: Vec<RawValue>,
     ) -> Result<Box<[Value]>, RuntimeError> {
         println!("Calling {function}...");
-        let export = self.instance.exports.get_function(function).unwrap();
+        let export = self.get_function(&function);
         let response = export.call_raw(&mut self.store, params);
         self.print_results(&response);
         response
+    }
+
+    fn get_memory(&self) -> &Memory {
+        return self.instance.exports.get_memory("memory").unwrap();
+    }
+
+    fn get_function(&self, function: &str) -> &Function {
+        return self.instance.exports.get_function(function).unwrap();
     }
 
     fn print_results(&mut self, response: &Result<Box<[Value]>, RuntimeError>) {

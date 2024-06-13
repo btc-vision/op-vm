@@ -3,7 +3,8 @@ use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use wasmer::Value;
 use wasmer_types::RawValue;
 
-use crate::domain::Contract;
+use crate::domain::assembly_script::AssemblyScript;
+use crate::domain::contract::Contract;
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
@@ -62,29 +63,20 @@ impl JsContract {
 
         Ok(js_array)
     }
-
-    fn bytes_to_u32_le(bytes: Vec<u8>) -> u32 {
-        let mut result = 0;
-        for i in 0..4 {
-            result |= (bytes[i] as u32) << (i * 8);
-        }
-
-        result
-    }
 }
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
     #[napi(constructor)]
-    pub fn new(bytecode: Buffer, address: String, deployer: String) -> Self {
+    pub fn new(bytecode: Buffer) -> Self {
         let bytecode_vec = bytecode.to_vec();
-        let contract = Contract::new(&bytecode_vec, &address, &deployer);
+        let contract = Contract::new(&bytecode_vec);
         Self { contract }
     }
 
     #[napi]
-    pub fn init(&mut self) {
-        self.contract.init();
+    pub fn init(&mut self, address: String, deployer: String) {
+        AssemblyScript::init(self.contract, &address, &deployer);
     }
 
     #[napi]
@@ -112,8 +104,7 @@ impl JsContract {
 
     #[napi]
     pub fn lower_string(&mut self, value: String) -> Result<u32> {
-        let result = self.contract
-            .lower_string(&value)
+        let result = AssemblyScript::lower_string(&mut self.contract, &value)
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
         return Ok(result);
@@ -126,92 +117,18 @@ impl JsContract {
         id: i32,
         align: u32,
     ) -> Result<i64> {
-        // Convert Buffer to Vec<u8>
         let value = value.to_vec();
-
-        let contract = &mut self.contract;
-
-        // Calculate the length and create a new buffer
-        let length = value.len();
-        let buffer_size = length << align;
-        let buffer = contract.__new(buffer_size as i32, 1);
-        if buffer.is_err() {
-            return Err(Error::from_reason(format!(
-                "Failed to get buffer from __new: {:?}",
-                buffer.unwrap_err()
-            )));
-        }
-
-        let buffer_value = buffer.unwrap();
-
-        // Pin the buffer
-        let pinned_buffer = contract.__pin(buffer_value);
-        if pinned_buffer.is_err() {
-            return Err(Error::from_reason(format!(
-                "Failed to pin buffer: {:?}",
-                pinned_buffer.unwrap_err()
-            )));
-        }
-
-        let pin_value: Value = pinned_buffer.unwrap()[0].clone();
-        let pinned_buffer_value = pin_value.unwrap_i32() as u32;
-
-        // Create the header
-        let header = contract.__new(12, id);
-        if header.is_err() {
-            return Err(Error::from_reason(format!(
-                "Failed to get header from __new: {:?}",
-                header.unwrap_err()
-            )));
-        }
-
-        let header_value = header.unwrap();
-
-        // Set the header values
-        contract.set_u32(header_value, pinned_buffer_value).unwrap();
-        contract.set_u32(header_value + 4, pinned_buffer_value).unwrap();
-        contract.set_u32(header_value + 8, buffer_size as u32).unwrap();
-
-        // Write the buffer value to the contract's memory
-        contract.write_pointer(pinned_buffer_value as u64, value).unwrap();
-
-        // Unpin the buffer
-        contract.__unpin(pinned_buffer_value as i32).unwrap();
-
-        return Ok(header_value as i64);
+        AssemblyScript::write_buffer(&mut self.contract, value, id, align)
     }
 
     #[napi]
     pub fn lift_typed_array(&self, offset: i32) -> Result<Buffer> {
-        let contract = &self.contract;
+        let result = AssemblyScript::lift_typed_array(&self.contract, offset);
 
-        let pointer = contract.read_pointer((offset + 4) as u64, 4);
-        if pointer.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
+        match result {
+            Ok(buffer) => Ok(Buffer::from(buffer)),
+            Err(e) => Err(e)
         }
-
-        let pointer_buffer = pointer.unwrap();
-        let pointer = JsContract::bytes_to_u32_le(pointer_buffer);
-
-        println!("Pointer: {}", pointer);
-
-        let length = contract.read_pointer((offset + 8) as u64, 4);
-        if length.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
-
-        let length_buffer = length.unwrap();
-        let length = JsContract::bytes_to_u32_le(length_buffer);
-
-        println!("Length: {}", length);
-        let result = contract.read_pointer(pointer as u64 + 4, length as u64);
-        if result.is_err() {
-            return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
-        }
-
-        let buffer = result.unwrap();
-
-        Ok(Buffer::from(buffer))
     }
 
     #[napi]

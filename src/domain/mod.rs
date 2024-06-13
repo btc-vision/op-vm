@@ -1,5 +1,3 @@
-pub use contract::Contract;
-
-mod contract;
-mod vm;
-
+pub mod assembly_script;
+pub mod contract;
+pub mod vm;
