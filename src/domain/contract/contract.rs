@@ -114,7 +114,6 @@ impl Contract {
         response
     }
 
-    #[allow(dead_code)]
     pub fn call_raw(
         &mut self,
         function: &str,
