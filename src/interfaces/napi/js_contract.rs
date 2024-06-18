@@ -111,12 +111,7 @@ impl JsContract {
     }
 
     #[napi]
-    pub fn write_buffer(
-        &mut self,
-        value: Buffer,
-        id: i32,
-        align: u32,
-    ) -> Result<i64> {
+    pub fn write_buffer(&mut self, value: Buffer, id: i32, align: u32) -> Result<i64> {
         let value = value.to_vec();
         AssemblyScript::write_buffer(&mut self.contract, value, id, align)
     }
@@ -127,7 +122,7 @@ impl JsContract {
 
         match result {
             Ok(buffer) => Ok(Buffer::from(buffer)),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 
@@ -148,7 +143,8 @@ impl JsContract {
             wasm_params.push(Value::I32(value));
         }
 
-        let result = self.contract
+        let result = self
+            .contract
             .call(&func_name, &wasm_params)
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         let js_array = JsContract::box_values_to_js_array(&env, result)?;
