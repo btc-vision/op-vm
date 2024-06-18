@@ -138,15 +138,6 @@ impl AssemblyScript {
         Ok(result.unwrap())
     }
 
-    pub fn lift_typed_array_to_string(contract: &Contract, offset: i32) -> Result<String, RuntimeError> {
-        let result = AssemblyScript::lift_typed_array(contract, offset);
-
-        match result {
-            Ok(bytes) => Ok(String::from_utf8(bytes).unwrap()),
-            Err(error) => Err(RuntimeError::new(&error.to_string())),
-        }
-    }
-
     fn bytes_to_u32_le(bytes: Vec<u8>) -> u32 {
         let mut result = 0;
         for i in 0..4 {

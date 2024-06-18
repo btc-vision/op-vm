@@ -14,7 +14,15 @@ use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::get_op_cost;
 
 pub struct MyEnv {
-    revert_pointer: i32,
+    abort_data: Option<AbortData>,
+}
+
+#[derive(Copy, Clone)]
+pub struct AbortData {
+    pub message: u32,
+    pub file_name: u32,
+    pub line: u32,
+    pub column: u32,
 }
 
 pub struct Contract {
@@ -36,15 +44,22 @@ impl Contract {
         let engine = EngineBuilder::new(compiler).set_features(None).engine();
         let mut store = Store::new(engine);
 
-        let env = FunctionEnv::new(&mut store, MyEnv {
-            revert_pointer: 0,
-        });
+        let env = FunctionEnv::new(&mut store, MyEnv { abort_data: None });
 
-        fn abort(mut env: FunctionEnvMut<MyEnv>, revert_pointer: i32, _: i32, _: i32, _: i32) -> Result<(), RuntimeError> {
+        fn abort(
+            mut env: FunctionEnvMut<MyEnv>,
+            message: u32,
+            file_name: u32,
+            line: u32,
+            column: u32,
+        ) -> Result<(), RuntimeError> {
             let data = env.data_mut();
-            data.revert_pointer = revert_pointer;
-
-            //let message: String = AssemblyScript::lift_typed_array_to_string(Self { store, instance }, revert_pointer).unwrap();
+            data.abort_data = Some(AbortData {
+                message,
+                file_name,
+                line,
+                column,
+            });
 
             return Err(RuntimeError::new("Execution aborted"));
         }
@@ -59,11 +74,11 @@ impl Contract {
         let module = Module::new(&store, &bytecode).unwrap();
         let instance = Instance::new(&mut store, &module, &import_object).unwrap();
 
-        Self { store, instance, env }
-    }
-
-    pub fn get_revert_pointer(&self) -> i32 {
-        self.env.as_ref(&self.store).revert_pointer
+        Self {
+            store,
+            instance,
+            env,
+        }
     }
 
     pub fn init(&mut self, address: &str, deployer: &str) {
@@ -140,6 +155,10 @@ impl Contract {
         let response = export.call_raw(&mut self.store, params);
         self.print_results(&response);
         response
+    }
+
+    pub fn get_abort_data(&self) -> Option<AbortData> {
+        self.env.as_ref(&self.store).abort_data
     }
 
     fn get_memory(instance: &Instance) -> &Memory {

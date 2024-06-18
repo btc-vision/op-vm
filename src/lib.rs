@@ -15,7 +15,7 @@ const CONTRACT_PATH: &str = "resources/release.wasm";
 
 
 #[napi]
-fn init() {
+pub fn init() {
     panic::set_hook(Box::new(|_| {}));
 }
 

@@ -4,7 +4,26 @@ use wasmer::Value;
 use wasmer_types::RawValue;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::contract::Contract;
+use crate::domain::contract::{AbortData, Contract};
+
+#[napi(object)]
+pub struct AbortDataResponse {
+    pub message: u32,
+    pub file_name: u32,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl From<AbortData> for AbortDataResponse {
+    fn from(data: AbortData) -> Self {
+        AbortDataResponse {
+            message: data.message,
+            file_name: data.file_name,
+            line: data.line,
+            column: data.column,
+        }
+    }
+}
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
@@ -80,11 +99,6 @@ impl JsContract {
     }
 
     #[napi]
-    pub fn get_revert_pointer(&self) -> i32 {
-        self.contract.get_revert_pointer()
-    }
-
-    #[napi]
     pub fn read_memory(&mut self, offset: BigInt, length: BigInt) -> Result<Buffer> {
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;
@@ -155,6 +169,11 @@ impl JsContract {
         let js_array = JsContract::box_values_to_js_array(&env, result)?;
 
         Ok(js_array)
+    }
+
+    #[napi]
+    pub fn get_abort_data(&self) -> Option<AbortDataResponse> {
+        self.contract.get_abort_data().map(|data| data.into())
     }
 
     #[napi]
