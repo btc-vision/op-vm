@@ -13,9 +13,14 @@ use wasmer_types::RawValue;
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::get_op_cost;
 
+pub struct MyEnv {
+    revert_pointer: i32,
+}
+
 pub struct Contract {
     pub store: Store,
     pub instance: Instance,
+    pub env: FunctionEnv<MyEnv>,
 }
 
 const MAX_GAS: u64 = 300_000_000_000;
@@ -31,13 +36,20 @@ impl Contract {
         let engine = EngineBuilder::new(compiler).set_features(None).engine();
         let mut store = Store::new(engine);
 
-        struct MyEnv;
-        let env = FunctionEnv::new(&mut store, MyEnv {});
-        fn abort(_env: FunctionEnvMut<MyEnv>, _: i32, _: i32, _: i32, _: i32) {
-            panic!("Abort called")
-        }
-        let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
+        let env = FunctionEnv::new(&mut store, MyEnv {
+            revert_pointer: 0,
+        });
 
+        fn abort(mut env: FunctionEnvMut<MyEnv>, revert_pointer: i32, _: i32, _: i32, _: i32) -> Result<(), RuntimeError> {
+            let data = env.data_mut();
+            data.revert_pointer = revert_pointer;
+
+            //let message: String = AssemblyScript::lift_typed_array_to_string(Self { store, instance }, revert_pointer).unwrap();
+
+            return Err(RuntimeError::new("Execution aborted"));
+        }
+
+        let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
         let import_object = imports! {
             "env" => {
                 "abort" => abort_typed,
@@ -47,7 +59,11 @@ impl Contract {
         let module = Module::new(&store, &bytecode).unwrap();
         let instance = Instance::new(&mut store, &module, &import_object).unwrap();
 
-        Self { store, instance }
+        Self { store, instance, env }
+    }
+
+    pub fn get_revert_pointer(&self) -> i32 {
+        self.env.as_ref(&self.store).revert_pointer
     }
 
     pub fn init(&mut self, address: &str, deployer: &str) {

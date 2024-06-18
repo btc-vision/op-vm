@@ -80,6 +80,11 @@ impl JsContract {
     }
 
     #[napi]
+    pub fn get_revert_pointer(&self) -> i32 {
+        self.contract.get_revert_pointer()
+    }
+
+    #[napi]
     pub fn read_memory(&mut self, offset: BigInt, length: BigInt) -> Result<Buffer> {
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;

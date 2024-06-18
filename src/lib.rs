@@ -4,6 +4,7 @@
 extern crate napi_derive;
 
 use std::fs;
+use std::panic;
 
 use crate::domain::contract::Contract;
 
@@ -12,6 +13,12 @@ mod interfaces;
 
 const CONTRACT_PATH: &str = "resources/release.wasm";
 
+
+#[napi]
+fn init() {
+    panic::set_hook(Box::new(|_| {}));
+}
+
 #[napi]
 pub fn test(contract_address: String, deployer_address: String) {
     let contract_bytecode = fs::read(CONTRACT_PATH).expect("Unable to read contract file");
@@ -19,3 +26,5 @@ pub fn test(contract_address: String, deployer_address: String) {
     let _ = contract.init(&contract_address, &deployer_address);
     let _ = contract.call("getContract", &[]);
 }
+
+
