@@ -11,24 +11,14 @@ use wasmer_middlewares::Metering;
 use wasmer_types::RawValue;
 
 use crate::domain::assembly_script::AssemblyScript;
+use crate::domain::contract::AbortData;
+use crate::domain::contract::CustomEnv;
 use crate::domain::vm::get_op_cost;
-
-pub struct MyEnv {
-    abort_data: Option<AbortData>,
-}
-
-#[derive(Copy, Clone)]
-pub struct AbortData {
-    pub message: u32,
-    pub file_name: u32,
-    pub line: u32,
-    pub column: u32,
-}
 
 pub struct Contract {
     pub store: Store,
     pub instance: Instance,
-    pub env: FunctionEnv<MyEnv>,
+    pub env: FunctionEnv<CustomEnv>,
 }
 
 const MAX_GAS: u64 = 300_000_000_000;
@@ -44,10 +34,10 @@ impl Contract {
         let engine = EngineBuilder::new(compiler).set_features(None).engine();
         let mut store = Store::new(engine);
 
-        let env = FunctionEnv::new(&mut store, MyEnv { abort_data: None });
+        let env = FunctionEnv::new(&mut store, CustomEnv { abort_data: None });
 
         fn abort(
-            mut env: FunctionEnvMut<MyEnv>,
+            mut env: FunctionEnvMut<CustomEnv>,
             message: u32,
             file_name: u32,
             line: u32,

@@ -4,26 +4,8 @@ use wasmer::Value;
 use wasmer_types::RawValue;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::contract::{AbortData, Contract};
-
-#[napi(object)]
-pub struct AbortDataResponse {
-    pub message: u32,
-    pub file_name: u32,
-    pub line: u32,
-    pub column: u32,
-}
-
-impl From<AbortData> for AbortDataResponse {
-    fn from(data: AbortData) -> Self {
-        AbortDataResponse {
-            message: data.message,
-            file_name: data.file_name,
-            line: data.line,
-            column: data.column,
-        }
-    }
-}
+use crate::domain::contract::Contract;
+use crate::interfaces::AbortDataResponse;
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
