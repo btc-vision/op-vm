@@ -34,7 +34,7 @@ impl Contract {
         struct MyEnv;
         let env = FunctionEnv::new(&mut store, MyEnv {});
         fn abort(_env: FunctionEnvMut<MyEnv>, _: i32, _: i32, _: i32, _: i32) {
-            std::process::exit(-1)
+            panic!("Abort called")
         }
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
 
