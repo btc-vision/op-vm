@@ -54,6 +54,7 @@
         "test": "echo ''",
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
-        "version": "napi version"
+        "version": "napi version",
+        "setup": "npm run build"
     }
 }
