@@ -3,8 +3,8 @@ use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use wasmer::Value;
 use wasmer_types::RawValue;
 
-use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::Contract;
+use crate::domain::runner::WasmerInstance;
 use crate::interfaces::AbortDataResponse;
 
 #[napi(js_name = "Contract")]
@@ -71,13 +71,9 @@ impl JsContract {
     #[napi(constructor)]
     pub fn new(bytecode: Buffer) -> Self {
         let bytecode_vec = bytecode.to_vec();
-        let contract = Contract::new(&bytecode_vec);
+        let runner = WasmerInstance::new(&bytecode_vec);
+        let contract = Contract::new(Box::new(runner));
         Self { contract }
-    }
-
-    #[napi]
-    pub fn init(&mut self, address: String, deployer: String) {
-        self.contract.init(&address, &deployer);
     }
 
     #[napi]
@@ -104,27 +100,9 @@ impl JsContract {
     }
 
     #[napi]
-    pub fn lower_string(&mut self, value: String) -> Result<u32> {
-        let result = AssemblyScript::lower_string(&mut self.contract, &value)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
-        return Ok(result);
-    }
-
-    #[napi]
     pub fn write_buffer(&mut self, value: Buffer, id: i32, align: u32) -> Result<i64> {
         let value = value.to_vec();
-        AssemblyScript::write_buffer(&mut self.contract, value, id, align)
-    }
-
-    #[napi]
-    pub fn lift_typed_array(&self, offset: i32) -> Result<Buffer> {
-        let result = AssemblyScript::lift_typed_array(&self.contract, offset);
-
-        match result {
-            Ok(buffer) => Ok(Buffer::from(buffer)),
-            Err(e) => Err(e),
-        }
+        self.contract.write_buffer(&value, id, align)
     }
 
     #[napi]

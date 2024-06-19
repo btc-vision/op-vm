@@ -1,136 +1,24 @@
-use std::sync::Arc;
-
-use wasmer::{
-    CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
-    MemoryAccessError, MemoryView, Module, RuntimeError, Store, Value,
-};
-use wasmer::sys::EngineBuilder;
-use wasmer_compiler_singlepass::Singlepass;
-use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
-use wasmer_middlewares::Metering;
+use napi::Error;
+use wasmer::{MemoryAccessError, RuntimeError, Value};
 use wasmer_types::RawValue;
 
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
-use crate::domain::contract::CustomEnv;
-use crate::domain::vm::get_op_cost;
+use crate::domain::runner::RunnerInstance;
+use crate::domain::vm::MAX_GAS;
 
 pub struct Contract {
-    pub store: Store,
-    pub instance: Instance,
-    pub env: FunctionEnv<CustomEnv>,
+    runner: Box<dyn RunnerInstance>,
 }
 
-const MAX_GAS: u64 = 300_000_000_000;
-
 impl Contract {
-    pub fn new(bytecode: &[u8]) -> Self {
-        let metering = Arc::new(Metering::new(MAX_GAS, get_op_cost));
-
-        let mut compiler = Singlepass::default();
-        compiler.canonicalize_nans(true);
-        compiler.push_middleware(metering);
-
-        let engine = EngineBuilder::new(compiler).set_features(None).engine();
-        let mut store = Store::new(engine);
-
-        let env = FunctionEnv::new(&mut store, CustomEnv { abort_data: None });
-
-        fn abort(
-            mut env: FunctionEnvMut<CustomEnv>,
-            message: u32,
-            file_name: u32,
-            line: u32,
-            column: u32,
-        ) -> Result<(), RuntimeError> {
-            let data = env.data_mut();
-            data.abort_data = Some(AbortData {
-                message,
-                file_name,
-                line,
-                column,
-            });
-
-            return Err(RuntimeError::new("Execution aborted"));
-        }
-
-        let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let import_object = imports! {
-            "env" => {
-                "abort" => abort_typed,
-            }
-        };
-
-        let module = Module::new(&store, &bytecode).unwrap();
-        let instance = Instance::new(&mut store, &module, &import_object).unwrap();
-
-        Self {
-            store,
-            instance,
-            env,
-        }
+    pub fn new(runner: Box<dyn RunnerInstance>) -> Self {
+        Self { runner }
     }
 
-    pub fn init(&mut self, address: &str, deployer: &str) {
-        let address_ptr: i32 = AssemblyScript::lower_string(self, &address).unwrap() as i32;
-        let deployer_ptr: i32 = AssemblyScript::lower_string(self, &deployer).unwrap() as i32;
-
-        self.call("INIT", &[Value::I32(address_ptr), Value::I32(deployer_ptr)])
-            .unwrap();
-    }
-
-    pub fn read_pointer(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = Self::get_memory(&self.instance);
-        let view: MemoryView = memory.view(&self.store);
-
-        let mut buffer: Vec<u8> = vec![0; length as usize];
-        for i in 0..length {
-            let byte = view.read_u8(offset + i);
-
-            // check for error
-            if byte.is_err() {
-                return Err(RuntimeError::new("Out of bounds memory access"));
-            }
-
-            buffer[i as usize] = byte.unwrap();
-        }
-
-        Ok(buffer)
-    }
-
-    pub fn write_pointer(&mut self, offset: u64, value: Vec<u8>) -> Result<(), MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&mut self.store);
-        return view.write(offset, &value);
-    }
-
-    pub fn set_u32(&mut self, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&mut self.store);
-
-        return view.write(offset as u64, &value.to_le_bytes());
-    }
-
-    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&self.store);
-
-        let mut buffer: Vec<u8> = vec![0; length as usize];
-        view.read(offset, &mut buffer).unwrap();
-
-        Ok(buffer)
-    }
-
-    pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&self.store);
-        return view.write(offset, data);
-    }
-
-    pub fn call(&mut self, function: &str, params: &[Value]) -> Result<Box<[Value]>, RuntimeError> {
+    pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         println!("Calling {function}...");
-        let export = Self::get_function(&self.instance, &function);
-        let response = export.call(&mut self.store, params);
+        let response = self.runner.call(&function, params);
         self.print_results(&response);
         response
     }
@@ -139,46 +27,49 @@ impl Contract {
         &mut self,
         function: &str,
         params: Vec<RawValue>,
-    ) -> Result<Box<[Value]>, RuntimeError> {
+    ) -> anyhow::Result<Box<[Value]>> {
         println!("Calling {function}...");
-        let export = Self::get_function(&self.instance, &function);
-        let response = export.call_raw(&mut self.store, params);
+        let response = self.runner.call_raw(&function, &params);
         self.print_results(&response);
         response
     }
 
+    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+        self.runner.read_memory(offset, length)
+    }
+
+    pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
+        self.runner.write_memory(offset, data)
+    }
+
+    pub fn write_buffer(
+        &mut self,
+        value: &[u8],
+        id: i32,
+        align: u32,
+    ) -> Result<i64, Error> {
+        AssemblyScript::write_buffer(&mut self.runner, value, id, align)
+    }
+
     pub fn get_abort_data(&self) -> Option<AbortData> {
-        self.env.as_ref(&self.store).abort_data
+        self.runner.get_abort_data()
     }
 
-    fn get_memory(instance: &Instance) -> &Memory {
-        instance.exports.get_memory("memory").unwrap()
-    }
+    fn print_results(&mut self, response: &anyhow::Result<Box<[Value]>>) {
+        let remaining_gas = self.runner.get_remaining_gas();
 
-    fn get_function<'a>(instance: &'a Instance, function: &str) -> &'a Function {
-        instance.exports.get_function(function).unwrap()
-    }
-
-    fn print_results(&mut self, response: &Result<Box<[Value]>, RuntimeError>) {
         match &response {
             Ok(results) => println!("Results: {:?}", &results),
             Err(error) => {
                 println!("Execution failed");
-                let remaining_points = get_remaining_points(&mut self.store, &self.instance);
-                match remaining_points {
-                    MeteringPoints::Remaining(_) => eprintln!("{}", &error),
-                    MeteringPoints::Exhausted => (),
+                match remaining_gas {
+                    0 => (),
+                    _ => eprintln!("{}", &error),
                 };
             }
         }
 
-        let remaining_points = get_remaining_points(&mut self.store, &self.instance);
-
-        let gas_used = match remaining_points {
-            MeteringPoints::Remaining(remaining) => MAX_GAS - remaining,
-            MeteringPoints::Exhausted => MAX_GAS,
-        };
-
+        let gas_used = MAX_GAS - remaining_gas;
         println!("Gas used: {gas_used}/{MAX_GAS}");
     }
 }

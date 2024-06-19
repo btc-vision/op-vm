@@ -1,15 +1,15 @@
 use anyhow::anyhow;
 use napi::Error;
-use wasmer::{RuntimeError, Value};
+use wasmer::{MemoryAccessError, Value};
 
-use crate::domain::contract::Contract;
+use crate::domain::runner::RunnerInstance;
 
 pub struct AssemblyScript;
 
 impl AssemblyScript {
-    pub fn __new(contract: &mut Contract, size: i32, id: i32) -> anyhow::Result<i32> {
+    pub fn __new(runner: &mut Box<dyn RunnerInstance>, size: i32, id: i32) -> anyhow::Result<i32> {
         let params = &[Value::I32(size), Value::I32(id)];
-        let result = contract.call("__new", params)?;
+        let result = runner.call("__new", params)?;
 
         let pointer = result
             .get(0)
@@ -20,44 +20,30 @@ impl AssemblyScript {
         return Ok(pointer);
     }
 
-    pub fn __pin(contract: &mut Contract, pointer: i32) -> Result<Box<[Value]>, RuntimeError> {
-        contract.call("__pin", &[Value::I32(pointer)])
+    pub fn __pin(
+        runner: &mut Box<dyn RunnerInstance>,
+        pointer: i32,
+    ) -> anyhow::Result<Box<[Value]>> {
+        runner.call("__pin", &[Value::I32(pointer)])
     }
 
-    pub fn __unpin(contract: &mut Contract, pointer: i32) -> Result<Box<[Value]>, RuntimeError> {
-        contract.call("__unpin", &[Value::I32(pointer)])
-    }
-
-    pub fn lower_string(contract: &mut Contract, value: &str) -> anyhow::Result<u32> {
-        let length: i32 = value.len().try_into()?;
-
-        let result = contract.call("__new", &[Value::I32(length << 1), Value::I32(2)])?;
-
-        let pointer = result
-            .get(0)
-            .ok_or(anyhow!("can't get new string pointer"))?
-            .i32()
-            .ok_or(anyhow!("can't get new string pointer"))?;
-
-        let utf16: Vec<u16> = value.encode_utf16().collect();
-        let utf16_to_u8: &[u8] = bytemuck::try_cast_slice(&utf16.as_slice()).expect("qaq");
-
-        contract.write_memory(pointer as u64, utf16_to_u8).unwrap();
-        contract.call("__pin", &[Value::I32(pointer)])?;
-
-        Ok(pointer as u32)
+    pub fn __unpin(
+        runner: &mut Box<dyn RunnerInstance>,
+        pointer: i32,
+    ) -> anyhow::Result<Box<[Value]>> {
+        runner.call("__unpin", &[Value::I32(pointer)])
     }
 
     pub fn write_buffer(
-        contract: &mut Contract,
-        value: Vec<u8>,
+        mut runner: &mut Box<dyn RunnerInstance>,
+        value: &[u8],
         id: i32,
         align: u32,
     ) -> Result<i64, Error> {
         // Calculate the length and create a new buffer
         let length = value.len();
         let buffer_size = length << align;
-        let buffer = Self::__new(contract, buffer_size as i32, 1);
+        let buffer = Self::__new(&mut runner, buffer_size as i32, 1);
         if buffer.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to get buffer from __new: {:?}",
@@ -68,7 +54,7 @@ impl AssemblyScript {
         let buffer_value = buffer.unwrap();
 
         // Pin the buffer
-        let pinned_buffer = Self::__pin(contract, buffer_value);
+        let pinned_buffer = Self::__pin(runner, buffer_value);
         if pinned_buffer.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to pin buffer: {:?}",
@@ -80,7 +66,7 @@ impl AssemblyScript {
         let pinned_buffer_value = pin_value.unwrap_i32() as u32;
 
         // Create the header
-        let header = Self::__new(contract, 12, id);
+        let header = Self::__new(runner, 12, id);
         if header.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to get header from __new: {:?}",
@@ -91,58 +77,20 @@ impl AssemblyScript {
         let header_value = header.unwrap();
 
         // Set the header values
-        contract.set_u32(header_value, pinned_buffer_value).unwrap();
-        contract
-            .set_u32(header_value + 4, pinned_buffer_value)
-            .unwrap();
-        contract
-            .set_u32(header_value + 8, buffer_size as u32)
-            .unwrap();
+        Self::set_u32(&mut runner, header_value, pinned_buffer_value).unwrap();
+        Self::set_u32(&mut runner, header_value + 4, pinned_buffer_value).unwrap();
+        Self::set_u32(&mut runner, header_value + 8, buffer_size as u32).unwrap();
 
         // Write the buffer value to the contract's memory
-        contract
-            .write_pointer(pinned_buffer_value as u64, value)
-            .unwrap();
+        runner.write_memory(pinned_buffer_value as u64, &value).unwrap();
 
         // Unpin the buffer
-        Self::__unpin(contract, pinned_buffer_value as i32).unwrap();
+        Self::__unpin(runner, pinned_buffer_value as i32).unwrap();
 
         return Ok(header_value as i64);
     }
 
-    pub fn lift_typed_array(contract: &Contract, offset: i32) -> Result<Vec<u8>, Error> {
-        let pointer = contract.read_pointer((offset + 4) as u64, 4);
-        if pointer.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
-
-        let pointer_buffer = pointer.unwrap();
-        let pointer = Self::bytes_to_u32_le(pointer_buffer);
-
-        println!("Pointer: {}", pointer);
-
-        let length = contract.read_pointer((offset + 8) as u64, 4);
-        if length.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
-
-        let length_buffer = length.unwrap();
-        let length = Self::bytes_to_u32_le(length_buffer);
-
-        println!("Length: {}", length);
-        let result = contract.read_pointer(pointer as u64 + 4, length as u64);
-        if result.is_err() {
-            return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
-        }
-
-        Ok(result.unwrap())
-    }
-
-    fn bytes_to_u32_le(bytes: Vec<u8>) -> u32 {
-        let mut result = 0;
-        for i in 0..4 {
-            result |= (bytes[i] as u32) << (i * 8);
-        }
-        result
+    pub fn set_u32(runner: &mut Box<dyn RunnerInstance>, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
+        runner.write_memory(offset as u64, &value.to_le_bytes())
     }
 }

@@ -1,5 +1,7 @@
 use wasmer::wasmparser::Operator;
 
+pub const MAX_GAS: u64 = 300_000_000_000;
+
 pub fn get_op_cost(operator: &Operator) -> u64 {
     use Operator::*;
 
@@ -16,7 +18,7 @@ pub fn get_op_cost(operator: &Operator) -> u64 {
     }
 
     #[rustfmt::skip]
-        let gas_cost = match operator {
+    let gas_cost = match operator {
         op!(Unreachable, Return) => 1,
         op!(Nop) | dot!(I32Const, I64Const) => 1,
         op!(Drop) => 9, // could be 1, but using a higher number helps limit the number of ops in BOLD
