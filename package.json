@@ -55,6 +55,6 @@
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
         "version": "napi version",
-        "setup": "npm run build"
+        "postinstall": "npm run build"
     }
 }
