@@ -1,14 +1,10 @@
 use std::sync::Arc;
 
-use wasmer::{
-    CompilerConfig, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
-    MemoryAccessError, Module, RuntimeError, Store, Value,
-};
+use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, Value};
 use wasmer::sys::EngineBuilder;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 use wasmer_middlewares::Metering;
-use wasmer_types::RawValue;
 
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
@@ -22,14 +18,8 @@ pub struct WasmerInstance {
 
 impl RunnerInstance for WasmerInstance {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        let export = self.instance.exports.get_function(function)?;
+        let export = Self::get_function(&self.instance, function)?;
         let result = export.call(&mut self.store, params)?;
-        Ok(result)
-    }
-
-    fn call_raw(&mut self, function: &str, params: &[RawValue]) -> anyhow::Result<Box<[Value]>> {
-        let export = Self::get_function(&self.instance, &function);
-        let result = export.call_raw(&mut self.store, params.to_vec())?;
         Ok(result)
     }
 
@@ -114,7 +104,7 @@ impl WasmerInstance {
         instance.exports.get_memory("memory").unwrap()
     }
 
-    fn get_function<'a>(instance: &'a Instance, function: &str) -> &'a Function {
-        instance.exports.get_function(function).unwrap()
+    fn get_function<'a>(instance: &'a Instance, function: &str) -> Result<&'a Function, ExportError> {
+        instance.exports.get_function(function)
     }
 }
