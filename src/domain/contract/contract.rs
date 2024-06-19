@@ -1,6 +1,5 @@
 use napi::Error;
 use wasmer::{MemoryAccessError, RuntimeError, Value};
-use wasmer_types::RawValue;
 
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
@@ -23,15 +22,8 @@ impl Contract {
         response
     }
 
-    pub fn call_raw(
-        &mut self,
-        function: &str,
-        params: Vec<RawValue>,
-    ) -> anyhow::Result<Box<[Value]>> {
-        println!("Calling {function}...");
-        let response = self.runner.call_raw(&function, &params);
-        self.print_results(&response);
-        response
+    pub fn get_used_gas(&mut self) -> u64 {
+        MAX_GAS - self.runner.get_remaining_gas()
     }
 
     pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
