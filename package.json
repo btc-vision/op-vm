@@ -44,7 +44,7 @@
     "engines": {
         "node": ">= 16"
     },
-    "devDependencies": {
+    "dependencies": {
         "@napi-rs/cli": "^2.18.3"
     },
     "scripts": {
