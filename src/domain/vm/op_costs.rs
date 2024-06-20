@@ -1,7 +1,5 @@
 use wasmer::wasmparser::Operator;
 
-pub const MAX_GAS: u64 = 300_000_000_000;
-
 pub fn get_op_cost(operator: &Operator) -> u64 {
     use Operator::*;
 
