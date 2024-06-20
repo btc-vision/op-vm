@@ -3,12 +3,12 @@ use std::sync::Arc;
 use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, Value};
 use wasmer::sys::EngineBuilder;
 use wasmer_compiler_singlepass::Singlepass;
-use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
+use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
 
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
-use crate::domain::vm::{get_op_cost, MAX_GAS};
+use crate::domain::vm::get_op_cost;
 
 pub struct WasmerInstance {
     store: Store,
@@ -16,45 +16,9 @@ pub struct WasmerInstance {
     env: FunctionEnv<CustomEnv>,
 }
 
-impl RunnerInstance for WasmerInstance {
-    fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        let export = Self::get_function(&self.instance, function)?;
-        let result = export.call(&mut self.store, params)?;
-        Ok(result)
-    }
-
-    fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&self.store);
-
-        let mut buffer: Vec<u8> = vec![0; length as usize];
-        view.read(offset, &mut buffer).unwrap();
-
-        Ok(buffer)
-    }
-
-    fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&self.store);
-        return view.write(offset, data);
-    }
-
-    fn get_remaining_gas(&mut self) -> u64 {
-        let remaining_points = get_remaining_points(&mut self.store, &self.instance);
-        match remaining_points {
-            MeteringPoints::Remaining(remaining) => remaining,
-            MeteringPoints::Exhausted => 0,
-        }
-    }
-
-    fn get_abort_data(&self) -> Option<AbortData> {
-        self.env.as_ref(&self.store).abort_data
-    }
-}
-
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8]) -> Self {
-        let metering = Arc::new(Metering::new(MAX_GAS, get_op_cost));
+    pub fn new(bytecode: &[u8], max_gas: u64) -> Self {
+        let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
         compiler.canonicalize_nans(true);
@@ -106,5 +70,45 @@ impl WasmerInstance {
 
     fn get_function<'a>(instance: &'a Instance, function: &str) -> Result<&'a Function, ExportError> {
         instance.exports.get_function(function)
+    }
+}
+
+impl RunnerInstance for WasmerInstance {
+    fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+        let export = Self::get_function(&self.instance, function)?;
+        let result = export.call(&mut self.store, params)?;
+        Ok(result)
+    }
+
+    fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+        let memory = Self::get_memory(&self.instance);
+        let view = memory.view(&self.store);
+
+        let mut buffer: Vec<u8> = vec![0; length as usize];
+        view.read(offset, &mut buffer).unwrap();
+
+        Ok(buffer)
+    }
+
+    fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
+        let memory = Self::get_memory(&self.instance);
+        let view = memory.view(&self.store);
+        return view.write(offset, data);
+    }
+
+    fn get_remaining_gas(&mut self) -> u64 {
+        let remaining_points = get_remaining_points(&mut self.store, &self.instance);
+        match remaining_points {
+            MeteringPoints::Remaining(remaining) => remaining,
+            MeteringPoints::Exhausted => 0,
+        }
+    }
+
+    fn set_remaining_gas(&mut self, gas: u64) {
+        set_remaining_points(&mut self.store, &self.instance, gas);
+    }
+
+    fn get_abort_data(&self) -> Option<AbortData> {
+        self.env.as_ref(&self.store).abort_data
     }
 }

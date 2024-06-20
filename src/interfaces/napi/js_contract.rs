@@ -14,10 +14,11 @@ pub struct JsContract {
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
     #[napi(constructor)]
-    pub fn new(bytecode: Buffer) -> Self {
+    pub fn new(bytecode: Buffer, max_gas: BigInt) -> Self {
         let bytecode_vec = bytecode.to_vec();
-        let runner = WasmerInstance::new(&bytecode_vec);
-        let contract = Contract::new(Box::new(runner));
+        let max_gas = max_gas.get_u64().1;
+        let runner = WasmerInstance::new(&bytecode_vec, max_gas);
+        let contract = Contract::new(max_gas, Box::new(runner));
         Self { contract }
     }
 
@@ -50,6 +51,18 @@ impl JsContract {
             result: js_array,
             gas_used: BigInt::from(gas_used),
         })
+    }
+
+    #[napi]
+    pub fn get_used_gas(&mut self) -> BigInt {
+        let gas = self.contract.get_used_gas();
+        BigInt::from(gas)
+    }
+
+    #[napi]
+    pub fn set_used_gas(&mut self, gas: BigInt) {
+        let gas = gas.get_u64().1;
+        self.contract.set_used_gas(gas);
     }
 
     #[napi]

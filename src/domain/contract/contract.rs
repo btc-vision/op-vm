@@ -4,15 +4,15 @@ use wasmer::{MemoryAccessError, RuntimeError, Value};
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
 use crate::domain::runner::RunnerInstance;
-use crate::domain::vm::MAX_GAS;
 
 pub struct Contract {
+    max_gas: u64,
     runner: Box<dyn RunnerInstance>,
 }
 
 impl Contract {
-    pub fn new(runner: Box<dyn RunnerInstance>) -> Self {
-        Self { runner }
+    pub fn new(max_gas: u64, runner: Box<dyn RunnerInstance>) -> Self {
+        Self { max_gas, runner }
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
@@ -23,7 +23,11 @@ impl Contract {
     }
 
     pub fn get_used_gas(&mut self) -> u64 {
-        MAX_GAS - self.runner.get_remaining_gas()
+        self.max_gas - self.runner.get_remaining_gas()
+    }
+    
+    pub fn set_used_gas(&mut self, gas: u64) {
+        self.runner.set_remaining_gas(self.max_gas - gas);
     }
 
     pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
@@ -61,7 +65,8 @@ impl Contract {
             }
         }
 
-        let gas_used = MAX_GAS - remaining_gas;
-        println!("Gas used: {gas_used}/{MAX_GAS}");
+        let max_gas = self.max_gas;
+        let gas_used = max_gas - remaining_gas;
+        println!("Gas used: {gas_used}/{max_gas}");
     }
 }
