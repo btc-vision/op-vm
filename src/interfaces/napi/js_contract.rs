@@ -14,12 +14,13 @@ pub struct JsContract {
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
     #[napi(constructor)]
-    pub fn new(bytecode: Buffer, max_gas: BigInt) -> Self {
+    pub fn new(bytecode: Buffer, max_gas: BigInt) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
-        let runner = WasmerInstance::new(&bytecode_vec, max_gas);
+        let runner = WasmerInstance::new(&bytecode_vec, max_gas).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         let contract = Contract::new(max_gas, Box::new(runner));
-        Self { contract }
+
+        Ok(Self { contract })
     }
 
     #[napi]
@@ -44,9 +45,9 @@ impl JsContract {
             .call(&func_name, &wasm_params)
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         let js_array = JsContract::box_values_to_js_array(&env, result)?;
-        
+
         let gas_used = self.contract.get_used_gas();
-        
+
         Ok(CallResponse {
             result: js_array,
             gas_used: BigInt::from(gas_used),

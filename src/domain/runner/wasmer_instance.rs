@@ -17,7 +17,7 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64) -> Self {
+    pub fn new(bytecode: &[u8], max_gas: u64) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -54,14 +54,14 @@ impl WasmerInstance {
             }
         };
 
-        let module = Module::new(&store, &bytecode).unwrap();
-        let instance = Instance::new(&mut store, &module, &import_object).unwrap();
+        let module: Module = Module::new(&store, &bytecode)?;
+        let instance: Instance = Instance::new(&mut store, &module, &import_object)?;
 
-        Self {
+        Ok(Self {
             store,
             instance,
             env,
-        }
+        })
     }
 
     fn get_memory(instance: &Instance) -> &Memory {
