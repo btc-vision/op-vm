@@ -16,16 +16,16 @@ impl Contract {
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        println!("Calling {function}...");
+        //println!("Calling {function}...");
         let response = self.runner.call(&function, params);
-        self.print_results(&response);
+        //self.print_results(&response);
         response
     }
 
     pub fn get_used_gas(&mut self) -> u64 {
         self.max_gas - self.runner.get_remaining_gas()
     }
-    
+
     pub fn set_used_gas(&mut self, gas: u64) {
         self.runner.set_remaining_gas(self.max_gas - gas);
     }
