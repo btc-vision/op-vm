@@ -27,7 +27,7 @@ impl WasmerInstance {
         compiler.enable_verifier();
 
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, Pages(1)); // 1 page = 64 KiB
+        let tunables = LimitingTunables::new(base, Pages(16)); // 1 page = 64 KiB
 
         let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
         engine.set_tunables(tunables);
