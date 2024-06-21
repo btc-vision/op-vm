@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, NativeEngineExt, RuntimeError, Store, Value};
+use wasmer::{
+    CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
+    MemoryAccessError, Module, RuntimeError, Store, Value,
+};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
@@ -75,7 +78,10 @@ impl WasmerInstance {
         instance.exports.get_memory("memory").unwrap()
     }
 
-    fn get_function<'a>(instance: &'a Instance, function: &str) -> Result<&'a Function, ExportError> {
+    fn get_function<'a>(
+        instance: &'a Instance,
+        function: &str,
+    ) -> Result<&'a Function, ExportError> {
         instance.exports.get_function(function)
     }
 }
