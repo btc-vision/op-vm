@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, Value};
-use wasmer::sys::EngineBuilder;
+use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, NativeEngineExt, RuntimeError, Store, Value};
+use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
+use wasmer_types::{Pages, Target};
 
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
-use crate::domain::vm::get_op_cost;
+use crate::domain::vm::{get_op_cost, LimitingTunables};
 
 pub struct WasmerInstance {
     store: Store,
@@ -23,8 +24,14 @@ impl WasmerInstance {
         let mut compiler = Singlepass::default();
         compiler.canonicalize_nans(true);
         compiler.push_middleware(metering);
+        compiler.enable_verifier();
 
-        let engine = EngineBuilder::new(compiler).set_features(None).engine();
+        let base = BaseTunables::for_target(&Target::default());
+        let tunables = LimitingTunables::new(base, Pages(4)); // 1 page = 64 KiB
+
+        let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
+        engine.set_tunables(tunables);
+
         let mut store = Store::new(engine);
 
         let env = FunctionEnv::new(&mut store, CustomEnv { abort_data: None });

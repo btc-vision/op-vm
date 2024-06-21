@@ -15,59 +15,61 @@ pub fn get_op_cost(operator: &Operator) -> u64 {
         };
     }
 
+
+
     #[rustfmt::skip]
-    let gas_cost = match operator {
-        op!(Unreachable, Return) => 1,
-        op!(Nop) | dot!(I32Const, I64Const) => 1,
-        op!(Drop) => 9, // could be 1, but using a higher number helps limit the number of ops in BOLD
+        let gas_cost = match operator {
+        op!(Unreachable, Return) => 2,
+        op!(Nop) | dot!(I32Const, I64Const) => 2,
+        op!(Drop) => 10,
 
-        dot!(Block, Loop) | op!(Else, End) => 1,
-        dot!(Br, BrIf, If) => 765,
-        dot!(Select) => 1250, // TODO: improve wasmer codegen
-        dot!(Call) => 3800,
-        dot!(LocalGet, LocalTee) => 75,
-        dot!(LocalSet) => 210,
-        dot!(GlobalGet) => 225,
-        dot!(GlobalSet) => 575,
-        dot!(I32Load, I32Load8S, I32Load8U, I32Load16S, I32Load16U) => 670,
-        dot!(I64Load, I64Load8S, I64Load8U, I64Load16S, I64Load16U, I64Load32S, I64Load32U) => 680,
-        dot!(I32Store, I32Store8, I32Store16) => 825,
-        dot!(I64Store, I64Store8, I64Store16, I64Store32) => 950,
-        dot!(MemorySize) => 3000,
-        dot!(MemoryGrow) => 8050, // rest of cost handled by memory pricer
+        dot!(Block, Loop) | op!(Else, End) => 2,
+        dot!(Br, BrIf, If) => 766,
+        dot!(Select) => 1251,
+        dot!(Call) => 3801,
+        dot!(LocalGet, LocalTee) => 76,
+        dot!(LocalSet) => 211,
+        dot!(GlobalGet) => 226,
+        dot!(GlobalSet) => 576,
+        dot!(I32Load, I32Load8S, I32Load8U, I32Load16S, I32Load16U) => 671,
+        dot!(I64Load, I64Load8S, I64Load8U, I64Load16S, I64Load16U, I64Load32S, I64Load32U) => 681,
+        dot!(I32Store, I32Store8, I32Store16) => 826,
+        dot!(I64Store, I64Store8, I64Store16, I64Store32) => 951,
 
-        op!(I32Eqz, I32Eq, I32Ne, I32LtS, I32LtU, I32GtS, I32GtU, I32LeS, I32LeU, I32GeS, I32GeU) => 170,
-        op!(I64Eqz, I64Eq, I64Ne, I64LtS, I64LtU, I64GtS, I64GtU, I64LeS, I64LeU, I64GeS, I64GeU) => 225,
-        op!(I32Clz) => 210,
-        op!(I32Ctz) => 2650, // slow on ARM, fast on x86
-        op!(I32Add, I32Sub) => 70,
-        op!(I32Mul) => 160,
-        op!(I32DivS, I32DivU, I32RemS, I32RemU) => 1120,
-        op!(I32And, I32Or, I32Xor, I32Shl, I32ShrS, I32ShrU, I32Rotl, I32Rotr) => 70,
-        op!(I64Clz) => 210,
-        op!(I64Ctz) => 6000, // slow on ARM, fast on x86
-        op!(I64Add, I64Sub) => 100,
-        op!(I64Mul) => 160,
-        op!(I64DivS, I64DivU, I64RemS, I64RemU) => 1270,
-        op!(I64And, I64Or, I64Xor, I64Shl, I64ShrS, I64ShrU, I64Rotl, I64Rotr) => 100,
-        op!(I32Popcnt) => 2650, // slow on ARM, fast on x86
-        op!(I64Popcnt) => 6000, // slow on ARM, fast on x86
+        dot!(MemorySize) => 3001,
+        dot!(MemoryGrow) => 8051,
 
-        op!(I32WrapI64, I64ExtendI32S, I64ExtendI32U) => 100,
-        op!(I32Extend8S, I32Extend16S, I64Extend8S, I64Extend16S, I64Extend32S) => 100,
-        dot!(MemoryCopy) => 950,
-        dot!(MemoryFill) => 950,
+        op!(I32Eqz, I32Eq, I32Ne, I32LtS, I32LtU, I32GtS, I32GtU, I32LeS, I32LeU, I32GeS, I32GeU) => 171,
+        op!(I64Eqz, I64Eq, I64Ne, I64LtS, I64LtU, I64GtS, I64GtU, I64LeS, I64LeU, I64GeS, I64GeU) => 226,
+        op!(I32Clz) => 211,
+        op!(I32Ctz) => 2651,
+        op!(I32Add, I32Sub) => 71,
+        op!(I32Mul) => 161,
+        op!(I32DivS, I32DivU, I32RemS, I32RemU) => 1121,
+        op!(I32And, I32Or, I32Xor, I32Shl, I32ShrS, I32ShrU, I32Rotl, I32Rotr) => 71,
+        op!(I64Clz) => 211,
+        op!(I64Ctz) => 6001,
+        op!(I64Add, I64Sub) => 101,
+        op!(I64Mul) => 161,
+        op!(I64DivS, I64DivU, I64RemS, I64RemU) => 1271,
+        op!(I64And, I64Or, I64Xor, I64Shl, I64ShrS, I64ShrU, I64Rotl, I64Rotr) => 101,
+        op!(I32Popcnt) => 2651,
+        op!(I64Popcnt) => 6001,
+
+        op!(I32WrapI64, I64ExtendI32S, I64ExtendI32U) => 101,
+        op!(I32Extend8S, I32Extend16S, I64Extend8S, I64Extend16S, I64Extend32S) => 101,
+        dot!(MemoryCopy) => 951,
+        dot!(MemoryFill) => 951,
 
         BrTable { targets } => {
-            2400 + 325 * targets.len() as u64
-        }
-        CallIndirect { /*type_index,*/ .. } => {
-            // let ty = tys.get(&SignatureIndex::from_u32(*type_index)).expect("no type");
-            // 13610 + 650 * ty.inputs.len() as u64
-            13610
+            2401 + 326 * targets.len() as u64
         }
 
-        // we don't support the following, so return u64::MAX
+        CallIndirect { .. } => {
+            14262
+        }
+
+        // return u64::MAX
         dot!(
             Try, Catch, CatchAll, Delegate, Throw, Rethrow, ThrowRef, TryTable,
 
