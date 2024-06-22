@@ -64,7 +64,7 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        fn load(mut env: &FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<(), RuntimeError> {
+        async fn load(mut env: &FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<(), RuntimeError> {
             let data = env.data_mut();
             let js_pointer: BigInt = BigInt::from(pointer);
 
