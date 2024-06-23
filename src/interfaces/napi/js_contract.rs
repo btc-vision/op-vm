@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use napi::{Env, Error, JsNumber, JsUnknown, Result};
-use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
+use napi::bindgen_prelude::{Array, BigInt, Buffer, Function, Undefined};
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
@@ -14,14 +16,19 @@ pub struct JsContract {
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
     #[napi(constructor)]
-    pub fn new(bytecode: Buffer, max_gas: BigInt) -> Result<Self> {
+    pub fn new(bytecode: Buffer, max_gas: BigInt, js_load_function: Function<Vec<BigInt>, BigInt>, js_store_function: Function<Vec<BigInt>, BigInt>) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
-        let runner = WasmerInstance::new(&bytecode_vec, max_gas).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+        let load_function = js_load_function.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]));
+        let store_function = js_store_function.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]));
+
+        let runner = WasmerInstance::new(&bytecode_vec, max_gas, Arc::new(load_function), Arc::new(store_function)).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         let contract = Contract::new(max_gas, Box::new(runner));
 
         Ok(Self { contract })
     }
+
 
     #[napi]
     pub fn call(&mut self, env: Env, func_name: String, params: Vec<JsNumber>) -> Result<CallResponse> {

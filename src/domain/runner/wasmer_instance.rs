@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use napi::bindgen_prelude::BigInt;
+use napi::Status;
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::{
     CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
     MemoryAccessError, Module, RuntimeError, Store, Value,
@@ -21,7 +24,7 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64) -> anyhow::Result<Self> {
+    pub fn new(bytecode: &[u8], max_gas: u64, load_function: Arc<ThreadsafeFunction<BigInt, ErrorStrategy::Fatal>>, store_function: Arc<ThreadsafeFunction<BigInt, ErrorStrategy::Fatal>>) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -37,7 +40,11 @@ impl WasmerInstance {
 
         let mut store = Store::new(engine);
 
-        let env = FunctionEnv::new(&mut store, CustomEnv { abort_data: None });
+        let env = FunctionEnv::new(&mut store, CustomEnv {
+            abort_data: None,
+            load_function,
+            store_function,
+        });
 
         fn abort(
             mut env: FunctionEnvMut<CustomEnv>,
@@ -57,10 +64,36 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
+        async fn load(mut env: &FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<(), RuntimeError> {
+            let data = env.data_mut();
+            let js_pointer: BigInt = BigInt::from(pointer);
+
+            let result: Status = data.load_function.call(js_pointer, napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking);
+
+            match result {
+                Ok(value) => {
+                    let js_value: JsUnknown = value.await.unwrap();
+                    let js_bigint: BigInt = js_value.try_into()?;
+                    Ok(js_bigint)
+                }
+                Err(e) => Err(Error::new(Status::GenericFailure, format!("Failed to call JavaScript function: {:?}", e))),
+            }
+        }
+
+        fn store_fn(mut env: &FunctionEnvMut<CustomEnv>, offset: u32, data: &[u8]) -> Result<(), RuntimeError> {
+            let result = data.store(offset, data);
+            result
+        }
+
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
+        let load_typed = Function::new_typed_with_env(&mut store, &env, load);
+        let store_typed = Function::new_typed_with_env(&mut store, &env, store_fn);
+
         let import_object = imports! {
             "env" => {
                 "abort" => abort_typed,
+                "load" => load_typed,
+                "store" => store_typed
             }
         };
 
