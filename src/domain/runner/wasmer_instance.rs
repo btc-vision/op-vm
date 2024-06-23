@@ -8,7 +8,7 @@ use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
-use wasmer_types::{Pages, Target};
+use wasmer_types::Target;
 
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
@@ -30,7 +30,7 @@ impl WasmerInstance {
         compiler.enable_verifier();
 
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, Pages(16)); // 1 page = 64 KiB
+        let tunables = LimitingTunables::new(base, 16, 1024 * 1024);
 
         let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
         engine.set_tunables(tunables);

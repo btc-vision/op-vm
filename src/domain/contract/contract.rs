@@ -51,6 +51,7 @@ impl Contract {
         self.runner.get_abort_data()
     }
 
+    #[allow(dead_code)]
     fn print_results(&mut self, response: &anyhow::Result<Box<[Value]>>) {
         let remaining_gas = self.runner.get_remaining_gas();
 

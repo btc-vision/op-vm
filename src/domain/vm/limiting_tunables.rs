@@ -5,6 +5,7 @@ use wasmer::{
     , Pages, TableType, Tunables
     , vm::{self, MemoryError, MemoryStyle, TableStyle, VMMemoryDefinition, VMTableDefinition},
 };
+use wasmer::sys::VMConfig;
 
 /// A custom tunables that allows you to set a memory limit.
 ///
@@ -14,14 +15,18 @@ pub struct LimitingTunables<T: Tunables> {
     /// The maximum a linear memory is allowed to be (in Wasm pages, 64 KiB each).
     /// Since Wasmer ensures there is only none or one memory, this is practically
     /// an upper limit for the guest memory.
-    limit: Pages,
+    max_pages: Pages, // 1 page = 64 KiB
+    vm_config: VMConfig,
     /// The base implementation we delegate all the logic to
     base: T,
 }
 
 impl<T: Tunables> LimitingTunables<T> {
-    pub fn new(base: T, limit: Pages) -> Self {
-        Self { limit, base }
+    pub fn new(base: T, max_pages: u32, stack_size: usize) -> Self {
+        let vm_config = VMConfig {
+            wasm_stack_size: Some(stack_size),
+        };
+        Self { max_pages: Pages(max_pages), vm_config, base }
     }
 
     /// Takes an input memory type as requested by the guest and sets
@@ -31,22 +36,22 @@ impl<T: Tunables> LimitingTunables<T> {
     fn adjust_memory(&self, requested: &MemoryType) -> MemoryType {
         let mut adjusted = requested.clone();
         if requested.maximum.is_none() {
-            adjusted.maximum = Some(self.limit);
+            adjusted.maximum = Some(self.max_pages);
         }
         adjusted
     }
 
-    /// Ensures the a given memory type does not exceed the memory limit.
+    /// Ensures that a given memory type does not exceed the memory limit.
     /// Call this after adjusting the memory.
     fn validate_memory(&self, ty: &MemoryType) -> Result<(), MemoryError> {
-        if ty.minimum > self.limit {
+        if ty.minimum > self.max_pages {
             return Err(MemoryError::Generic(
                 "Minimum exceeds the allowed memory limit".to_string(),
             ));
         }
 
         if let Some(max) = ty.maximum {
-            if max > self.limit {
+            if max > self.max_pages {
                 return Err(MemoryError::Generic(
                     "Maximum exceeds the allowed memory limit".to_string(),
                 ));
@@ -120,5 +125,9 @@ impl<T: Tunables> Tunables for LimitingTunables<T> {
         vm_definition_location: NonNull<VMTableDefinition>,
     ) -> Result<vm::VMTable, String> {
         self.base.create_vm_table(ty, style, vm_definition_location)
+    }
+
+    fn vmconfig(&self) -> &VMConfig {
+        &self.vm_config
     }
 }
