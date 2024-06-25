@@ -7,7 +7,7 @@ use crate::domain::runner::RunnerInstance;
 pub struct AssemblyScript;
 
 impl AssemblyScript {
-    pub fn __new(runner: &mut Box<dyn RunnerInstance>, size: i32, id: i32) -> anyhow::Result<i32> {
+    pub fn __new(runner: &mut dyn RunnerInstance, size: i32, id: i32) -> anyhow::Result<i32> {
         let params = &[Value::I32(size), Value::I32(id)];
         let result = runner.call("__new", params)?;
 
@@ -21,21 +21,21 @@ impl AssemblyScript {
     }
 
     pub fn __pin(
-        runner: &mut Box<dyn RunnerInstance>,
+        runner: &mut dyn RunnerInstance,
         pointer: i32,
     ) -> anyhow::Result<Box<[Value]>> {
         runner.call("__pin", &[Value::I32(pointer)])
     }
 
     pub fn __unpin(
-        runner: &mut Box<dyn RunnerInstance>,
+        runner: &mut dyn RunnerInstance,
         pointer: i32,
     ) -> anyhow::Result<Box<[Value]>> {
         runner.call("__unpin", &[Value::I32(pointer)])
     }
 
     pub fn write_buffer(
-        mut runner: &mut Box<dyn RunnerInstance>,
+        runner: &mut dyn RunnerInstance,
         value: &[u8],
         id: i32,
         align: u32,
@@ -43,7 +43,7 @@ impl AssemblyScript {
         // Calculate the length and create a new buffer
         let length = value.len();
         let buffer_size = length << align;
-        let buffer = Self::__new(&mut runner, buffer_size as i32, 1);
+        let buffer = Self::__new(runner, buffer_size as i32, 1);
         if buffer.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to get buffer from __new: {:?}",
@@ -77,9 +77,9 @@ impl AssemblyScript {
         let header_value = header.unwrap();
 
         // Set the header values
-        Self::set_u32(&mut runner, header_value, pinned_buffer_value).unwrap();
-        Self::set_u32(&mut runner, header_value + 4, pinned_buffer_value).unwrap();
-        Self::set_u32(&mut runner, header_value + 8, buffer_size as u32).unwrap();
+        Self::set_u32(runner, header_value, pinned_buffer_value).unwrap();
+        Self::set_u32(runner, header_value + 4, pinned_buffer_value).unwrap();
+        Self::set_u32(runner, header_value + 8, buffer_size as u32).unwrap();
 
         // Write the buffer value to the contract's memory
         runner.write_memory(pinned_buffer_value as u64, &value).unwrap();
@@ -90,7 +90,7 @@ impl AssemblyScript {
         return Ok(header_value as i64);
     }
 
-    pub fn set_u32(runner: &mut Box<dyn RunnerInstance>, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
+    pub fn set_u32(runner: &mut dyn RunnerInstance, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
         runner.write_memory(offset as u64, &value.to_le_bytes())
     }
 }

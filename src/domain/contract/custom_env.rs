@@ -1,8 +1,10 @@
-use std::sync::Arc;
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use wasmer::Memory;
 
 use crate::domain::contract::abort_data::AbortData;
 
 pub struct CustomEnv {
     pub abort_data: Option<AbortData>,
-    pub load_function: Arc<dyn Fn(u32) -> u32 + Sync + Send>,
+    pub memory: Option<Memory>,
+    pub load_function: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>,
 }

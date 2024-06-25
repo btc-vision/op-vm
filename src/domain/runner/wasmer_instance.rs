@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use tokio::runtime::Runtime;
+use tokio::sync::Mutex;
 use wasmer::{
     CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
     MemoryAccessError, Module, RuntimeError, Store, Value,
@@ -8,7 +11,7 @@ use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
-use wasmer_types::Target;
+use wasmer_types::{FunctionType, Target, Type};
 
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
@@ -21,7 +24,7 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64, load_function: Arc<dyn Fn(u32) -> u32 + Sync + Send>) -> anyhow::Result<Self> {
+    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -38,6 +41,7 @@ impl WasmerInstance {
         let mut store = Store::new(engine);
 
         let env = FunctionEnv::new(&mut store, CustomEnv {
+            memory: None,
             abort_data: None,
             load_function,
         });
@@ -60,35 +64,61 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        fn load(mut env: FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<u32, RuntimeError> {
+        /*fn load(mut env: FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<u32, RuntimeError> {
             let data = env.data_mut();
             Ok((data.load_function)(pointer))
-        }
+        }*/
 
-        // fn load(mut env: FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<(), RuntimeError> {
-        //     let data = env.data_mut();
-        //     let js_pointer: BigInt = BigInt::from(pointer as u64);
-        //
-        //     let result = data.load_function.call_with_return_value(js_pointer, napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking);
-        //
-        //     Ok(())
-        // }
+        let deploy_from_address_mut = move |context: FunctionEnvMut<CustomEnv>, values: &[Value]| {
+            let ptr: u32 = values[0].unwrap_i32() as u32;
 
-        // fn store(mut env: &FunctionEnvMut<CustomEnv>, offset: u32, data: &[u8]) -> Result<(), RuntimeError> {
-        //     let result = data.store(offset, data);
-        //     result
-        // }
+            let async_context = Arc::new(Mutex::new(context));
+
+            let deploy = {
+                let async_context = async_context.clone();
+                async move {
+                    let mut context = async_context.lock().await;
+                    let mutable_context = context.as_mut();
+                    let state = mutable_context.data();
+
+                    let load_func: ThreadsafeFunction<u32> = state.load_function.clone();
+
+                    println!("Calling load function from async context...");
+
+                    let response: Result<u32, RuntimeError> = load_func.call_async(Ok(ptr)).await.map_err(|e| {
+                        println!("Error calling load function: {:?}", e);
+                        RuntimeError::new("Error calling load function")
+                    });
+
+                    Ok(vec![Value::I32(response.unwrap() as i32)])
+                }
+            };
+
+            let rt = Runtime::new().unwrap();
+            let response = rt.block_on(deploy);
+
+            response
+        };
 
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let load_typed = Function::new_typed_with_env(&mut store, &env, load);
+        let deploy_from_address_signature = FunctionType::new(
+            vec![Type::I32],
+            vec![Type::I32],
+        );
+
+        let deploy_from_address = Function::new_with_env(
+            &mut store,
+            &env,
+            deploy_from_address_signature,
+            deploy_from_address_mut,
+        );
+
         // let store_typed = Function::new_typed_with_env(&mut store, &env, store);
 
         let import_object = imports! {
             "env" => {
                 "abort" => abort_typed,
-                //"load" => load_typed,
-                "deployFromAddress" => load_typed,
-                // "store" => store_typed,
+                "deployFromAddress" => deploy_from_address,
             }
         };
 
