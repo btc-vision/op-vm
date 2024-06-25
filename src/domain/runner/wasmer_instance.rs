@@ -113,8 +113,6 @@ impl WasmerInstance {
             deploy_from_address_mut,
         );
 
-        // let store_typed = Function::new_typed_with_env(&mut store, &env, store);
-
         let import_object = imports! {
             "env" => {
                 "abort" => abort_typed,

@@ -2,13 +2,16 @@ use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
 use anyhow::anyhow;
+use futures::FutureExt;
 use napi::{CallContext, Env, Error, JsFunction, JsNumber, JsObject, JsString, JsUnknown, NapiRaw, Result};
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Promise, Undefined};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tokio::task;
-use wasmer::Value;
+use tokio::task::JoinHandle;
+use wasmer::{RuntimeError, Value};
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
@@ -59,96 +62,16 @@ impl Task for ContractCallTask {
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    #[napi]
-    pub fn call(&self, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
-        let mut wasm_params = Vec::new();
-        let length = params.len();
-
-        for i in 0..length {
-            let param = params.get(i).expect("Failed to get param");
-            let param_value = param.get_int32();
-
-            if param_value.is_err() {
-                return Err(Error::from_reason(format!("{:?}", param_value.unwrap_err())));
-            }
-
-            wasm_params.push(Value::I32(param_value.unwrap()));
-        }
-
-        let contract = self.contract.clone();
-        Ok(AsyncTask::new(ContractCallTask {
-            contract,
-            func_name,
-            wasm_params,
-        }))
-    }
-    //#[napi]
-    /*pub fn call(ctx: CallContext) -> Result<JsObject> {
-        let mut env = ctx.env.clone();
-        let func_name = ctx.get::<JsString>(0)?.into_utf8()?.as_str()?.to_string();
-        let params: Vec<JsNumber> = ctx.get::<Vec<JsNumber>>(1).unwrap().to_vec()
-            .into_iter()
-            .map(|value| value.coerce_to_number().unwrap())
-            .collect();
-
-        let mut wasm_params = Vec::new();
-        for param in params {
-            let param_value = param.get_int32()?;
-            wasm_params.push(Value::I32(param_value));
-        }
-
-        let contract = env.get
-
-        let task = ContractCallTask {
-            contract,
-            func_name,
-            wasm_params,
-        };
-
-        ctx.env.spawn(task).map(|async_task| async_task.promise_object())
-    }*/
-
-    /*#[napi]
-   pub async fn call(
-       &self,
-       env: Env,
-       func_name: String,
-       params: Vec<JsNumber>,
-   ) -> Result<CallResponse> {
-       let (tx, rx) = oneshot::channel();
-       let mut wasm_params = Vec::new();
-       for param in params {
-           let param_value = param.get_int32()?;
-           wasm_params.push(Value::I32(param_value));
-       }
-
-       let contract = self.contract.clone();
-       task::spawn_blocking(move || {
-           let result = {
-               let mut contract = contract.lock().unwrap();
-               contract.call(&func_name, &wasm_params).map_err(|e| Error::from_reason(format!("{:?}", e)))
-           };
-           tx.send(result).expect("Failed to send result");
-       });
-
-       let result = rx.await.map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?.map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-       let js_array = JsContract::box_values_to_js_array(&env, result)?;
-       let gas_used = self.contract.lock().unwrap().get_used_gas();
-
-       Ok(CallResponse {
-           result: js_array,
-           gas_used: BigInt::from(gas_used),
-       })
-   }*/
-
     #[napi(constructor)]
     pub fn new(
+        env: Env,
         bytecode: Buffer,
         max_gas: BigInt,
-        js_load_function: JsFunction,//Function<u32, u32>,
+        js_load_function: JsFunction,
     ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
+
         let tsfn: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled> = js_load_function
             .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<u32>| {
                 ctx.env.create_uint32(ctx.value).map(|v| vec![v])
@@ -175,6 +98,30 @@ impl JsContract {
 
         let deploy_tsfn_clone = tsfn.clone();
         Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone })
+    }
+
+    #[napi]
+    pub fn call(&self, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
+        let mut wasm_params = Vec::new();
+        let length = params.len();
+
+        for i in 0..length {
+            let param = params.get(i).expect("Failed to get param");
+            let param_value = param.get_int32();
+
+            if param_value.is_err() {
+                return Err(Error::from_reason(format!("{:?}", param_value.unwrap_err())));
+            }
+
+            wasm_params.push(Value::I32(param_value.unwrap()));
+        }
+
+        let contract = self.contract.clone();
+        Ok(AsyncTask::new(ContractCallTask {
+            contract,
+            func_name,
+            wasm_params,
+        }))
     }
 
     #[napi]
