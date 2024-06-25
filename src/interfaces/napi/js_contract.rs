@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use napi::{Env, Error, JsNumber, JsUnknown, Result};
+use napi::{Env, Error, JsFunction, JsNumber, JsUnknown, Result};
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Function, Undefined};
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::tokio::runtime::Runtime;
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
@@ -13,25 +15,54 @@ pub struct JsContract {
     contract: Contract,
 }
 
-#[napi] //noinspection RsCompileErrorMacro
+// #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    #[napi(constructor)]
-    pub fn new(bytecode: Buffer, max_gas: BigInt, js_load_function: Function<Vec<BigInt>, BigInt>, js_store_function: Function<Vec<BigInt>, BigInt>) -> Result<Self> {
+    // #[napi(constructor)]
+    pub fn new(
+        bytecode: Buffer,
+        max_gas: BigInt,
+        js_load_function: JsFunction,
+    ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
+        let tsfn: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled> = js_load_function
+            .create_threadsafe_function(0, |ctx| {
+                ctx.env.create_uint32(ctx.value + 1).map(|v| vec![v])
+            })?;
 
-        let load_function = js_load_function.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]));
-        let store_function = js_store_function.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]));
+        // let load_function = js_load_function.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]));
 
-        let runner = WasmerInstance::new(&bytecode_vec, max_gas, Arc::new(load_function), Arc::new(store_function)).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+        let load_function = move |pointer: u32| -> u32 {
+            let js_pointer = BigInt::from(pointer as u64);
+            let runtime = Runtime::new().unwrap();
+            let result = tsfn.call_async(Ok(pointer));
+            futures::executor::block_on(async move {
+                runtime.spawn(async move {
+                    return result.await.unwrap();
+                }).await.unwrap()
+            })
+        };
+
+        // let load_function = |pointer: u32| -> u32 {
+        //     let js_pointer = BigInt::from(pointer as u64);
+        //     let result = js_load_function.call(js_pointer).unwrap();
+        //     result.get_u64().1 as u32
+        // };
+
+        let runner = WasmerInstance::new(&bytecode_vec, max_gas, Arc::new(load_function))
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         let contract = Contract::new(max_gas, Box::new(runner));
 
         Ok(Self { contract })
     }
 
-
     #[napi]
-    pub fn call(&mut self, env: Env, func_name: String, params: Vec<JsNumber>) -> Result<CallResponse> {
+    pub fn call(
+        &mut self,
+        env: Env,
+        func_name: String,
+        params: Vec<JsNumber>,
+    ) -> Result<CallResponse> {
         let mut wasm_params = Vec::new();
 
         for param in params {
