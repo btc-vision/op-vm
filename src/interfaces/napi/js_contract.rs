@@ -1,17 +1,16 @@
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
-use anyhow::anyhow;
-use futures::FutureExt;
-use napi::{CallContext, Env, Error, JsFunction, JsNumber, JsObject, JsString, JsUnknown, NapiRaw, Result};
 use napi::bindgen_prelude::*;
-use napi::bindgen_prelude::{Array, BigInt, Buffer, Promise, Undefined};
+use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
+use napi::Env;
+use napi::Error;
+use napi::JsFunction;
+use napi::JsNumber;
+use napi::JsUnknown;
+use napi::Result;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
-use tokio::runtime::Runtime;
-use tokio::sync::oneshot;
-use tokio::task;
-use tokio::task::JoinHandle;
-use wasmer::{RuntimeError, Value};
+use wasmer::Value;
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
@@ -20,7 +19,7 @@ use crate::interfaces::{AbortDataResponse, CallResponse};
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
-    deploy_tsfn: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>,
+    deploy_tsfn: ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>,
 }
 
 pub struct ContractCallTask {
@@ -64,7 +63,6 @@ impl Task for ContractCallTask {
 impl JsContract {
     #[napi(constructor)]
     pub fn new(
-        env: Env,
         bytecode: Buffer,
         max_gas: BigInt,
         js_load_function: JsFunction,
@@ -72,9 +70,9 @@ impl JsContract {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let tsfn: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled> = js_load_function
-            .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<u32>| {
-                ctx.env.create_uint32(ctx.value).map(|v| vec![v])
+        let tsfn: ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled> = js_load_function
+            .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<Vec<u8>>| {
+                Ok(vec![ctx.value])
             })?;
 
         let (tx, rx) = mpsc::channel();

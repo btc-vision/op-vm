@@ -3,10 +3,7 @@ use std::sync::Arc;
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
-use wasmer::{
-    CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory,
-    MemoryAccessError, Module, RuntimeError, Store, Value,
-};
+use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, Value};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
@@ -24,7 +21,7 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
+    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -81,16 +78,28 @@ impl WasmerInstance {
                     let mutable_context = context.as_mut();
                     let state = mutable_context.data();
 
-                    let load_func: ThreadsafeFunction<u32> = state.load_function.clone();
+                    let load_func: ThreadsafeFunction<Vec<u8>> = state.load_function.clone();
 
                     println!("Calling load function from async context...");
 
-                    let response: Result<u32, RuntimeError> = load_func.call_async(Ok(ptr)).await.map_err(|e| {
+                    let (env, store) = context.data_and_store_mut();
+                    let memory = env.memory.clone().unwrap();
+                    let view = memory.view(&store);
+
+                    let key = read_memory(&view, ptr as u64, 32).unwrap();
+
+                    let response: Result<Vec<u8>, RuntimeError> = load_func.call_async(Ok(key)).await.map_err(|e| {
                         println!("Error calling load function: {:?}", e);
                         RuntimeError::new("Error calling load function")
                     });
 
-                    Ok(vec![Value::I32(response.unwrap() as i32)])
+                    let data = response.unwrap();
+
+                    println!("Data received: {:?}", &data);
+
+                    write_memory(&view, 0, &data).unwrap();
+
+                    Ok(vec![Value::I32(0)])
                 }
             };
 
@@ -122,6 +131,8 @@ impl WasmerInstance {
 
         let module: Module = Module::new(&store, &bytecode)?;
         let instance: Instance = Instance::new(&mut store, &module, &import_object)?;
+
+        env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
 
         Ok(Self {
             store,
@@ -162,7 +173,7 @@ impl RunnerInstance for WasmerInstance {
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
         let memory = Self::get_memory(&self.instance);
         let view = memory.view(&self.store);
-        return view.write(offset, data);
+        view.write(offset, data)
     }
 
     fn get_remaining_gas(&mut self) -> u64 {
@@ -180,4 +191,16 @@ impl RunnerInstance for WasmerInstance {
     fn get_abort_data(&self) -> Option<AbortData> {
         self.env.as_ref(&self.store).abort_data
     }
+}
+
+fn read_memory(view: &MemoryView, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+
+    let mut buffer: Vec<u8> = vec![0; length as usize];
+    view.read(offset, &mut buffer).unwrap();
+
+    Ok(buffer)
+}
+
+fn write_memory(view: &MemoryView, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
+    view.write(offset, data)
 }
