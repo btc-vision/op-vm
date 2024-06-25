@@ -15,9 +15,9 @@ pub struct JsContract {
     contract: Contract,
 }
 
-// #[napi] //noinspection RsCompileErrorMacro
+#[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    // #[napi(constructor)]
+    #[napi(constructor)]
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
@@ -30,18 +30,23 @@ impl JsContract {
                 ctx.env.create_uint32(ctx.value + 1).map(|v| vec![v])
             })?;
 
-        // let load_function = js_load_function.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]));
+        let tsfn: Arc<ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>> = Arc::new(tsfn);
 
-        let load_function = move |pointer: u32| -> u32 {
-            let js_pointer = BigInt::from(pointer as u64);
-            let runtime = Runtime::new().unwrap();
-            let result = tsfn.call_async(Ok(pointer));
-            futures::executor::block_on(async move {
-                runtime.spawn(async move {
-                    return result.await.unwrap();
-                }).await.unwrap()
-            })
+        let load_function = {
+            let tsfn_clone = Arc::clone(&tsfn);
+            move |pointer: u32| -> u32 {
+                let tsfn_inner = Arc::clone(&tsfn_clone);
+                let result = tokio::task::block_in_place(|| {
+                    let runtime = Runtime::new().unwrap();
+                    runtime.block_on(async move {
+                        let async_result = tsfn_inner.call_async(Ok(pointer)).await;
+                        async_result.unwrap_or_else(|_| 0)
+                    })
+                });
+                result
+            }
         };
+
 
         // let load_function = |pointer: u32| -> u32 {
         //     let js_pointer = BigInt::from(pointer as u64);
