@@ -86,7 +86,8 @@ impl WasmerInstance {
         let import_object = imports! {
             "env" => {
                 "abort" => abort_typed,
-                "load" => load_typed,
+                //"load" => load_typed,
+                "deployFromAddress" => load_typed,
                 // "store" => store_typed,
             }
         };

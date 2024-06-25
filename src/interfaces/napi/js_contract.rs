@@ -4,6 +4,7 @@ use napi::{Env, Error, JsFunction, JsNumber, JsUnknown, Result};
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Function, Undefined};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi::tokio::runtime::Runtime;
+use tokio::task;
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
@@ -13,6 +14,8 @@ use crate::interfaces::{AbortDataResponse, CallResponse};
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Contract,
+    _tsfn: Arc<ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>>,
+    runtime: Arc<Runtime>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -31,14 +34,19 @@ impl JsContract {
             })?;
 
         let tsfn: Arc<ThreadsafeFunction<u32, ErrorStrategy::CalleeHandled>> = Arc::new(tsfn);
+        let runtime = Arc::new(Runtime::new().unwrap());
 
+        let tsfn_clone = Arc::clone(&tsfn);
         let load_function = {
-            let tsfn_clone = Arc::clone(&tsfn);
+            let runtime_clone = Arc::clone(&runtime);
+            let tsfn_clone = Arc::clone(&tsfn_clone);
             move |pointer: u32| -> u32 {
                 let tsfn_inner = Arc::clone(&tsfn_clone);
-                let result = tokio::task::block_in_place(|| {
-                    let runtime = Runtime::new().unwrap();
-                    runtime.block_on(async move {
+                let handle = runtime_clone.handle();
+
+                let result = task::block_in_place(|| {
+                    //let runtime = Runtime::new().unwrap();
+                    handle.block_on(async move {
                         let async_result = tsfn_inner.call_async(Ok(pointer)).await;
                         async_result.unwrap_or_else(|_| 0)
                     })
@@ -46,7 +54,6 @@ impl JsContract {
                 result
             }
         };
-
 
         // let load_function = |pointer: u32| -> u32 {
         //     let js_pointer = BigInt::from(pointer as u64);
@@ -58,7 +65,7 @@ impl JsContract {
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         let contract = Contract::new(max_gas, Box::new(runner));
 
-        Ok(Self { contract })
+        Ok(Self { contract, _tsfn: tsfn, runtime })
     }
 
     #[napi]
