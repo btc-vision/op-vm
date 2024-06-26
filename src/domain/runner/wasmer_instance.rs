@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, Value};
+use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
@@ -13,6 +14,7 @@ use wasmer_types::{FunctionType, Target, Type};
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
 use crate::domain::vm::{get_op_cost, LimitingTunables};
+use crate::interfaces::ThreadSafeJsImportResponse;
 
 pub struct WasmerInstance {
     store: Store,
@@ -21,7 +23,7 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
+    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -36,12 +38,8 @@ impl WasmerInstance {
         engine.set_tunables(tunables);
 
         let mut store = Store::new(engine);
-
-        let env = FunctionEnv::new(&mut store, CustomEnv {
-            memory: None,
-            abort_data: None,
-            load_function,
-        });
+        let instance = CustomEnv::new(load_function)?;
+        let env = FunctionEnv::new(&mut store, instance);
 
         fn abort(
             mut env: FunctionEnvMut<CustomEnv>,
@@ -61,14 +59,8 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        /*fn load(mut env: FunctionEnvMut<CustomEnv>, pointer: u32) -> Result<u32, RuntimeError> {
-            let data = env.data_mut();
-            Ok((data.load_function)(pointer))
-        }*/
-
         let deploy_from_address_mut = move |context: FunctionEnvMut<CustomEnv>, values: &[Value]| {
             let ptr: u32 = values[0].unwrap_i32() as u32;
-
             let async_context = Arc::new(Mutex::new(context));
 
             let deploy = {
@@ -78,28 +70,44 @@ impl WasmerInstance {
                     let mutable_context = context.as_mut();
                     let state = mutable_context.data();
 
-                    let load_func: ThreadsafeFunction<Vec<u8>> = state.load_function.clone();
+                    let load_func: ThreadsafeFunction<ThreadSafeJsImportResponse> = state.load_function.clone();
+                    let (env, mut store): (&mut CustomEnv, StoreMut) = context.data_and_store_mut();
 
-                    println!("Calling load function from async context...");
-
-                    let (env, store) = context.data_and_store_mut();
                     let memory = env.memory.clone().unwrap();
-                    let view = memory.view(&store);
+                    let instance = env.instance.clone().unwrap();
 
-                    let key = read_memory(&view, ptr as u64, 32).unwrap();
+                    let data = {
+                        let view = memory.view(&store);
 
-                    let response: Result<Vec<u8>, RuntimeError> = load_func.call_async(Ok(key)).await.map_err(|e| {
-                        println!("Error calling load function: {:?}", e);
-                        RuntimeError::new("Error calling load function")
-                    });
+                        let data = env.read_buffer(&view, ptr as i32).map_err(|e| {
+                            RuntimeError::new("Error lifting typed array")
+                        })?;
 
-                    let data = response.unwrap();
+                        let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
+                            buffer: data,
+                        };
 
-                    println!("Data received: {:?}", &data);
+                        let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|e| {
+                            RuntimeError::new("Error calling load function")
+                        });
 
-                    write_memory(&view, 0, &data).unwrap();
+                        let promise = response?;
 
-                    Ok(vec![Value::I32(0)])
+                        let data: Buffer = promise.await.map_err(|e| {
+                            RuntimeError::new("Error awaiting promise")
+                        })?;
+
+                        let data: Vec<u8> = data.into();
+                        data
+                    };
+
+                    let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|e| {
+                        RuntimeError::new("Error writing buffer")
+                    })?;
+
+                    //write_memory(&view, 0, &data).unwrap();
+
+                    Ok(vec![Value::I32(value as i32)])
                 }
             };
 
@@ -133,6 +141,7 @@ impl WasmerInstance {
         let instance: Instance = Instance::new(&mut store, &module, &import_object)?;
 
         env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
+        env.as_mut(&mut store).instance = Some(instance.clone());
 
         Ok(Self {
             store,
@@ -191,16 +200,4 @@ impl RunnerInstance for WasmerInstance {
     fn get_abort_data(&self) -> Option<AbortData> {
         self.env.as_ref(&self.store).abort_data
     }
-}
-
-fn read_memory(view: &MemoryView, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-
-    let mut buffer: Vec<u8> = vec![0; length as usize];
-    view.read(offset, &mut buffer).unwrap();
-
-    Ok(buffer)
-}
-
-fn write_memory(view: &MemoryView, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
-    view.write(offset, data)
 }

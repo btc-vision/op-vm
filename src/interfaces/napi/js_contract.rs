@@ -1,9 +1,9 @@
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
+use napi::{CallContext, Env};
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
-use napi::Env;
 use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
@@ -15,11 +15,13 @@ use wasmer::Value;
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
 use crate::interfaces::{AbortDataResponse, CallResponse};
+use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
-    deploy_tsfn: ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled>,
+    deploy_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    callback_fn: Option<Function<'static, Vec<u8>, ()>>,
 }
 
 pub struct ContractCallTask {
@@ -59,10 +61,19 @@ impl Task for ContractCallTask {
     }
 }
 
+/*#[js_function(1)]
+fn callback(ctx: CallContext) -> Result<JsNumber> {
+    let input_number: u32 = ctx.get::<JsNumber>(0)?.try_into()?;
+    let result = input_number + 1;
+
+    ctx.env.create_uint32(result)
+}*/
+
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
     #[napi(constructor)]
     pub fn new(
+        env: Env,
         bytecode: Buffer,
         max_gas: BigInt,
         js_load_function: JsFunction,
@@ -70,9 +81,17 @@ impl JsContract {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let tsfn: ThreadsafeFunction<Vec<u8>, ErrorStrategy::CalleeHandled> = js_load_function
-            .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<Vec<u8>>| {
-                Ok(vec![ctx.value])
+        /*let callback_fn = js_deploy_function_callback.create_threadsafe_function(10, |ctx: ThreadSafeCallContext<Vec<u8>>| {
+            println!("Callback called with: {:?}", ctx.value);
+            Ok(vec![1])
+        })?;*/
+
+        let tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled> = js_load_function
+            .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<ThreadSafeJsImportResponse>| {
+                //println!("Load function called with: {:?}", ctx.value.buffer);
+
+                let mut value = ctx.value;
+                Ok(vec![value])
             })?;
 
         let (tx, rx) = mpsc::channel();
@@ -91,15 +110,14 @@ impl JsContract {
         });
 
         let contract = rx.recv().expect("Failed to receive contract");
-
         handle.join().expect("Thread panicked");
 
         let deploy_tsfn_clone = tsfn.clone();
-        Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone })
+        Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone, callback_fn: None })
     }
 
     #[napi]
-    pub fn call(&self, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
+    pub fn call(&self, env: Env, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
         let mut wasm_params = Vec::new();
         let length = params.len();
 
@@ -114,7 +132,17 @@ impl JsContract {
             wasm_params.push(Value::I32(param_value.unwrap()));
         }
 
+        /*let callback: JsFunction = env.create_function("callback", |env, data| {
+            println!("Callback called");
+        })?;
+
+        let thread_safe_callback = env.create_threadsafe_function::<>(10, |ctx: ThreadSafeCallContext<Vec<u8>>| {
+            println!("Callback called with: {:?}", ctx.value);
+            Ok(())
+        })?;*/
+
         let contract = self.contract.clone();
+
         Ok(AsyncTask::new(ContractCallTask {
             contract,
             func_name,
@@ -307,7 +335,7 @@ impl JsContract {
         }
     }
 
-    fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
+    pub(crate) fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
         let vals: Vec<Value> = values.clone().into_vec();
         let mut js_array = env.create_array(vals.len() as u32).unwrap();
 
