@@ -156,40 +156,23 @@ impl CustomEnv {
         Ok(buffer)
     }
 
-    pub fn bytes_to_u32_le(&self, bytes: Vec<u8>) -> u32 {
+    pub fn bytes_to_u32_le(&self, bytes: Vec<u8>, offset: u32) -> u32 {
         let mut result = 0;
         for i in 0..4 {
-            result |= (bytes[i] as u32) << (i * 8);
+            result |= (bytes[i + offset as usize] as u32) << (i * 8);
         }
         result
     }
 
-    pub fn read_buffer(&self, memory_view: &MemoryView, offset: i32) -> Result<Vec<u8>, Error> {
-        let pointer = self.read_pointer(memory_view, (offset + 4) as u64, 4);
-        if pointer.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
+    pub fn read_buffer(&self, memory_view: &MemoryView, offset: u32) -> Result<Vec<u8>, Error> {
+        let pointer = self.read_pointer(memory_view, (offset + 4) as u64, 8);
+        let pointer_buffer = pointer.map_err(|e| Error::from_reason(e.to_string()))?;
 
-        let pointer_buffer = pointer.unwrap();
-        let pointer = self.bytes_to_u32_le(pointer_buffer);
+        let data_offset = self.bytes_to_u32_le(pointer_buffer.clone(), 0);
+        let length = self.bytes_to_u32_le(pointer_buffer, 4);
 
-        //println!("Pointer: {}", pointer);
+        let result = self.read_pointer(memory_view, data_offset as u64, length as u64).map_err(|e| Error::from_reason(e.to_string()))?;
 
-        let length = self.read_pointer(memory_view, (offset + 8) as u64, 4);
-        if length.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
-
-        let length_buffer = length.unwrap();
-        let length = self.bytes_to_u32_le(length_buffer);
-
-        //println!("Length: {}", length);
-
-        let result = self.read_pointer(memory_view, pointer as u64 + 4, length as u64);
-        if result.is_err() {
-            return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
-        }
-
-        Ok(result.unwrap())
+        Ok(result)
     }
 }

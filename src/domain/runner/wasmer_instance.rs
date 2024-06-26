@@ -79,10 +79,10 @@ impl WasmerInstance {
                     let data = {
                         let view = memory.view(&store);
 
-                        let data = env.read_buffer(&view, ptr as i32).map_err(|_e| {
+                        let data = env.read_buffer(&view, ptr).map_err(|_e| {
                             RuntimeError::new("Error lifting typed array")
                         })?;
-
+                        
                         let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
                             buffer: data,
                         };

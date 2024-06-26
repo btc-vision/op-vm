@@ -66,21 +66,23 @@ impl JsContract {
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
-        js_load_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )] js_deploy_from_address_function: JsFunction,
     ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled> = js_load_function
+        let tsfn_deploy_from_address: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled> = js_deploy_from_address_function
             .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<ThreadSafeJsImportResponse>| {
                 Ok(vec![ctx.value])
             })?;
 
         let (tx, rx) = mpsc::channel();
 
-        let deploy_tsfn_clone = tsfn.clone();
+        let deploy_from_address_tsfn_clone = tsfn_deploy_from_address.clone();
         let handle = thread::spawn(move || {
-            let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_tsfn_clone)
+            let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_tsfn_clone)
                 .map_err(|e| Error::from_reason(format!("{:?}", e)))
                 .unwrap();
 
@@ -94,11 +96,22 @@ impl JsContract {
         let contract = rx.recv().expect("Failed to receive contract");
         handle.join().expect("Thread panicked");
 
-        let deploy_tsfn_clone = tsfn.clone();
+        let deploy_tsfn_clone = tsfn_deploy_from_address.clone();
         Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone })
     }
 
     #[napi]
+    pub fn destroy(&mut self) -> Result<()> {
+        let aborted: bool = self.deploy_tsfn.aborted();
+
+        if !aborted {
+            self.deploy_tsfn.clone().abort()?;
+        }
+
+        Ok(())
+    }
+
+    #[napi(ts_return_type = "Promise<CallResponse>")]
     pub fn call(&self, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
         let mut wasm_params = Vec::new();
         let length = params.len();
@@ -113,15 +126,6 @@ impl JsContract {
 
             wasm_params.push(Value::I32(param_value.unwrap()));
         }
-
-        /*let callback: JsFunction = env.create_function("callback", |env, data| {
-            println!("Callback called");
-        })?;
-
-        let thread_safe_callback = env.create_threadsafe_function::<>(10, |ctx: ThreadSafeCallContext<Vec<u8>>| {
-            println!("Callback called with: {:?}", ctx.value);
-            Ok(())
-        })?;*/
 
         let contract = self.contract.clone();
 
@@ -169,12 +173,6 @@ impl JsContract {
         });
 
         rx.recv().map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?.map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-        Ok(())
-    }
-
-    #[napi]
-    pub fn destroy(&mut self) -> Result<()> {
-        self.deploy_tsfn.clone().abort().expect("TODO: panic message");
         Ok(())
     }
 
