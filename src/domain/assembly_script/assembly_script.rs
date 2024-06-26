@@ -34,34 +34,6 @@ impl AssemblyScript {
         runner.call("__unpin", &[Value::I32(pointer)])
     }
 
-    /*pub fn lift_typed_array(runner: &mut dyn RunnerInstance, offset: i32) -> Result<Vec<u8>, Error> {
-        let pointer = runner.read_pointer((offset + 4) as u64, 4);
-        if pointer.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
-
-        let pointer_buffer = pointer.unwrap();
-        let pointer = Self::bytes_to_u32_le(pointer_buffer);
-
-        println!("Pointer: {}", pointer);
-
-        let length = runner.read_pointer((offset + 8) as u64, 4);
-        if length.is_err() {
-            return Err(Error::from_reason("Failed to read length"));
-        }
-
-        let length_buffer = length.unwrap();
-        let length = Self::bytes_to_u32_le(length_buffer);
-
-        println!("Length: {}", length);
-        let result = runner.read_pointer(pointer as u64 + 4, length as u64);
-        if result.is_err() {
-            return Err(Error::from_reason(format!("{:?}", result.unwrap_err())));
-        }
-
-        Ok(result.unwrap())
-    }*/
-
     pub fn write_buffer(
         runner: &mut dyn RunnerInstance,
         value: &[u8],
