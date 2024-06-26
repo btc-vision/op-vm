@@ -10,9 +10,6 @@ pub struct CustomEnv {
     pub memory: Option<Memory>,
     pub abort_data: Option<AbortData>,
     pub load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    /*pub bytes_to_u32_le: fn(Vec<u8>) -> u32,
-    pub read_pointer: fn(u64, u64) -> Result<Vec<u8>, RuntimeError>,
-    pub lift_typed_array: fn(u64, u64) -> Result<Vec<u8>, RuntimeError>,*/
     pub instance: Option<Instance>,
 }
 

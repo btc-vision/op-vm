@@ -60,14 +60,6 @@ impl Task for ContractCallTask {
     }
 }
 
-/*#[js_function(1)]
-fn callback(ctx: CallContext) -> Result<JsNumber> {
-    let input_number: u32 = ctx.get::<JsNumber>(0)?.try_into()?;
-    let result = input_number + 1;
-
-    ctx.env.create_uint32(result)
-}*/
-
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
     #[napi(constructor)]
@@ -78,11 +70,6 @@ impl JsContract {
     ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
-
-        /*let callback_fn = js_deploy_function_callback.create_threadsafe_function(10, |ctx: ThreadSafeCallContext<Vec<u8>>| {
-            println!("Callback called with: {:?}", ctx.value);
-            Ok(vec![1])
-        })?;*/
 
         let tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled> = js_load_function
             .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<ThreadSafeJsImportResponse>| {
