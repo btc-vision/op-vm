@@ -1,9 +1,9 @@
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
-use napi::{CallContext, Env};
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
+use napi::Env;
 use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
@@ -21,7 +21,6 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
     deploy_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    callback_fn: Option<Function<'static, Vec<u8>, ()>>,
 }
 
 pub struct ContractCallTask {
@@ -73,7 +72,6 @@ fn callback(ctx: CallContext) -> Result<JsNumber> {
 impl JsContract {
     #[napi(constructor)]
     pub fn new(
-        env: Env,
         bytecode: Buffer,
         max_gas: BigInt,
         js_load_function: JsFunction,
@@ -88,10 +86,7 @@ impl JsContract {
 
         let tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled> = js_load_function
             .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<ThreadSafeJsImportResponse>| {
-                //println!("Load function called with: {:?}", ctx.value.buffer);
-
-                let mut value = ctx.value;
-                Ok(vec![value])
+                Ok(vec![ctx.value])
             })?;
 
         let (tx, rx) = mpsc::channel();
@@ -113,11 +108,11 @@ impl JsContract {
         handle.join().expect("Thread panicked");
 
         let deploy_tsfn_clone = tsfn.clone();
-        Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone, callback_fn: None })
+        Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone })
     }
 
     #[napi]
-    pub fn call(&self, env: Env, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
+    pub fn call(&self, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
         let mut wasm_params = Vec::new();
         let length = params.len();
 

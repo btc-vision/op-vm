@@ -4,7 +4,6 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::{Instance, Memory, MemoryAccessError, MemoryView, RuntimeError, StoreMut, Value};
 
 use crate::domain::contract::abort_data::AbortData;
-use crate::domain::runner::RunnerInstance;
 use crate::interfaces::ThreadSafeJsImportResponse;
 
 pub struct CustomEnv {

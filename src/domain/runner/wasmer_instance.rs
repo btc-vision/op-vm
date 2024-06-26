@@ -79,7 +79,7 @@ impl WasmerInstance {
                     let data = {
                         let view = memory.view(&store);
 
-                        let data = env.read_buffer(&view, ptr as i32).map_err(|e| {
+                        let data = env.read_buffer(&view, ptr as i32).map_err(|_e| {
                             RuntimeError::new("Error lifting typed array")
                         })?;
 
@@ -87,13 +87,13 @@ impl WasmerInstance {
                             buffer: data,
                         };
 
-                        let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|e| {
+                        let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|_e| {
                             RuntimeError::new("Error calling load function")
                         });
 
                         let promise = response?;
 
-                        let data: Buffer = promise.await.map_err(|e| {
+                        let data: Buffer = promise.await.map_err(|_e| {
                             RuntimeError::new("Error awaiting promise")
                         })?;
 
@@ -101,7 +101,7 @@ impl WasmerInstance {
                         data
                     };
 
-                    let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|e| {
+                    let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|_e| {
                         RuntimeError::new("Error writing buffer")
                     })?;
 
