@@ -7,8 +7,8 @@ use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_rem
 use wasmer_middlewares::Metering;
 use wasmer_types::Target;
 
-use crate::domain::contract::{AbortData, CustomEnv};
-use crate::domain::runner::RunnerInstance;
+use crate::domain::contract::AbortData;
+use crate::domain::runner::{CustomEnv, RunnerInstance};
 use crate::domain::vm::{get_op_cost, LimitingTunables};
 use crate::interfaces::DeployFromAddressExternalFunction;
 

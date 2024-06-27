@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use napi::Error;
 use wasmer::{Instance, Memory, MemoryAccessError, MemoryView, RuntimeError, StoreMut, Value};
 
-use crate::domain::contract::abort_data::AbortData;
+use crate::domain::contract::AbortData;
 use crate::interfaces::DeployFromAddressExternalFunction;
 
 pub struct CustomEnv {
@@ -14,7 +14,7 @@ pub struct CustomEnv {
 
 impl CustomEnv {
     pub fn new(
-        deploy_from_address_external: DeployFromAddressExternalFunction
+        deploy_from_address_external: DeployFromAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             memory: None,
@@ -42,9 +42,13 @@ impl CustomEnv {
         self.call(instance, store, "__unpin", &[Value::I32(pointer)])
     }
 
-    pub fn __new(&self,
-                 instance: &Instance,
-                 store: &mut StoreMut, size: i32, id: i32) -> anyhow::Result<i32> {
+    pub fn __new(
+        &self,
+        instance: &Instance,
+        store: &mut StoreMut,
+        size: i32,
+        id: i32,
+    ) -> anyhow::Result<i32> {
         let params = &[Value::I32(size), Value::I32(id)];
         let result = self.call(instance, store, "__new", params)?;
 
@@ -105,44 +109,73 @@ impl CustomEnv {
             let view = self.memory.clone().unwrap().view(store);
 
             // Set the header values
-            self.set_u32(&view, header_value, pinned_buffer_value).unwrap();
-            self.set_u32(&view, header_value + 4, pinned_buffer_value).unwrap();
-            self.set_u32(&view, header_value + 8, buffer_size as u32).unwrap();
+            self.set_u32(&view, header_value, pinned_buffer_value)
+                .unwrap();
+            self.set_u32(&view, header_value + 4, pinned_buffer_value)
+                .unwrap();
+            self.set_u32(&view, header_value + 8, buffer_size as u32)
+                .unwrap();
 
             // Write the buffer value to the contract's memory
-            self.write_memory(&view, pinned_buffer_value as u64, &value).unwrap();
+            self.write_memory(&view, pinned_buffer_value as u64, &value)
+                .unwrap();
         }
 
         // Unpin the buffer
-        self.__unpin(instance, store, pinned_buffer_value as i32).unwrap();
+        self.__unpin(instance, store, pinned_buffer_value as i32)
+            .unwrap();
 
         return Ok(header_value as i64);
     }
 
-    pub fn set_u32(&self,
-                   view: &MemoryView, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
+    pub fn set_u32(
+        &self,
+        view: &MemoryView,
+        offset: i32,
+        value: u32,
+    ) -> Result<(), MemoryAccessError> {
         self.write_memory(view, offset as u64, &value.to_le_bytes())
     }
 
-    pub fn write_memory(&self, view: &MemoryView, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
+    pub fn write_memory(
+        &self,
+        view: &MemoryView,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<(), MemoryAccessError> {
         view.write(offset, data)
     }
 
     #[allow(dead_code)]
-    pub fn read_memory(view: &MemoryView, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+    pub fn read_memory(
+        view: &MemoryView,
+        offset: u64,
+        length: u64,
+    ) -> Result<Vec<u8>, RuntimeError> {
         let mut buffer: Vec<u8> = vec![0; length as usize];
         view.read(offset, &mut buffer).unwrap();
 
         Ok(buffer)
     }
 
-    pub fn call(&self, instance: &Instance, store: &mut StoreMut, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+    pub fn call(
+        &self,
+        instance: &Instance,
+        store: &mut StoreMut,
+        function: &str,
+        params: &[Value],
+    ) -> anyhow::Result<Box<[Value]>> {
         let export = instance.exports.get_function(function)?; //Self::get_function(&self.instance, function)?;
         let result = export.call(store, params)?;
         Ok(result)
     }
 
-    pub fn read_pointer(&self, memory_view: &MemoryView, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+    pub fn read_pointer(
+        &self,
+        memory_view: &MemoryView,
+        offset: u64,
+        length: u64,
+    ) -> Result<Vec<u8>, RuntimeError> {
         let mut buffer: Vec<u8> = vec![0; length as usize];
         for i in 0..length {
             let byte = memory_view.read_u8(offset + i);
@@ -173,7 +206,9 @@ impl CustomEnv {
         let data_offset = self.bytes_to_u32_le(pointer_buffer.clone(), 0);
         let length = self.bytes_to_u32_le(pointer_buffer, 4);
 
-        let result = self.read_pointer(memory_view, data_offset as u64, length as u64).map_err(|e| Error::from_reason(e.to_string()))?;
+        let result = self
+            .read_pointer(memory_view, data_offset as u64, length as u64)
+            .map_err(|e| Error::from_reason(e.to_string()))?;
 
         Ok(result)
     }
