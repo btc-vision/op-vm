@@ -1,28 +1,23 @@
 use anyhow::anyhow;
 use napi::Error;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::{Instance, Memory, MemoryAccessError, MemoryView, RuntimeError, StoreMut, Value};
 
 use crate::domain::contract::abort_data::AbortData;
-use crate::interfaces::ThreadSafeJsImportResponse;
 
 pub struct CustomEnv {
     pub memory: Option<Memory>,
     pub abort_data: Option<AbortData>,
-    pub load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    pub call_js_function: Box<dyn Fn(&[u8], ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> Result<Vec<u8>, RuntimeError> + Send + Sync>,
+    pub call_js_function: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>,
     pub instance: Option<Instance>,
 }
 
 impl CustomEnv {
     pub fn new(
-        load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        call_js_function: Box<dyn Fn(&[u8], ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+        call_js_function: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
     ) -> anyhow::Result<Self> {
         Ok(Self {
             memory: None,
             abort_data: None,
-            load_function,
             call_js_function,
             instance: None,
         })

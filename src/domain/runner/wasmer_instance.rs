@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, StoreMut, Value};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
@@ -11,7 +10,6 @@ use wasmer_types::Target;
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
 use crate::domain::vm::{get_op_cost, LimitingTunables};
-use crate::interfaces::ThreadSafeJsImportResponse;
 
 pub struct WasmerInstance {
     store: Store,
@@ -23,8 +21,7 @@ impl WasmerInstance {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
-        load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        call_js_function: Box<dyn Fn(&[u8], ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+        call_js_function: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
     ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
@@ -40,7 +37,7 @@ impl WasmerInstance {
         engine.set_tunables(tunables);
 
         let mut store = Store::new(engine);
-        let instance = CustomEnv::new(load_function, call_js_function)?;
+        let instance = CustomEnv::new(call_js_function)?;
         let env = FunctionEnv::new(&mut store, instance);
 
         fn abort(
@@ -73,9 +70,7 @@ impl WasmerInstance {
                 RuntimeError::new("Error lifting typed array")
             })?;
 
-            let load_func: ThreadsafeFunction<ThreadSafeJsImportResponse> = env.load_function.clone();
-
-            let result = (env.call_js_function)(&data, load_func)?;
+            let result = (env.call_js_function)(&data)?;
 
             let value: i64 = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
                 RuntimeError::new("Error writing buffer")

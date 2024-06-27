@@ -78,7 +78,11 @@ impl JsContract {
                 Ok(vec![ctx.value])
             })?;
 
-        fn js_call_function(data: &[u8], load_func: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> core::result::Result<Vec<u8>, RuntimeError> {
+        let deploy_from_address_tsfn_clone = tsfn_deploy_from_address.clone();
+
+        let js_call_function = move |data: &[u8]| -> core::result::Result<Vec<u8>, RuntimeError> {
+            let load_func = deploy_from_address_tsfn_clone.clone();
+
             let deploy = {
                 async move {
                     let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
@@ -103,13 +107,12 @@ impl JsContract {
             let rt: Runtime = Runtime::new().unwrap();
             let response: core::result::Result<Vec<u8>, RuntimeError> = rt.block_on(deploy);
             response
-        }
+        };
 
         let (tx, rx) = mpsc::channel();
 
-        let deploy_from_address_tsfn_clone = tsfn_deploy_from_address.clone();
         let handle = thread::spawn(move || {
-            let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_tsfn_clone, Box::new(js_call_function))
+            let runner = WasmerInstance::new(&bytecode_vec, max_gas, Box::new(js_call_function))
                 .map_err(|e| Error::from_reason(format!("{:?}", e)))
                 .unwrap();
 
