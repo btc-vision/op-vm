@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, Value};
+use wasmer::{
+    CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance,
+    Memory, MemoryAccessError, Module, RuntimeError, Store, Value,
+};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
@@ -22,7 +25,7 @@ impl WasmerInstance {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
-        deploy_from_address_external: DeployFromAddressExternalFunction
+        deploy_from_address_external: DeployFromAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
@@ -59,7 +62,10 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        fn deploy_from_address(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<u32, RuntimeError> {
+        fn deploy_from_address(
+            mut context: FunctionEnvMut<CustomEnv>,
+            ptr: u32,
+        ) -> Result<u32, RuntimeError> {
             let (env, mut store) = context.data_and_store_mut();
 
             let memory = env.memory.clone().unwrap();
@@ -67,21 +73,22 @@ impl WasmerInstance {
 
             let view = memory.view(&store);
 
-            let data = env.read_buffer(&view, ptr).map_err(|_e| {
-                RuntimeError::new("Error lifting typed array")
-            })?;
+            let data = env
+                .read_buffer(&view, ptr)
+                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
             let result = env.deploy_from_address_external.execute(&data)?;
 
-            let value = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
-                RuntimeError::new("Error writing buffer")
-            })?;
+            let value = env
+                .write_buffer(&instance, &mut store, &result, 13, 0)
+                .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
             Ok(value as u32)
         }
 
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let deploy_from_address_typed = Function::new_typed_with_env(&mut store, &env, deploy_from_address);
+        let deploy_from_address_typed =
+            Function::new_typed_with_env(&mut store, &env, deploy_from_address);
 
         let import_object: Imports = imports! {
             "env" => {

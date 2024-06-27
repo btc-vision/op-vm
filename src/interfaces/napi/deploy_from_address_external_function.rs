@@ -22,7 +22,8 @@ impl DeployFromAddressExternalFunction {
         };
 
         let deploy = async move {
-            let response: Result<Promise<Buffer>, RuntimeError> = self.tsfn
+            let response: Result<Promise<Buffer>, RuntimeError> = self
+                .tsfn
                 .call_async(Ok(request))
                 .await
                 .map_err(|_e| RuntimeError::new("Error calling load function"));
