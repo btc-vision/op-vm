@@ -214,42 +214,6 @@ impl JsContract {
 
         rx.recv().expect("Recv error")
     }
-
-    /*#[napi]
-    pub fn call(
-        &mut self,
-        env: Env,
-        func_name: String,
-        params: Vec<JsNumber>,
-    ) -> Result<CallResponse> {
-        let mut wasm_params = Vec::new();
-
-        for param in params {
-            let param_value = param.get_int32();
-            if param_value.is_err() {
-                return Err(Error::from_reason(format!(
-                    "{:?}",
-                    param_value.unwrap_err()
-                )));
-            }
-
-            let value = param_value.unwrap();
-            wasm_params.push(Value::I32(value));
-        }
-
-        let result = self
-            .contract
-            .call(&func_name, &wasm_params)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-        let js_array = JsContract::box_values_to_js_array(&env, result)?;
-
-        let gas_used = self.contract.get_used_gas();
-
-        Ok(CallResponse {
-            result: js_array,
-            gas_used: BigInt::from(gas_used),
-        })
-    }*/
 }
 
 impl JsContract {
