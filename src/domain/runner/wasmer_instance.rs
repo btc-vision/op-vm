@@ -21,7 +21,7 @@ impl WasmerInstance {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
-        call_js_function: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+        deploy_from_address_external: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
     ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
@@ -37,7 +37,7 @@ impl WasmerInstance {
         engine.set_tunables(tunables);
 
         let mut store = Store::new(engine);
-        let instance = CustomEnv::new(call_js_function)?;
+        let instance = CustomEnv::new(deploy_from_address_external)?;
         let env = FunctionEnv::new(&mut store, instance);
 
         fn abort(
@@ -58,7 +58,7 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        fn deploy_from_address_mut(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<u32, RuntimeError> {
+        fn deploy_from_address(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<u32, RuntimeError> {
             let (env, mut store): (&mut CustomEnv, StoreMut) = context.data_and_store_mut();
 
             let memory: Memory = env.memory.clone().unwrap();
@@ -70,7 +70,7 @@ impl WasmerInstance {
                 RuntimeError::new("Error lifting typed array")
             })?;
 
-            let result = (env.call_js_function)(&data)?;
+            let result = (env.deploy_from_address_internal)(&data)?;
 
             let value: i64 = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
                 RuntimeError::new("Error writing buffer")
@@ -80,7 +80,7 @@ impl WasmerInstance {
         }
 
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let deploy_from_address_typed = Function::new_typed_with_env(&mut store, &env, deploy_from_address_mut);
+        let deploy_from_address_typed = Function::new_typed_with_env(&mut store, &env, deploy_from_address);
 
         let import_object: Imports = imports! {
             "env" => {

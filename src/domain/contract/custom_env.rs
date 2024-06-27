@@ -7,7 +7,7 @@ use crate::domain::contract::abort_data::AbortData;
 pub struct CustomEnv {
     pub memory: Option<Memory>,
     pub abort_data: Option<AbortData>,
-    pub call_js_function: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>,
+    pub deploy_from_address_internal: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>,
     pub instance: Option<Instance>,
 }
 
@@ -18,7 +18,7 @@ impl CustomEnv {
         Ok(Self {
             memory: None,
             abort_data: None,
-            call_js_function,
+            deploy_from_address_internal: call_js_function,
             instance: None,
         })
     }
