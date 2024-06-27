@@ -15,8 +15,6 @@ pub fn get_op_cost(operator: &Operator) -> u64 {
         };
     }
 
-
-
     #[rustfmt::skip]
         let gas_cost = match operator {
         op!(Unreachable, Return) => 2,
@@ -36,8 +34,8 @@ pub fn get_op_cost(operator: &Operator) -> u64 {
         dot!(I32Store, I32Store8, I32Store16) => 826,
         dot!(I64Store, I64Store8, I64Store16, I64Store32) => 951,
 
-        dot!(MemorySize) => 0, //3001,
-        dot!(MemoryGrow) => 0, //8051,
+        dot!(MemorySize) => 3001,
+        dot!(MemoryGrow) => 8051,
 
         op!(I32Eqz, I32Eq, I32Ne, I32LtS, I32LtU, I32GtS, I32GtU, I32LeS, I32LeU, I32GeS, I32GeU) => 171,
         op!(I64Eqz, I64Eq, I64Ne, I64LtS, I64LtU, I64GtS, I64GtU, I64LeS, I64LeU, I64GeS, I64GeU) => 226,
@@ -65,14 +63,12 @@ pub fn get_op_cost(operator: &Operator) -> u64 {
             2401 + 326 * targets.len() as u64
         }
 
-        /*CallIndirect { .. } => {
+        CallIndirect { .. } => {
             14262
-        }*/
+            //u64::MAX
+        }
 
-        // return u64::MAX
         dot!(
-            CallIndirect,
-
             Try, Catch, CatchAll, Delegate, Throw, Rethrow, ThrowRef, TryTable,
 
             RefNull, RefIsNull, RefFunc, RefEq,
