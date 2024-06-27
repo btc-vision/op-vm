@@ -13,52 +13,15 @@ use wasmer::Value;
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
-use crate::interfaces::{AbortDataResponse, CallResponse, DeployFromAddressExternalFunction};
+use crate::interfaces::{
+    AbortDataResponse, ContractCallTask, DeployFromAddressExternalFunction,
+};
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
     deploy_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-}
-
-pub struct ContractCallTask {
-    contract: Arc<Mutex<Contract>>,
-    func_name: String,
-    wasm_params: Vec<Value>,
-}
-
-impl Task for ContractCallTask {
-    type Output = Box<[Value]>;
-    type JsValue = CallResponse;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        let mut contract = self.contract.lock().unwrap();
-
-        contract
-            .call(&self.func_name, &self.wasm_params)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))
-    }
-
-    fn resolve(&mut self, env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        let js_array = JsContract::box_values_to_js_array(&env, output)?;
-        let gas_used = self.contract.lock().unwrap().get_used_gas();
-
-        let gas_used_bigint: BigInt = BigInt::from(gas_used);
-
-        Ok(CallResponse {
-            result: js_array,
-            gas_used: gas_used_bigint,
-        })
-    }
-
-    fn reject(&mut self, _env: Env, err: Error) -> Result<Self::JsValue> {
-        Err(err)
-    }
-
-    fn finally(&mut self, _env: Env) -> Result<()> {
-        Ok(())
-    }
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -136,11 +99,11 @@ impl JsContract {
 
         let contract = self.contract.clone();
 
-        Ok(AsyncTask::new(ContractCallTask {
+        Ok(AsyncTask::new(ContractCallTask::new(
             contract,
-            func_name,
-            wasm_params,
-        }))
+            &func_name,
+            &wasm_params,
+        )))
     }
 
     #[napi]
