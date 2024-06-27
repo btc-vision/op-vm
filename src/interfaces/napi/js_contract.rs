@@ -109,22 +109,12 @@ impl JsContract {
             response
         };
 
-        let (tx, rx) = mpsc::channel();
+        let runner = WasmerInstance::new(&bytecode_vec, max_gas, Box::new(js_call_function))
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))
+            .unwrap();
 
-        let handle = thread::spawn(move || {
-            let runner = WasmerInstance::new(&bytecode_vec, max_gas, Box::new(js_call_function))
-                .map_err(|e| Error::from_reason(format!("{:?}", e)))
-                .unwrap();
-
-            let runner = Arc::new(Mutex::new(runner));
-            let contract = Contract::new(max_gas, runner);
-
-            // Send the contract back to the main thread
-            tx.send(contract).expect("Failed to send contract");
-        });
-
-        let contract = rx.recv().expect("Failed to receive contract");
-        handle.join().expect("Thread panicked");
+        let runner = Arc::new(Mutex::new(runner));
+        let contract = Contract::new(max_gas, runner);
 
         let deploy_tsfn_clone = tsfn_deploy_from_address.clone();
         Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone })
