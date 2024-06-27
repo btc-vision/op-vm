@@ -31,28 +31,26 @@ impl JsContract {
         #[napi(
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
         )]
-        js_deploy_from_address_function: JsFunction,
+        deploy_from_address_js_function: JsFunction,
     ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let deploy_from_address_tsfn = js_deploy_from_address_function
-            .create_threadsafe_function(10, move |ctx| Ok(vec![ctx.value]))?;
+        let deploy_from_address_tsfn = deploy_from_address_js_function
+            .create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
 
         let deploy_from_address_external =
             DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
 
         let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_external)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))
-            .unwrap();
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
         let runner = Arc::new(Mutex::new(runner));
         let contract = Contract::new(max_gas, runner);
 
-        let deploy_tsfn_clone = deploy_from_address_tsfn.clone();
         Ok(Self {
             contract: Arc::new(Mutex::new(contract)),
-            deploy_tsfn: deploy_tsfn_clone,
+            deploy_tsfn: deploy_from_address_tsfn.clone(),
         })
     }
 
