@@ -13,7 +13,7 @@ use wasmer::Value;
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
-use crate::interfaces::{AbortDataResponse, ContractCallTask, DeployFromAddressExternalFunction};
+use crate::interfaces::{AbortDataResponse, ContractCallTask, DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 #[napi(js_name = "Contract")]
@@ -31,19 +31,40 @@ impl JsContract {
         #[napi(
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
         )]
+        storage_load_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )]
+        storage_store_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )]
         deploy_from_address_js_function: JsFunction,
     ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
+        let storage_load_tsfn =
+            storage_load_js_function.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
+        let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn.clone());
+
+        let storage_store_tsfn =
+            storage_store_js_function.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
+        let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn.clone());
+
         let deploy_from_address_tsfn = deploy_from_address_js_function
             .create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
-
         let deploy_from_address_external =
             DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
 
-        let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_external)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+        let runner = WasmerInstance::new(
+            &bytecode_vec,
+            max_gas,
+            storage_load_external,
+            storage_store_external,
+            deploy_from_address_external,
+        )
+        .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
         let runner = Arc::new(Mutex::new(runner));
         let contract = Contract::new(max_gas, runner);

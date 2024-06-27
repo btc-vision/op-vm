@@ -13,7 +13,9 @@ use wasmer_types::Target;
 use crate::domain::contract::AbortData;
 use crate::domain::runner::{CustomEnv, RunnerInstance};
 use crate::domain::vm::{get_op_cost, LimitingTunables};
-use crate::interfaces::DeployFromAddressExternalFunction;
+use crate::interfaces::{
+    DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
+};
 
 pub struct WasmerInstance {
     store: Store,
@@ -25,6 +27,8 @@ impl WasmerInstance {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
+        storage_load_external: StorageLoadExternalFunction,
+        storage_store_external: StorageStoreExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
@@ -41,7 +45,11 @@ impl WasmerInstance {
         engine.set_tunables(tunables);
 
         let mut store = Store::new(engine);
-        let instance = CustomEnv::new(deploy_from_address_external)?;
+        let instance = CustomEnv::new(
+            storage_load_external,
+            storage_store_external,
+            deploy_from_address_external,
+        )?;
         let env = FunctionEnv::new(&mut store, instance);
 
         fn abort(
@@ -60,6 +68,54 @@ impl WasmerInstance {
             });
 
             return Err(RuntimeError::new("Execution aborted"));
+        }
+
+        fn storage_load(
+            mut context: FunctionEnvMut<CustomEnv>,
+            ptr: u32,
+        ) -> Result<u32, RuntimeError> {
+            let (env, mut store) = context.data_and_store_mut();
+
+            let memory = env.memory.clone().unwrap();
+            let instance = env.instance.clone().unwrap();
+
+            let view = memory.view(&store);
+
+            let data = env
+                .read_buffer(&view, ptr)
+                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+            let result = env.storage_load_external.execute(&data)?;
+
+            let value = env
+                .write_buffer(&instance, &mut store, &result, 13, 0)
+                .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+
+            Ok(value as u32)
+        }
+
+        fn storage_store(
+            mut context: FunctionEnvMut<CustomEnv>,
+            ptr: u32,
+        ) -> Result<u32, RuntimeError> {
+            let (env, mut store) = context.data_and_store_mut();
+
+            let memory = env.memory.clone().unwrap();
+            let instance = env.instance.clone().unwrap();
+
+            let view = memory.view(&store);
+
+            let data = env
+                .read_buffer(&view, ptr)
+                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+            let result = env.storage_store_external.execute(&data)?;
+
+            let value = env
+                .write_buffer(&instance, &mut store, &result, 13, 0)
+                .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+
+            Ok(value as u32)
         }
 
         fn deploy_from_address(
@@ -87,12 +143,16 @@ impl WasmerInstance {
         }
 
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
+        let storage_load_typed = Function::new_typed_with_env(&mut store, &env, storage_load);
+        let storage_store_typed = Function::new_typed_with_env(&mut store, &env, storage_store);
         let deploy_from_address_typed =
             Function::new_typed_with_env(&mut store, &env, deploy_from_address);
 
         let import_object: Imports = imports! {
             "env" => {
                 "abort" => abort_typed,
+                "load" => storage_load_typed,
+                "store" => storage_store_typed,
                 "deployFromAddress" => deploy_from_address_typed,
             }
         };
