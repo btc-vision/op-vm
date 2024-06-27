@@ -10,6 +10,7 @@ use wasmer_types::Target;
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
 use crate::domain::vm::{get_op_cost, LimitingTunables};
+use crate::interfaces::DeployFromAddressExternalFunction;
 
 pub struct WasmerInstance {
     store: Store,
@@ -21,7 +22,7 @@ impl WasmerInstance {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
-        deploy_from_address_external: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+        deploy_from_address_external: DeployFromAddressExternalFunction
     ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
@@ -70,7 +71,7 @@ impl WasmerInstance {
                 RuntimeError::new("Error lifting typed array")
             })?;
 
-            let result = (env.deploy_from_address_internal)(&data)?;
+            let result = env.deploy_from_address_external.execute(&data)?;
 
             let value: i64 = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
                 RuntimeError::new("Error writing buffer")

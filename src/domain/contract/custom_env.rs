@@ -3,22 +3,23 @@ use napi::Error;
 use wasmer::{Instance, Memory, MemoryAccessError, MemoryView, RuntimeError, StoreMut, Value};
 
 use crate::domain::contract::abort_data::AbortData;
+use crate::interfaces::DeployFromAddressExternalFunction;
 
 pub struct CustomEnv {
     pub memory: Option<Memory>,
     pub abort_data: Option<AbortData>,
-    pub deploy_from_address_internal: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>,
+    pub deploy_from_address_external: DeployFromAddressExternalFunction,
     pub instance: Option<Instance>,
 }
 
 impl CustomEnv {
     pub fn new(
-        call_js_function: Box<dyn Fn(&[u8]) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+        deploy_from_address_external: DeployFromAddressExternalFunction
     ) -> anyhow::Result<Self> {
         Ok(Self {
             memory: None,
             abort_data: None,
-            deploy_from_address_internal: call_js_function,
+            deploy_from_address_external,
             instance: None,
         })
     }
