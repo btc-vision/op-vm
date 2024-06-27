@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
-use tokio::runtime::Runtime;
 use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, StoreMut, Value};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
@@ -22,7 +20,12 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
+    pub fn new(
+        bytecode: &[u8],
+        max_gas: u64,
+        load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        call_js_function: Box<dyn Fn(&[u8], ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+    ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -37,7 +40,7 @@ impl WasmerInstance {
         engine.set_tunables(tunables);
 
         let mut store = Store::new(engine);
-        let instance = CustomEnv::new(load_function)?;
+        let instance = CustomEnv::new(load_function, call_js_function)?;
         let env = FunctionEnv::new(&mut store, instance);
 
         fn abort(
@@ -70,36 +73,11 @@ impl WasmerInstance {
                 RuntimeError::new("Error lifting typed array")
             })?;
 
-            let load_func: &ThreadsafeFunction<ThreadSafeJsImportResponse> = &env.load_function;
+            let load_func: ThreadsafeFunction<ThreadSafeJsImportResponse> = env.load_function.clone();
 
-            let deploy = {
-                async move {
+            let result = (env.call_js_function)(&data, load_func)?;
 
-                    let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
-                        buffer: data,
-                    };
-
-                    let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|_e| {
-                        RuntimeError::new("Error calling load function")
-                    });
-
-                    let promise: Promise<Buffer> = response?;
-
-                    let data: Buffer = promise.await.map_err(|_e| {
-                        RuntimeError::new("Error awaiting promise")
-                    })?;
-
-                    let data: Vec<u8> = data.into();
-                    Ok(data)
-                }
-            };
-
-            let rt: Runtime = Runtime::new().unwrap();
-            let response: Result<Vec<u8>, RuntimeError> = rt.block_on(deploy);
-
-            let data: Vec<u8> = response?;
-
-            let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|_e| {
+            let value: i64 = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
                 RuntimeError::new("Error writing buffer")
             })?;
 

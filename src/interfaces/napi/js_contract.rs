@@ -8,9 +8,9 @@ use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
 use napi::JsUnknown;
-use napi::Result;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
-use wasmer::Value;
+use tokio::runtime::Runtime;
+use wasmer::{RuntimeError, Value};
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
@@ -78,11 +78,38 @@ impl JsContract {
                 Ok(vec![ctx.value])
             })?;
 
+        fn js_call_function(data: &[u8], load_func: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> core::result::Result<Vec<u8>, RuntimeError> {
+            let deploy = {
+                async move {
+                    let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
+                        buffer: Vec::from(data),
+                    };
+
+                    let response: core::result::Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|_e| {
+                        RuntimeError::new("Error calling load function")
+                    });
+
+                    let promise: Promise<Buffer> = response?;
+
+                    let data: Buffer = promise.await.map_err(|_e| {
+                        RuntimeError::new("Error awaiting promise")
+                    })?;
+
+                    let data: Vec<u8> = data.into();
+                    Ok(data)
+                }
+            };
+
+            let rt: Runtime = Runtime::new().unwrap();
+            let response: core::result::Result<Vec<u8>, RuntimeError> = rt.block_on(deploy);
+            response
+        }
+
         let (tx, rx) = mpsc::channel();
 
         let deploy_from_address_tsfn_clone = tsfn_deploy_from_address.clone();
         let handle = thread::spawn(move || {
-            let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_tsfn_clone)
+            let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_tsfn_clone, Box::new(js_call_function))
                 .map_err(|e| Error::from_reason(format!("{:?}", e)))
                 .unwrap();
 

@@ -10,15 +10,20 @@ pub struct CustomEnv {
     pub memory: Option<Memory>,
     pub abort_data: Option<AbortData>,
     pub load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub call_js_function: Box<dyn Fn(&[u8], ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> Result<Vec<u8>, RuntimeError> + Send + Sync>,
     pub instance: Option<Instance>,
 }
 
 impl CustomEnv {
-    pub fn new(load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
+    pub fn new(
+        load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        call_js_function: Box<dyn Fn(&[u8], ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> Result<Vec<u8>, RuntimeError> + Send + Sync>
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             memory: None,
             abort_data: None,
             load_function,
+            call_js_function,
             instance: None,
         })
     }
