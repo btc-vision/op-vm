@@ -3,13 +3,12 @@ use std::sync::Arc;
 use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value};
+use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, StoreMut, Value};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
-use wasmer_types::{FunctionType, Target, Type};
+use wasmer_types::Target;
 
 use crate::domain::contract::{AbortData, CustomEnv};
 use crate::domain::runner::RunnerInstance;
@@ -59,81 +58,61 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        let deploy_from_address_mut = move |context: FunctionEnvMut<CustomEnv>, values: &[Value]| {
-            let ptr: u32 = values[0].unwrap_i32() as u32;
-            let async_context = Arc::new(Mutex::new(context));
+        fn deploy_from_address_mut(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<u32, RuntimeError> {
+            let (env, mut store): (&mut CustomEnv, StoreMut) = context.data_and_store_mut();
+
+            let memory: Memory = env.memory.clone().unwrap();
+            let instance: Instance = env.instance.clone().unwrap();
+
+            let view: MemoryView = memory.view(&store);
+
+            let data: Vec<u8> = env.read_buffer(&view, ptr).map_err(|_e| {
+                RuntimeError::new("Error lifting typed array")
+            })?;
+
+            let load_func: &ThreadsafeFunction<ThreadSafeJsImportResponse> = &env.load_function;
 
             let deploy = {
-                let async_context = async_context.clone();
                 async move {
-                    let mut context = async_context.lock().await;
-                    let mutable_context = context.as_mut();
-                    let state = mutable_context.data();
 
-                    let load_func: ThreadsafeFunction<ThreadSafeJsImportResponse> = state.load_function.clone();
-                    let (env, mut store): (&mut CustomEnv, StoreMut) = context.data_and_store_mut();
-
-                    let memory = env.memory.clone().unwrap();
-                    let instance = env.instance.clone().unwrap();
-
-                    let data = {
-                        let view = memory.view(&store);
-
-                        let data = env.read_buffer(&view, ptr).map_err(|_e| {
-                            RuntimeError::new("Error lifting typed array")
-                        })?;
-                        
-                        let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
-                            buffer: data,
-                        };
-
-                        let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|_e| {
-                            RuntimeError::new("Error calling load function")
-                        });
-
-                        let promise = response?;
-
-                        let data: Buffer = promise.await.map_err(|_e| {
-                            RuntimeError::new("Error awaiting promise")
-                        })?;
-
-                        let data: Vec<u8> = data.into();
-                        data
+                    let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
+                        buffer: data,
                     };
 
-                    let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|_e| {
-                        RuntimeError::new("Error writing buffer")
+                    let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|_e| {
+                        RuntimeError::new("Error calling load function")
+                    });
+
+                    let promise: Promise<Buffer> = response?;
+
+                    let data: Buffer = promise.await.map_err(|_e| {
+                        RuntimeError::new("Error awaiting promise")
                     })?;
 
-                    //write_memory(&view, 0, &data).unwrap();
-
-                    Ok(vec![Value::I32(value as i32)])
+                    let data: Vec<u8> = data.into();
+                    Ok(data)
                 }
             };
 
-            let rt = Runtime::new().unwrap();
-            let response = rt.block_on(deploy);
+            let rt: Runtime = Runtime::new().unwrap();
+            let response: Result<Vec<u8>, RuntimeError> = rt.block_on(deploy);
 
-            response
-        };
+            let data: Vec<u8> = response?;
+
+            let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|_e| {
+                RuntimeError::new("Error writing buffer")
+            })?;
+
+            Ok(value as u32)
+        }
 
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let deploy_from_address_signature = FunctionType::new(
-            vec![Type::I32],
-            vec![Type::I32],
-        );
+        let deploy_from_address_typed = Function::new_typed_with_env(&mut store, &env, deploy_from_address_mut);
 
-        let deploy_from_address = Function::new_with_env(
-            &mut store,
-            &env,
-            deploy_from_address_signature,
-            deploy_from_address_mut,
-        );
-
-        let import_object = imports! {
+        let import_object: Imports = imports! {
             "env" => {
                 "abort" => abort_typed,
-                "deployFromAddress" => deploy_from_address,
+                "deployFromAddress" => deploy_from_address_typed,
             }
         };
 

@@ -127,6 +127,7 @@ impl CustomEnv {
         view.write(offset, data)
     }
 
+    #[allow(dead_code)]
     pub fn read_memory(view: &MemoryView, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
         let mut buffer: Vec<u8> = vec![0; length as usize];
         view.read(offset, &mut buffer).unwrap();
