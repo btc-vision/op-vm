@@ -8,7 +8,7 @@ use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
 use napi::JsUnknown;
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
@@ -38,13 +38,8 @@ impl JsContract {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let deploy_from_address_tsfn: ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            ErrorStrategy::CalleeHandled,
-        > = js_deploy_from_address_function.create_threadsafe_function(
-            10,
-            move |ctx: ThreadSafeCallContext<ThreadSafeJsImportResponse>| Ok(vec![ctx.value]),
-        )?;
+        let deploy_from_address_tsfn = js_deploy_from_address_function
+            .create_threadsafe_function(10, move |ctx| Ok(vec![ctx.value]))?;
 
         let deploy_from_address_external =
             DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());

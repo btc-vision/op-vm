@@ -27,18 +27,18 @@ impl DeployFromAddressExternalFunction {
                 .await
                 .map_err(|_e| RuntimeError::new("Error calling load function"));
 
-            let promise: Promise<Buffer> = response?;
+            let promise = response?;
 
-            let data: Buffer = promise
+            let data = promise
                 .await
                 .map_err(|_e| RuntimeError::new("Error awaiting promise"))?;
 
-            let data: Vec<u8> = data.to_vec();
+            let data = data.to_vec();
             Ok(data.into())
         };
 
         let rt: Runtime = Runtime::new().unwrap();
-        let response: Result<Vec<u8>, RuntimeError> = rt.block_on(deploy);
+        let response = rt.block_on(deploy);
         response
     }
 }

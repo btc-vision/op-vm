@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance, Memory, MemoryAccessError, MemoryView, Module, RuntimeError, Store, StoreMut, Value};
+use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, Value};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
@@ -60,20 +60,20 @@ impl WasmerInstance {
         }
 
         fn deploy_from_address(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<u32, RuntimeError> {
-            let (env, mut store): (&mut CustomEnv, StoreMut) = context.data_and_store_mut();
+            let (env, mut store) = context.data_and_store_mut();
 
-            let memory: Memory = env.memory.clone().unwrap();
-            let instance: Instance = env.instance.clone().unwrap();
+            let memory = env.memory.clone().unwrap();
+            let instance = env.instance.clone().unwrap();
 
-            let view: MemoryView = memory.view(&store);
+            let view = memory.view(&store);
 
-            let data: Vec<u8> = env.read_buffer(&view, ptr).map_err(|_e| {
+            let data = env.read_buffer(&view, ptr).map_err(|_e| {
                 RuntimeError::new("Error lifting typed array")
             })?;
 
             let result = env.deploy_from_address_external.execute(&data)?;
 
-            let value: i64 = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
+            let value = env.write_buffer(&instance, &mut store, &result, 13, 0).map_err(|_e| {
                 RuntimeError::new("Error writing buffer")
             })?;
 
@@ -90,8 +90,8 @@ impl WasmerInstance {
             }
         };
 
-        let module: Module = Module::new(&store, &bytecode)?;
-        let instance: Instance = Instance::new(&mut store, &module, &import_object)?;
+        let module = Module::new(&store, &bytecode)?;
+        let instance = Instance::new(&mut store, &module, &import_object)?;
 
         env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
         env.as_mut(&mut store).instance = Some(instance.clone());
