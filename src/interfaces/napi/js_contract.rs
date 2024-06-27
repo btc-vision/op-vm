@@ -100,7 +100,7 @@ impl JsContract {
         })
     }
 
-    // #[napi]
+    #[napi]
     pub fn destroy(&self) -> Result<()> {
         let aborted: bool = self.deploy_tsfn.aborted();
 
