@@ -22,7 +22,9 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
-    deploy_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    storage_store_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    deploy_from_address_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -74,16 +76,24 @@ impl JsContract {
 
         Ok(Self {
             contract: Arc::new(Mutex::new(contract)),
-            deploy_tsfn: deploy_from_address_tsfn.clone(),
+            storage_load_tsfn: storage_load_tsfn.clone(),
+            storage_store_tsfn: storage_store_tsfn.clone(),
+            deploy_from_address_tsfn: deploy_from_address_tsfn.clone(),
         })
     }
 
     #[napi]
     pub fn destroy(&self) -> Result<()> {
-        let aborted: bool = self.deploy_tsfn.aborted();
+        if !self.storage_load_tsfn.aborted() {
+            self.storage_load_tsfn.clone().abort()?;
+        }
 
-        if !aborted {
-            self.deploy_tsfn.clone().abort()?;
+        if !self.storage_store_tsfn.aborted() {
+            self.storage_store_tsfn.clone().abort()?;
+        }
+
+        if !self.deploy_from_address_tsfn.aborted() {
+            self.deploy_from_address_tsfn.clone().abort()?;
         }
 
         Ok(())
