@@ -47,7 +47,7 @@ pub struct JsContract {
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    // #[napi(constructor)]
+    #[napi(constructor)]
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
@@ -105,7 +105,7 @@ impl JsContract {
         })
     }
 
-    // #[napi]
+    #[napi]
     pub fn destroy(&self) -> Result<()> {
         abort_tsfn!(self.storage_load_tsfn);
         abort_tsfn!(self.storage_store_tsfn);
