@@ -73,38 +73,6 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        fn storage_load(
-            mut context: FunctionEnvMut<CustomEnv>,
-            ptr: u32,
-        ) -> Result<u32, RuntimeError> {
-            let (env, mut store) = context.data_and_store_mut();
-            handle_import_call(env, &mut store, &env.storage_load_external, ptr)
-        }
-
-        fn storage_store(
-            mut context: FunctionEnvMut<CustomEnv>,
-            ptr: u32,
-        ) -> Result<u32, RuntimeError> {
-            let (env, mut store) = context.data_and_store_mut();
-            handle_import_call(env, &mut store, &env.storage_store_external, ptr)
-        }
-
-        fn call_other_contract(
-            mut context: FunctionEnvMut<CustomEnv>,
-            ptr: u32,
-        ) -> Result<u32, RuntimeError> {
-            let (env, mut store) = context.data_and_store_mut();
-            handle_import_call(env, &mut store, &env.call_other_contract_external, ptr)
-        }
-
-        fn deploy_from_address(
-            mut context: FunctionEnvMut<CustomEnv>,
-            ptr: u32,
-        ) -> Result<u32, RuntimeError> {
-            let (env, mut store) = context.data_and_store_mut();
-            handle_import_call(env, &mut store, &env.deploy_from_address_external, ptr)
-        }
-
         fn handle_import_call(
             env: &CustomEnv,
             mut store: &mut StoreMut,
@@ -129,20 +97,33 @@ impl WasmerInstance {
             Ok(value as u32)
         }
 
-        let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let storage_load_typed = Function::new_typed_with_env(&mut store, &env, storage_load);
-        let storage_store_typed = Function::new_typed_with_env(&mut store, &env, storage_store);
-        let call_other_contract_typed = Function::new_typed_with_env(&mut store, &env, call_other_contract);
-        let deploy_from_address_typed =
-            Function::new_typed_with_env(&mut store, &env, deploy_from_address);
+        macro_rules! import_external {
+            ($func:tt, $external:ident) => {{
+                fn $func(
+                    mut context: FunctionEnvMut<CustomEnv>,
+                    ptr: u32,
+                ) -> Result<u32, RuntimeError> {
+                    let (env, mut store) = context.data_and_store_mut();
+                    handle_import_call(env, &mut store, &env.$external, ptr)
+                }
+
+                import!($func)
+            }};
+        }
+
+        macro_rules! import {
+            ($func:tt) => {
+                Function::new_typed_with_env(&mut store, &env, $func)
+            };
+        }
 
         let import_object: Imports = imports! {
             "env" => {
-                "abort" => abort_typed,
-                "load" => storage_load_typed,
-                "store" => storage_store_typed,
-                "call" => call_other_contract_typed,
-                "deployFromAddress" => deploy_from_address_typed,
+                "abort" => import!(abort),
+                "load" => import_external!(storage_load, storage_load_external),
+                "store" => import_external!(storage_store, storage_store_external),
+                "call" => import_external!(call_other_contract, call_other_contract_external),
+                "deployFromAddress" => import_external!(deploy_from_address, deploy_from_address_external),
             }
         };
 
