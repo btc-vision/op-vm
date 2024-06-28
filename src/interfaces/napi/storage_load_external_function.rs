@@ -3,6 +3,7 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
+use crate::interfaces::ExternalFunction;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 pub struct StorageLoadExternalFunction {
@@ -15,8 +16,10 @@ impl StorageLoadExternalFunction {
     ) -> Self {
         Self { tsfn }
     }
+}
 
-    pub fn execute(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+impl ExternalFunction for StorageLoadExternalFunction {
+    fn execute(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
         let request: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
             buffer: Vec::from(data),
         };

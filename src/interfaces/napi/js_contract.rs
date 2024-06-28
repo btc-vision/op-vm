@@ -13,7 +13,10 @@ use wasmer::Value;
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
-use crate::interfaces::{AbortDataResponse, ContractCallTask, DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{
+    AbortDataResponse, ContractCallTask, DeployFromAddressExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction,
+};
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 #[napi(js_name = "Contract")]
