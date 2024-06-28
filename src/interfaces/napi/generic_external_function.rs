@@ -29,11 +29,13 @@ impl ExternalFunction for GenericExternalFunction {
                 .tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|_e| RuntimeError::new("Error calling load function"));
+                .map_err(|e| RuntimeError::new(e.reason));
 
             let promise = response?;
 
-            let data = promise.await?;
+            let data = promise
+                .await
+                .map_err(|e| RuntimeError::new(e.reason))?;
 
             let data = data.to_vec();
             Ok(data.into())
