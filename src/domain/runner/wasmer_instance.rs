@@ -1,20 +1,23 @@
 use std::sync::Arc;
 
-use napi::bindgen_prelude::{Buffer, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
-use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
-use wasmer::{CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Instance, Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value};
+use chrono::Local;
+use wasmer::{
+    CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance,
+    Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value,
+};
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
-use wasmer_types::{FunctionType, Target, Type};
+use wasmer_types::Target;
 
-use crate::domain::contract::{AbortData, CustomEnv};
-use crate::domain::runner::RunnerInstance;
-use crate::domain::vm::{get_op_cost, LimitingTunables};
-use crate::interfaces::ThreadSafeJsImportResponse;
+use crate::domain::contract::AbortData;
+use crate::domain::runner::{CustomEnv, RunnerInstance};
+use crate::domain::vm::{get_op_cost, LimitingTunables, log_time_diff};
+use crate::interfaces::{
+    CallOtherContractExternalFunction, DeployFromAddressExternalFunction, ExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction,
+};
 
 pub struct WasmerInstance {
     store: Store,
@@ -23,7 +26,15 @@ pub struct WasmerInstance {
 }
 
 impl WasmerInstance {
-    pub fn new(bytecode: &[u8], max_gas: u64, load_function: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>) -> anyhow::Result<Self> {
+    pub fn new(
+        bytecode: &[u8],
+        max_gas: u64,
+        storage_load_external: StorageLoadExternalFunction,
+        storage_store_external: StorageStoreExternalFunction,
+        call_other_contract_external: CallOtherContractExternalFunction,
+        deploy_from_address_external: DeployFromAddressExternalFunction,
+    ) -> anyhow::Result<Self> {
+        let time = Local::now();
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -38,7 +49,12 @@ impl WasmerInstance {
         engine.set_tunables(tunables);
 
         let mut store = Store::new(engine);
-        let instance = CustomEnv::new(load_function)?;
+        let instance = CustomEnv::new(
+            storage_load_external,
+            storage_store_external,
+            call_other_contract_external,
+            deploy_from_address_external,
+        )?;
         let env = FunctionEnv::new(&mut store, instance);
 
         fn abort(
@@ -59,89 +75,67 @@ impl WasmerInstance {
             return Err(RuntimeError::new("Execution aborted"));
         }
 
-        let deploy_from_address_mut = move |context: FunctionEnvMut<CustomEnv>, values: &[Value]| {
-            let ptr: u32 = values[0].unwrap_i32() as u32;
-            let async_context = Arc::new(Mutex::new(context));
+        fn handle_import_call(
+            env: &CustomEnv,
+            mut store: &mut StoreMut,
+            external_function: &impl ExternalFunction,
+            ptr: u32,
+        ) -> Result<u32, RuntimeError> {
+            let memory = env.memory.clone().unwrap();
+            let instance = env.instance.clone().unwrap();
 
-            let deploy = {
-                let async_context = async_context.clone();
-                async move {
-                    let mut context = async_context.lock().await;
-                    let mutable_context = context.as_mut();
-                    let state = mutable_context.data();
+            let view = memory.view(&store);
 
-                    let load_func: ThreadsafeFunction<ThreadSafeJsImportResponse> = state.load_function.clone();
-                    let (env, mut store): (&mut CustomEnv, StoreMut) = context.data_and_store_mut();
+            let data = env
+                .read_buffer(&view, ptr)
+                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-                    let memory = env.memory.clone().unwrap();
-                    let instance = env.instance.clone().unwrap();
+            let result = external_function.execute(&data)?;
 
-                    let data = {
-                        let view = memory.view(&store);
+            let value = env
+                .write_buffer(&instance, &mut store, &result, 13, 0)
+                .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-                        let data = env.read_buffer(&view, ptr).map_err(|_e| {
-                            RuntimeError::new("Error lifting typed array")
-                        })?;
-                        
-                        let response: ThreadSafeJsImportResponse = ThreadSafeJsImportResponse {
-                            buffer: data,
-                        };
+            Ok(value as u32)
+        }
 
-                        let response: Result<Promise<Buffer>, RuntimeError> = load_func.call_async(Ok(response)).await.map_err(|_e| {
-                            RuntimeError::new("Error calling load function")
-                        });
-
-                        let promise = response?;
-
-                        let data: Buffer = promise.await.map_err(|_e| {
-                            RuntimeError::new("Error awaiting promise")
-                        })?;
-
-                        let data: Vec<u8> = data.into();
-                        data
-                    };
-
-                    let value: i64 = env.write_buffer(&instance, &mut store, &data, 13, 0).map_err(|_e| {
-                        RuntimeError::new("Error writing buffer")
-                    })?;
-
-                    //write_memory(&view, 0, &data).unwrap();
-
-                    Ok(vec![Value::I32(value as i32)])
+        macro_rules! import_external {
+            ($func:tt, $external:ident) => {{
+                fn $func(
+                    mut context: FunctionEnvMut<CustomEnv>,
+                    ptr: u32,
+                ) -> Result<u32, RuntimeError> {
+                    let (env, mut store) = context.data_and_store_mut();
+                    handle_import_call(env, &mut store, &env.$external, ptr)
                 }
+
+                import!($func)
+            }};
+        }
+
+        macro_rules! import {
+            ($func:tt) => {
+                Function::new_typed_with_env(&mut store, &env, $func)
             };
+        }
 
-            let rt = Runtime::new().unwrap();
-            let response = rt.block_on(deploy);
-
-            response
-        };
-
-        let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
-        let deploy_from_address_signature = FunctionType::new(
-            vec![Type::I32],
-            vec![Type::I32],
-        );
-
-        let deploy_from_address = Function::new_with_env(
-            &mut store,
-            &env,
-            deploy_from_address_signature,
-            deploy_from_address_mut,
-        );
-
-        let import_object = imports! {
+        let import_object: Imports = imports! {
             "env" => {
-                "abort" => abort_typed,
-                "deployFromAddress" => deploy_from_address,
+                "abort" => import!(abort),
+                "load" => import_external!(storage_load, storage_load_external),
+                "store" => import_external!(storage_store, storage_store_external),
+                "call" => import_external!(call_other_contract, call_other_contract_external),
+                "deployFromAddress" => import_external!(deploy_from_address, deploy_from_address_external),
             }
         };
 
-        let module: Module = Module::new(&store, &bytecode)?;
-        let instance: Instance = Instance::new(&mut store, &module, &import_object)?;
+        let module = Module::new(&store, &bytecode)?;
+        let instance = Instance::new(&mut store, &module, &import_object)?;
 
         env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
         env.as_mut(&mut store).instance = Some(instance.clone());
+
+        log_time_diff(&time, "WasmerInstance::new");
 
         Ok(Self {
             store,
@@ -166,6 +160,7 @@ impl RunnerInstance for WasmerInstance {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         let export = Self::get_function(&self.instance, function)?;
         let result = export.call(&mut self.store, params)?;
+
         Ok(result)
     }
 

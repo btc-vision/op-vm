@@ -1,5 +1,4 @@
-pub use self::{abort_data::*, contract::*, custom_env::*};
+pub use self::{abort_data::*, contract::*};
 
 mod abort_data;
 mod contract;
-mod custom_env;

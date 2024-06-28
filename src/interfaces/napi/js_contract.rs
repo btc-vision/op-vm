@@ -1,6 +1,7 @@
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
+use chrono::Local;
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use napi::Env;
@@ -8,56 +9,42 @@ use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
 use napi::JsUnknown;
-use napi::Result;
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
-use crate::interfaces::{AbortDataResponse, CallResponse};
+use crate::domain::vm::log_time_diff;
+use crate::interfaces::{
+    AbortDataResponse, CallOtherContractExternalFunction, ContractCallTask,
+    DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
+};
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+
+macro_rules! create_tsfn {
+    ($id:ident) => {
+        $id.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?
+    };
+}
+
+macro_rules! abort_tsfn {
+    ($id:expr) => {
+        if !$id.aborted() {
+            $id.clone().abort()?;
+        }
+    };
+}
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
-    deploy_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-}
-
-pub struct ContractCallTask {
-    contract: Arc<Mutex<Contract>>,
-    func_name: String,
-    wasm_params: Vec<Value>,
-}
-
-impl Task for ContractCallTask {
-    type Output = Box<[Value]>;
-    type JsValue = CallResponse;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        let mut contract = self.contract.lock().unwrap();
-
-        contract.call(&self.func_name, &self.wasm_params).map_err(|e| Error::from_reason(format!("{:?}", e)))
-    }
-
-    fn resolve(&mut self, env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        let js_array = JsContract::box_values_to_js_array(&env, output)?;
-        let gas_used = self.contract.lock().unwrap().get_used_gas();
-
-        let gas_used_bigint: BigInt = BigInt::from(gas_used);
-
-        Ok(CallResponse {
-            result: js_array,
-            gas_used: gas_used_bigint,
-        })
-    }
-
-    fn reject(&mut self, _env: Env, err: Error) -> Result<Self::JsValue> {
-        Err(err)
-    }
-
-    fn finally(&mut self, _env: Env) -> Result<()> {
-        Ok(())
-    }
+    storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    storage_store_tsfn:
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    call_other_contract_tsfn:
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    deploy_from_address_tsfn:
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -68,51 +55,78 @@ impl JsContract {
         max_gas: BigInt,
         #[napi(
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )] js_deploy_from_address_function: JsFunction,
+        )]
+        storage_load_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )]
+        storage_store_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )]
+        call_other_contract_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )]
+        deploy_from_address_js_function: JsFunction,
     ) -> Result<Self> {
+        let time = Local::now();
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let tsfn_deploy_from_address: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled> = js_deploy_from_address_function
-            .create_threadsafe_function(10, move |ctx: ThreadSafeCallContext<ThreadSafeJsImportResponse>| {
-                Ok(vec![ctx.value])
-            })?;
+        let storage_load_tsfn = create_tsfn!(storage_load_js_function);
+        let storage_store_tsfn = create_tsfn!(storage_store_js_function);
+        let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
+        let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
 
-        let (tx, rx) = mpsc::channel();
+        let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn.clone());
+        let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn.clone());
+        let call_other_contract_external =
+            CallOtherContractExternalFunction::new(call_other_contract_tsfn.clone());
+        let deploy_from_address_external =
+            DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
 
-        let deploy_from_address_tsfn_clone = tsfn_deploy_from_address.clone();
-        let handle = thread::spawn(move || {
-            let runner = WasmerInstance::new(&bytecode_vec, max_gas, deploy_from_address_tsfn_clone)
-                .map_err(|e| Error::from_reason(format!("{:?}", e)))
-                .unwrap();
+        let runner = WasmerInstance::new(
+            &bytecode_vec,
+            max_gas,
+            storage_load_external,
+            storage_store_external,
+            call_other_contract_external,
+            deploy_from_address_external,
+        )
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
-            let runner = Arc::new(Mutex::new(runner));
-            let contract = Contract::new(max_gas, runner);
+        let runner = Arc::new(Mutex::new(runner));
+        let contract = Contract::new(max_gas, runner);
 
-            // Send the contract back to the main thread
-            tx.send(contract).expect("Failed to send contract");
-        });
+        log_time_diff(&time, "JsContract::new");
 
-        let contract = rx.recv().expect("Failed to receive contract");
-        handle.join().expect("Thread panicked");
-
-        let deploy_tsfn_clone = tsfn_deploy_from_address.clone();
-        Ok(Self { contract: Arc::new(Mutex::new(contract)), deploy_tsfn: deploy_tsfn_clone })
+        Ok(Self {
+            contract: Arc::new(Mutex::new(contract)),
+            storage_load_tsfn: storage_load_tsfn.clone(),
+            storage_store_tsfn: storage_store_tsfn.clone(),
+            call_other_contract_tsfn: call_other_contract_tsfn.clone(),
+            deploy_from_address_tsfn: deploy_from_address_tsfn.clone(),
+        })
     }
 
     #[napi]
-    pub fn destroy(&mut self) -> Result<()> {
-        let aborted: bool = self.deploy_tsfn.aborted();
-
-        if !aborted {
-            self.deploy_tsfn.clone().abort()?;
-        }
+    pub fn destroy(&self) -> Result<()> {
+        abort_tsfn!(self.storage_load_tsfn);
+        abort_tsfn!(self.storage_store_tsfn);
+        abort_tsfn!(self.call_other_contract_tsfn);
+        abort_tsfn!(self.deploy_from_address_tsfn);
 
         Ok(())
     }
 
     #[napi(ts_return_type = "Promise<CallResponse>")]
-    pub fn call(&self, func_name: String, params: Vec<JsNumber>) -> Result<AsyncTask<ContractCallTask>> {
+    pub fn call(
+        &self,
+        func_name: String,
+        params: Vec<JsNumber>,
+    ) -> Result<AsyncTask<ContractCallTask>> {
+        let time = Local::now();
         let mut wasm_params = Vec::new();
         let length = params.len();
 
@@ -121,19 +135,24 @@ impl JsContract {
             let param_value = param.get_int32();
 
             if param_value.is_err() {
-                return Err(Error::from_reason(format!("{:?}", param_value.unwrap_err())));
+                return Err(Error::from_reason(format!(
+                    "{:?}",
+                    param_value.unwrap_err()
+                )));
             }
 
             wasm_params.push(Value::I32(param_value.unwrap()));
         }
 
         let contract = self.contract.clone();
-
-        Ok(AsyncTask::new(ContractCallTask {
+        let result = AsyncTask::new(ContractCallTask::new(
             contract,
-            func_name,
-            wasm_params,
-        }))
+            &func_name,
+            &wasm_params,
+            time,
+        ));
+
+        Ok(result)
     }
 
     #[napi]
@@ -151,7 +170,9 @@ impl JsContract {
             tx.send(result).expect("Failed to send read memory result");
         });
 
-        let result = rx.recv().map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?;
+        let result = rx
+            .recv()
+            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?;
         let resp = result.unwrap();
 
         Ok(Buffer::from(resp))
@@ -172,7 +193,9 @@ impl JsContract {
             tx.send(result).expect("Failed to send write memory result");
         });
 
-        rx.recv().map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?.map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+        rx.recv()
+            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         Ok(())
     }
 
@@ -188,7 +211,9 @@ impl JsContract {
             tx.send(gas).expect("Failed to send gas used");
         });
 
-        let gas = rx.recv().map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?;
+        let gas = rx
+            .recv()
+            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?;
         Ok(BigInt::from(gas))
     }
 
@@ -218,7 +243,9 @@ impl JsContract {
             tx.send(result).expect("Failed to send write buffer result");
         });
 
-        let result = rx.recv().map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))??;
+        let result = rx
+            .recv()
+            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))??;
         Ok(result)
     }
 
@@ -236,42 +263,6 @@ impl JsContract {
 
         rx.recv().expect("Recv error")
     }
-
-    /*#[napi]
-    pub fn call(
-        &mut self,
-        env: Env,
-        func_name: String,
-        params: Vec<JsNumber>,
-    ) -> Result<CallResponse> {
-        let mut wasm_params = Vec::new();
-
-        for param in params {
-            let param_value = param.get_int32();
-            if param_value.is_err() {
-                return Err(Error::from_reason(format!(
-                    "{:?}",
-                    param_value.unwrap_err()
-                )));
-            }
-
-            let value = param_value.unwrap();
-            wasm_params.push(Value::I32(value));
-        }
-
-        let result = self
-            .contract
-            .call(&func_name, &wasm_params)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-        let js_array = JsContract::box_values_to_js_array(&env, result)?;
-
-        let gas_used = self.contract.get_used_gas();
-
-        Ok(CallResponse {
-            result: js_array,
-            gas_used: BigInt::from(gas_used),
-        })
-    }*/
 }
 
 impl JsContract {

@@ -43,12 +43,7 @@ impl Contract {
         runner.write_memory(offset, data)
     }
 
-    pub fn write_buffer(
-        &mut self,
-        value: &[u8],
-        id: i32,
-        align: u32,
-    ) -> Result<i64, Error> {
+    pub fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, Error> {
         let mut runner = self.runner.lock().unwrap();
         AssemblyScript::write_buffer(&mut *runner, value, id, align)
     }
