@@ -14,22 +14,40 @@ use wasmer::Value;
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
 use crate::interfaces::{
-    AbortDataResponse, ContractCallTask, DeployFromAddressExternalFunction,
-    StorageLoadExternalFunction, StorageStoreExternalFunction,
+    AbortDataResponse, CallOtherContractExternalFunction, ContractCallTask,
+    DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+
+macro_rules! create_tsfn {
+    ($id:ident) => {
+        $id.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?
+    };
+}
+
+macro_rules! abort_tsfn {
+    ($id:expr) => {
+        if !$id.aborted() {
+            $id.clone().abort()?;
+        }
+    };
+}
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    storage_store_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    deploy_from_address_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    storage_store_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    call_other_contract_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    deploy_from_address_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    #[napi(constructor)]
+    // #[napi(constructor)]
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
@@ -44,21 +62,24 @@ impl JsContract {
         #[napi(
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
         )]
+        call_other_contract_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+        )]
         deploy_from_address_js_function: JsFunction,
     ) -> Result<Self> {
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
-        let storage_load_tsfn =
-            storage_load_js_function.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
+        let storage_load_tsfn = create_tsfn!(storage_load_js_function);
+        let storage_store_tsfn = create_tsfn!(storage_store_js_function);
+        let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
+        let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
+
         let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn.clone());
-
-        let storage_store_tsfn =
-            storage_store_js_function.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
         let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn.clone());
-
-        let deploy_from_address_tsfn = deploy_from_address_js_function
-            .create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?;
+        let call_other_contract_external =
+            CallOtherContractExternalFunction::new(call_other_contract_tsfn.clone());
         let deploy_from_address_external =
             DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
 
@@ -67,6 +88,7 @@ impl JsContract {
             max_gas,
             storage_load_external,
             storage_store_external,
+            call_other_contract_external,
             deploy_from_address_external,
         )
         .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
@@ -78,23 +100,17 @@ impl JsContract {
             contract: Arc::new(Mutex::new(contract)),
             storage_load_tsfn: storage_load_tsfn.clone(),
             storage_store_tsfn: storage_store_tsfn.clone(),
+            call_other_contract_tsfn: call_other_contract_tsfn.clone(),
             deploy_from_address_tsfn: deploy_from_address_tsfn.clone(),
         })
     }
 
-    #[napi]
+    // #[napi]
     pub fn destroy(&self) -> Result<()> {
-        if !self.storage_load_tsfn.aborted() {
-            self.storage_load_tsfn.clone().abort()?;
-        }
-
-        if !self.storage_store_tsfn.aborted() {
-            self.storage_store_tsfn.clone().abort()?;
-        }
-
-        if !self.deploy_from_address_tsfn.aborted() {
-            self.deploy_from_address_tsfn.clone().abort()?;
-        }
+        abort_tsfn!(self.storage_load_tsfn);
+        abort_tsfn!(self.storage_store_tsfn);
+        abort_tsfn!(self.call_other_contract_tsfn);
+        abort_tsfn!(self.deploy_from_address_tsfn);
 
         Ok(())
     }

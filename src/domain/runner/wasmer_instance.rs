@@ -14,8 +14,8 @@ use crate::domain::contract::AbortData;
 use crate::domain::runner::{CustomEnv, RunnerInstance};
 use crate::domain::vm::{get_op_cost, LimitingTunables};
 use crate::interfaces::{
-    DeployFromAddressExternalFunction, ExternalFunction, StorageLoadExternalFunction,
-    StorageStoreExternalFunction,
+    CallOtherContractExternalFunction, DeployFromAddressExternalFunction, ExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 
 pub struct WasmerInstance {
@@ -30,6 +30,7 @@ impl WasmerInstance {
         max_gas: u64,
         storage_load_external: StorageLoadExternalFunction,
         storage_store_external: StorageStoreExternalFunction,
+        call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
@@ -49,6 +50,7 @@ impl WasmerInstance {
         let instance = CustomEnv::new(
             storage_load_external,
             storage_store_external,
+            call_other_contract_external,
             deploy_from_address_external,
         )?;
         let env = FunctionEnv::new(&mut store, instance);
@@ -87,6 +89,14 @@ impl WasmerInstance {
             handle_import_call(env, &mut store, &env.storage_store_external, ptr)
         }
 
+        fn call_other_contract(
+            mut context: FunctionEnvMut<CustomEnv>,
+            ptr: u32,
+        ) -> Result<u32, RuntimeError> {
+            let (env, mut store) = context.data_and_store_mut();
+            handle_import_call(env, &mut store, &env.call_other_contract_external, ptr)
+        }
+
         fn deploy_from_address(
             mut context: FunctionEnvMut<CustomEnv>,
             ptr: u32,
@@ -122,6 +132,7 @@ impl WasmerInstance {
         let abort_typed = Function::new_typed_with_env(&mut store, &env, abort);
         let storage_load_typed = Function::new_typed_with_env(&mut store, &env, storage_load);
         let storage_store_typed = Function::new_typed_with_env(&mut store, &env, storage_store);
+        let call_other_contract_typed = Function::new_typed_with_env(&mut store, &env, call_other_contract);
         let deploy_from_address_typed =
             Function::new_typed_with_env(&mut store, &env, deploy_from_address);
 
@@ -130,6 +141,7 @@ impl WasmerInstance {
                 "abort" => abort_typed,
                 "load" => storage_load_typed,
                 "store" => storage_store_typed,
+                "call" => call_other_contract_typed,
                 "deployFromAddress" => deploy_from_address_typed,
             }
         };
