@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Local};
 use napi::{Env, Error, Task};
 use napi::bindgen_prelude::BigInt;
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
+use crate::domain::vm::log_time_diff;
 use crate::interfaces::CallResponse;
 use crate::interfaces::napi::js_contract::JsContract;
 
@@ -12,14 +14,16 @@ pub struct ContractCallTask {
     contract: Arc<Mutex<Contract>>,
     func_name: String,
     wasm_params: Vec<Value>,
+    time: DateTime<Local>,
 }
 
 impl ContractCallTask {
-    pub fn new(contract: Arc<Mutex<Contract>>, func_name: &str, wasm_params: &[Value]) -> Self {
+    pub fn new(contract: Arc<Mutex<Contract>>, func_name: &str, wasm_params: &[Value], time: DateTime<Local>) -> Self {
         Self {
             contract,
             func_name: func_name.to_string(),
             wasm_params: wasm_params.to_vec(),
+            time,
         }
     }
 }
@@ -41,6 +45,8 @@ impl Task for ContractCallTask {
         let gas_used = self.contract.lock().unwrap().get_used_gas();
 
         let gas_used_bigint: BigInt = BigInt::from(gas_used);
+
+        log_time_diff(&self.time, format!("JsContract::call: {}", self.func_name).as_str());
 
         Ok(CallResponse {
             result: js_array,

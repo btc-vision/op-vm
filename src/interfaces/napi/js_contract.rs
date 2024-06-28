@@ -1,6 +1,7 @@
 use std::sync::{Arc, mpsc, Mutex};
 use std::thread;
 
+use chrono::Local;
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use napi::Env;
@@ -13,6 +14,7 @@ use wasmer::Value;
 
 use crate::domain::contract::Contract;
 use crate::domain::runner::WasmerInstance;
+use crate::domain::vm::log_time_diff;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ContractCallTask,
     DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
@@ -38,11 +40,11 @@ pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     storage_store_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     call_other_contract_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     deploy_from_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -68,6 +70,7 @@ impl JsContract {
         )]
         deploy_from_address_js_function: JsFunction,
     ) -> Result<Self> {
+        let time = Local::now();
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
 
@@ -91,10 +94,12 @@ impl JsContract {
             call_other_contract_external,
             deploy_from_address_external,
         )
-        .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
         let runner = Arc::new(Mutex::new(runner));
         let contract = Contract::new(max_gas, runner);
+
+        log_time_diff(&time, "JsContract::new");
 
         Ok(Self {
             contract: Arc::new(Mutex::new(contract)),
@@ -121,6 +126,7 @@ impl JsContract {
         func_name: String,
         params: Vec<JsNumber>,
     ) -> Result<AsyncTask<ContractCallTask>> {
+        let time = Local::now();
         let mut wasm_params = Vec::new();
         let length = params.len();
 
@@ -139,12 +145,14 @@ impl JsContract {
         }
 
         let contract = self.contract.clone();
-
-        Ok(AsyncTask::new(ContractCallTask::new(
+        let result = AsyncTask::new(ContractCallTask::new(
             contract,
             &func_name,
             &wasm_params,
-        )))
+            time,
+        ));
+
+        Ok(result)
     }
 
     #[napi]

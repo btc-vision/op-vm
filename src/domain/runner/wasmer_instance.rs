@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::Local;
 use wasmer::{
     CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance,
     Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value,
@@ -12,7 +13,7 @@ use wasmer_types::Target;
 
 use crate::domain::contract::AbortData;
 use crate::domain::runner::{CustomEnv, RunnerInstance};
-use crate::domain::vm::{get_op_cost, LimitingTunables};
+use crate::domain::vm::{get_op_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
     CallOtherContractExternalFunction, DeployFromAddressExternalFunction, ExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
@@ -33,6 +34,7 @@ impl WasmerInstance {
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
     ) -> anyhow::Result<Self> {
+        let time = Local::now();
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
 
         let mut compiler = Singlepass::default();
@@ -133,6 +135,8 @@ impl WasmerInstance {
         env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
         env.as_mut(&mut store).instance = Some(instance.clone());
 
+        log_time_diff(&time, "WasmerInstance::new");
+
         Ok(Self {
             store,
             instance,
@@ -156,6 +160,7 @@ impl RunnerInstance for WasmerInstance {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         let export = Self::get_function(&self.instance, function)?;
         let result = export.call(&mut self.store, params)?;
+
         Ok(result)
     }
 
