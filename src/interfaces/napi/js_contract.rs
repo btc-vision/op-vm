@@ -1,5 +1,4 @@
-use std::sync::{Arc, mpsc, Mutex};
-use std::thread;
+use std::sync::{Arc, Mutex};
 
 use chrono::Local;
 use napi::bindgen_prelude::*;
@@ -157,22 +156,15 @@ impl JsContract {
 
     #[napi]
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
-        let (tx, rx) = mpsc::channel();
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;
         let contract = self.contract.clone();
 
-        thread::spawn(move || {
-            let result = {
-                let contract = contract.lock().unwrap();
-                contract.read_memory(offset, length)
-            };
-            tx.send(result).expect("Failed to send read memory result");
-        });
+        let result = {
+            let contract = contract.lock().unwrap();
+            contract.read_memory(offset, length)
+        };
 
-        let result = rx
-            .recv()
-            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?;
         let resp = result.unwrap();
 
         Ok(Buffer::from(resp))
@@ -180,40 +172,24 @@ impl JsContract {
 
     #[napi]
     pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
-        let (tx, rx) = mpsc::channel();
         let data: Vec<u8> = data.into();
         let offset = offset.get_u64().1;
         let contract = self.contract.clone();
 
-        thread::spawn(move || {
-            let result = {
-                let contract = contract.lock().unwrap();
-                contract.write_memory(offset, &data)
-            };
-            tx.send(result).expect("Failed to send write memory result");
-        });
+        let contract = contract.lock().unwrap();
+        contract.write_memory(offset, &data).unwrap();
 
-        rx.recv()
-            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
         Ok(())
     }
 
     #[napi]
     pub fn get_used_gas(&self) -> Result<BigInt> {
-        let (tx, rx) = mpsc::channel();
         let contract = self.contract.clone();
-        thread::spawn(move || {
-            let gas = {
-                let mut contract = contract.lock().unwrap();
-                contract.get_used_gas()
-            };
-            tx.send(gas).expect("Failed to send gas used");
-        });
+        let gas = {
+            let mut contract = contract.lock().unwrap();
+            contract.get_used_gas()
+        };
 
-        let gas = rx
-            .recv()
-            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))?;
         Ok(BigInt::from(gas))
     }
 
@@ -221,47 +197,34 @@ impl JsContract {
     pub fn set_used_gas(&self, gas: BigInt) -> Result<()> {
         let gas = gas.get_u64().1;
         let contract = self.contract.clone();
-        thread::spawn(move || {
-            let mut contract = contract.lock().unwrap();
-            contract.set_used_gas(gas);
-        });
+        let mut contract = contract.lock().unwrap();
+        contract.set_used_gas(gas);
 
         Ok(())
     }
 
     #[napi]
     pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
-        let (tx, rx) = mpsc::channel();
         let value = value.to_vec();
         let contract = self.contract.clone();
 
-        thread::spawn(move || {
-            let result = {
-                let mut contract = contract.lock().unwrap();
-                contract.write_buffer(&value, id, align)
-            };
-            tx.send(result).expect("Failed to send write buffer result");
-        });
+        let result = {
+            let mut contract = contract.lock().unwrap();
+            contract.write_buffer(&value, id, align)?
+        };
 
-        let result = rx
-            .recv()
-            .map_err(|e| Error::from_reason(format!("Recv error: {:?}", e)))??;
         Ok(result)
     }
 
     #[napi]
     pub fn get_abort_data(&self) -> Option<AbortDataResponse> {
-        let (tx, rx) = mpsc::channel();
         let contract = self.contract.clone();
-        thread::spawn(move || {
-            let result = {
-                let contract = contract.lock().unwrap();
-                contract.get_abort_data().map(|data| data.into())
-            };
-            tx.send(result).expect("Failed to send abort data result");
-        });
+        let result = {
+            let contract = contract.lock().unwrap();
+            contract.get_abort_data().map(|data| data.into())
+        };
 
-        rx.recv().expect("Recv error")
+        result
     }
 }
 
