@@ -15,8 +15,9 @@ use crate::domain::contract::AbortData;
 use crate::domain::runner::{CustomEnv, RunnerInstance};
 use crate::domain::vm::{get_op_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
-    CallOtherContractExternalFunction, DeployFromAddressExternalFunction, ExternalFunction,
-    StorageLoadExternalFunction, StorageStoreExternalFunction,
+    CallOtherContractExternalFunction, ConsoleLogExternalFunction,
+    DeployFromAddressExternalFunction, ExternalFunction, StorageLoadExternalFunction,
+    StorageStoreExternalFunction,
 };
 
 pub struct WasmerInstance {
@@ -33,6 +34,7 @@ impl WasmerInstance {
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
+        console_log_external: ConsoleLogExternalFunction,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
         let metering = Arc::new(Metering::new(max_gas, get_op_cost));
@@ -54,6 +56,7 @@ impl WasmerInstance {
             storage_store_external,
             call_other_contract_external,
             deploy_from_address_external,
+            console_log_external,
         )?;
         let env = FunctionEnv::new(&mut store, instance);
 
@@ -126,6 +129,7 @@ impl WasmerInstance {
                 "store" => import_external!(storage_store, storage_store_external),
                 "call" => import_external!(call_other_contract, call_other_contract_external),
                 "deployFromAddress" => import_external!(deploy_from_address, deploy_from_address_external),
+                "log" => import_external!(console_log, console_log_external),
             }
         };
 

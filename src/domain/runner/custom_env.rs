@@ -3,7 +3,7 @@ use napi::Error;
 use wasmer::{Instance, Memory, MemoryAccessError, MemoryView, RuntimeError, StoreMut, Value};
 
 use crate::domain::contract::AbortData;
-use crate::interfaces::{CallOtherContractExternalFunction, DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
 pub struct CustomEnv {
     pub instance: Option<Instance>,
@@ -13,6 +13,7 @@ pub struct CustomEnv {
     pub storage_store_external: StorageStoreExternalFunction,
     pub call_other_contract_external: CallOtherContractExternalFunction,
     pub deploy_from_address_external: DeployFromAddressExternalFunction,
+    pub console_log_external: ConsoleLogExternalFunction,
 }
 
 impl CustomEnv {
@@ -21,6 +22,7 @@ impl CustomEnv {
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
+        console_log_external: ConsoleLogExternalFunction,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             instance: None,
@@ -30,6 +32,7 @@ impl CustomEnv {
             storage_store_external,
             call_other_contract_external,
             deploy_from_address_external,
+            console_log_external,
         })
     }
 
