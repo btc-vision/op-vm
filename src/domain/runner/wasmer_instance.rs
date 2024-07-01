@@ -45,7 +45,7 @@ impl WasmerInstance {
         compiler.enable_verifier();
 
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, 16, 1024 * 1024);
+        let tunables = LimitingTunables::new(base, 128, 1024 * 1024);
 
         let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
         engine.set_tunables(tunables);
