@@ -102,6 +102,21 @@ impl WasmerInstance {
             Ok(value as u32)
         }
 
+        fn handle_console_log(
+            mut context: FunctionEnvMut<CustomEnv>,
+            ptr: u32,
+        ) -> Result<(), RuntimeError> {
+            let (env, store) = context.data_and_store_mut();
+            let memory = env.memory.clone().unwrap();
+            let view = memory.view(&store);
+
+            let data = env
+                .read_buffer(&view, ptr)
+                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+            env.console_log_external.execute(&data)
+        }
+
         macro_rules! import_external {
             ($func:tt, $external:ident) => {{
                 fn $func(
@@ -129,7 +144,7 @@ impl WasmerInstance {
                 "store" => import_external!(storage_store, storage_store_external),
                 "call" => import_external!(call_other_contract, call_other_contract_external),
                 "deployFromAddress" => import_external!(deploy_from_address, deploy_from_address_external),
-                "log" => import_external!(console_log, console_log_external),
+                "log" => import!(handle_console_log),
             }
         };
 
