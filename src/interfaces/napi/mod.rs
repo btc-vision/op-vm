@@ -1,8 +1,9 @@
 pub use self::{
     abort_data_response::*, call_other_contract_external_function::*, call_response::*,
     console_log_external_function::*, contract_call_task::*,
-    deploy_from_address_external_function::*, external_function::*,
-    storage_load_external_function::*, storage_store_external_function::*,
+    deploy_from_address_external_function::*, encode_address_function::*,
+    external_function::*, storage_load_external_function::*,
+    storage_store_external_function::*,
 };
 
 mod abort_data_response;
@@ -17,3 +18,4 @@ mod js_contract;
 mod storage_load_external_function;
 mod storage_store_external_function;
 mod thread_safe_js_import_response;
+mod encode_address_function;
