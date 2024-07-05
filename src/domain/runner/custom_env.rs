@@ -1,9 +1,10 @@
 use anyhow::anyhow;
 use napi::Error;
+use sha2::{Digest, Sha256};
 use wasmer::{Instance, Memory, MemoryAccessError, MemoryView, RuntimeError, StoreMut, Value};
 
 use crate::domain::contract::AbortData;
-use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
 pub struct CustomEnv {
     pub instance: Option<Instance>,
@@ -14,6 +15,7 @@ pub struct CustomEnv {
     pub call_other_contract_external: CallOtherContractExternalFunction,
     pub deploy_from_address_external: DeployFromAddressExternalFunction,
     pub console_log_external: ConsoleLogExternalFunction,
+    pub encode_address_external: EncodeAddressExternalFunction,
 }
 
 impl CustomEnv {
@@ -23,6 +25,7 @@ impl CustomEnv {
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
         console_log_external: ConsoleLogExternalFunction,
+        encode_address_external: EncodeAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             instance: None,
@@ -33,6 +36,7 @@ impl CustomEnv {
             call_other_contract_external,
             deploy_from_address_external,
             console_log_external,
+            encode_address_external,
         })
     }
 
@@ -138,6 +142,13 @@ impl CustomEnv {
             .unwrap();
 
         return Ok(header_value as i64);
+    }
+
+    pub fn sha256(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+        let hash = Sha256::digest(data);
+        let hash_as_vec: Vec<u8> = hash.to_vec();
+
+        Ok(hash_as_vec)
     }
 
     pub fn set_u32(

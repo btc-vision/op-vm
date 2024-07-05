@@ -17,7 +17,7 @@ pub fn get_op_cost(operator: &Operator) -> u64 {
 
     #[rustfmt::skip]
         let gas_cost = match operator {
-        op!(Unreachable, Return) => 2,
+        op!(Unreachable, Return) => u64::MAX,
         op!(Nop) | dot!(I32Const, I64Const) => 2,
         op!(Drop) => 10,
 

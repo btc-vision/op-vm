@@ -138,6 +138,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "sha2",
  "tokio",
  "wasmer",
  "wasmer-compiler-singlepass",
