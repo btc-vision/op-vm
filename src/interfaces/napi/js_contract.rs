@@ -2,9 +2,9 @@ use std::panic::catch_unwind;
 use std::sync::{Arc, Mutex};
 
 use chrono::Local;
-use napi::{Env, JsObject, Ref};
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
+use napi::Env;
 use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
@@ -290,7 +290,7 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    // #[napi]
+    #[napi]
     pub fn get_abort_data(&self) -> Result<AbortDataResponse> {
         catch_unwind(|| {
             let contract = self.contract.clone();

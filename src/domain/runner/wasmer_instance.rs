@@ -6,7 +6,6 @@ use wasmer::{
     Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
-use wasmer_cache::{Cache, FileSystemCache, Hash};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
