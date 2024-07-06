@@ -2,14 +2,14 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::RuntimeError;
 
 use crate::interfaces::ExternalFunction;
-use crate::interfaces::napi::generic_external_function::GenericExternalFunction;
+use crate::interfaces::napi::external_functions::GenericExternalFunction;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
-pub struct CallOtherContractExternalFunction {
+pub struct StorageLoadExternalFunction {
     external_function: GenericExternalFunction,
 }
 
-impl CallOtherContractExternalFunction {
+impl StorageLoadExternalFunction {
     pub fn new(
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     ) -> Self {
@@ -19,7 +19,7 @@ impl CallOtherContractExternalFunction {
     }
 }
 
-impl ExternalFunction for CallOtherContractExternalFunction {
+impl ExternalFunction for StorageLoadExternalFunction {
     fn execute(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
         self.external_function.execute(data)
     }

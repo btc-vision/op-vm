@@ -181,6 +181,18 @@ impl WasmerInstance {
             }
         };
 
+        //let mut fs_cache = FileSystemCache::new("./cache")?;
+        //let hash = Hash::generate(bytecode);
+
+        /*let module = fs_cache.load(&store, hash).or::<Module>({
+            let module = Module::new(&store, &bytecode)?;
+            fs_cache.store(hash, &module)?;
+            Ok(module)
+        }).map_err(|e| anyhow::anyhow!("Error loading module: {:?}", e))?;*/
+
+        //let module = Module::new(&store, &bytecode)?;
+        //fs_cache.store(hash, &module)?;
+
         let module = Module::new(&store, &bytecode)?;
         let instance = Instance::new(&mut store, &module, &import_object)?;
 
