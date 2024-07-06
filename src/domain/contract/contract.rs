@@ -75,8 +75,8 @@ impl Contract {
     }
 }
 
-impl Drop for Contract {
+/*impl Drop for Contract {
     fn drop(&mut self) {
         println!("Dropping contract!");
     }
-}
+}*/
