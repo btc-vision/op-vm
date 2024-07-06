@@ -48,6 +48,7 @@ impl ExternalFunction for GenericExternalFunction {
 
         let rt = Runtime::new().unwrap();
         let response = rt.block_on(deploy);
+
         response
     }
 }

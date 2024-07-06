@@ -6,6 +6,7 @@ use wasmer::{
     Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
+use wasmer_cache::{Cache, FileSystemCache, Hash};
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
@@ -180,6 +181,18 @@ impl WasmerInstance {
                 //"memory" => memory.clone(),
             }
         };
+
+        //let mut fs_cache = FileSystemCache::new("./cache")?;
+        //let hash = Hash::generate(bytecode);
+
+        /*let module = fs_cache.load(&store, hash).or::<Module>({
+            let module = Module::new(&store, &bytecode)?;
+            fs_cache.store(hash, &module)?;
+            Ok(module)
+        }).map_err(|e| anyhow::anyhow!("Error loading module: {:?}", e))?;*/
+
+        //let module = Module::new(&store, &bytecode)?;
+        //fs_cache.store(hash, &module)?;
 
         let module = Module::new(&store, &bytecode)?;
         let instance = Instance::new(&mut store, &module, &import_object)?;

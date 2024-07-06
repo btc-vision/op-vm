@@ -2,9 +2,9 @@ use std::panic::catch_unwind;
 use std::sync::{Arc, Mutex};
 
 use chrono::Local;
+use napi::{Env, JsObject, Ref};
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
-use napi::Env;
 use napi::Error;
 use napi::JsFunction;
 use napi::JsNumber;
@@ -29,10 +29,12 @@ macro_rules! create_tsfn {
 }
 
 macro_rules! abort_tsfn {
-    ($id:expr) => {
+    ($id:expr, $env:expr) => {
         if !$id.aborted() {
             $id.clone().abort()?;
         }
+
+        $id.unref(&$env).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
     };
 }
 
@@ -41,15 +43,38 @@ pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     storage_store_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     call_other_contract_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     deploy_from_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     encode_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
+/*
+struct CallbackContext {
+    callback: Ref<()>,
+}
+
+
+impl Drop for CallbackContext {
+    fn drop(&mut self) {
+        println!("Dropping CallbackContext!");
+    }
+}
+#[napi]
+pub fn wrap_in_obj(env: Env, js_fn: JsFunction) -> Result<JsObject> {
+    let mut js_obj = env.create_object()?;
+    // create a reference for the javascript function
+    let js_fn_ref = env.create_reference(js_fn)?;
+    let ctx = CallbackContext {
+        callback: js_fn_ref,
+    };
+    // wrap it in an object
+    env.wrap(&mut js_obj, ctx)?;
+    Ok(js_obj)
+}*/
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
@@ -115,7 +140,7 @@ impl JsContract {
                 console_log_external,
                 encode_address_external,
             )
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner = Arc::new(Mutex::new(runner));
             let contract = Contract::new(max_gas, runner);
@@ -124,30 +149,30 @@ impl JsContract {
 
             Ok(Self {
                 contract: Arc::new(Mutex::new(contract)),
-                storage_load_tsfn: storage_load_tsfn.clone(),
-                storage_store_tsfn: storage_store_tsfn.clone(),
-                call_other_contract_tsfn: call_other_contract_tsfn.clone(),
-                deploy_from_address_tsfn: deploy_from_address_tsfn.clone(),
-                console_log_tsfn: console_log_tsfn.clone(),
-                encode_address_tsfn: encode_address_tsfn.clone(),
+                storage_load_tsfn: storage_load_tsfn,
+                storage_store_tsfn: storage_store_tsfn,
+                call_other_contract_tsfn: call_other_contract_tsfn,
+                deploy_from_address_tsfn: deploy_from_address_tsfn,
+                console_log_tsfn: console_log_tsfn,
+                encode_address_tsfn: encode_address_tsfn,
             })
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
-    pub fn destroy(&self) -> Result<()> {
-        catch_unwind(|| {
-            abort_tsfn!(self.storage_load_tsfn);
-            abort_tsfn!(self.storage_store_tsfn);
-            abort_tsfn!(self.call_other_contract_tsfn);
-            abort_tsfn!(self.deploy_from_address_tsfn);
-            abort_tsfn!(self.console_log_tsfn);
-            abort_tsfn!(self.encode_address_tsfn);
+    pub fn destroy(&mut self, env: Env) -> Result<()> {
+        //catch_unwind(|| {
+        abort_tsfn!(self.storage_load_tsfn, &env);
+        abort_tsfn!(self.storage_store_tsfn, &env);
+        abort_tsfn!(self.call_other_contract_tsfn, &env);
+        abort_tsfn!(self.deploy_from_address_tsfn, &env);
+        abort_tsfn!(self.console_log_tsfn, &env);
+        abort_tsfn!(self.encode_address_tsfn, &env);
 
-            Ok(())
-        })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        Ok(())
+        //})
+        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi(ts_return_type = "Promise<CallResponse>")]
@@ -185,7 +210,7 @@ impl JsContract {
 
             Ok(result)
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -204,7 +229,7 @@ impl JsContract {
 
             Ok(Buffer::from(resp))
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -219,7 +244,7 @@ impl JsContract {
 
             Ok(())
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -233,7 +258,7 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -246,7 +271,7 @@ impl JsContract {
 
             Ok(())
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -262,7 +287,7 @@ impl JsContract {
 
             Ok(result)
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     // #[napi]
@@ -276,7 +301,7 @@ impl JsContract {
 
             result.ok_or(Error::from_reason("No abort data")).into()
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 }
 
