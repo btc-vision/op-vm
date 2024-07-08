@@ -220,6 +220,12 @@ impl WasmerInstance {
     }
 }
 
+impl Drop for WasmerInstance {
+    fn drop(&mut self) {
+        println!("Dropping WasmerInstance!");
+    }
+}
+
 impl RunnerInstance for WasmerInstance {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         let export = Self::get_function(&self.instance, function)?;
