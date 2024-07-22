@@ -13,8 +13,11 @@ use wasmer_types::Target;
 
 use crate::domain::contract::AbortData;
 use crate::domain::runner::{CustomEnv, RunnerInstance};
-use crate::domain::vm::{get_op_cost, LimitingTunables, log_time_diff};
+use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, ExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+
+const MAX_PAGES: u32 = 128; // 1 page = 64KB
+const STACK_SIZE: usize = 1024 * 1024; // 1MB
 
 pub struct WasmerInstance {
     store: Store,
@@ -34,7 +37,7 @@ impl WasmerInstance {
         encode_address_external: EncodeAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
-        let metering = Arc::new(Metering::new(max_gas, get_op_cost));
+        let metering = Arc::new(Metering::new(max_gas, get_gas_cost));
 
         let mut compiler = Singlepass::default();
         compiler.canonicalize_nans(true);
@@ -42,7 +45,7 @@ impl WasmerInstance {
         compiler.enable_verifier();
 
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, 128, 1024 * 1024);
+        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
 
         let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
         engine.set_tunables(tunables);
@@ -160,13 +163,6 @@ impl WasmerInstance {
             };
         }
 
-        // Define the memory type
-        //let memory_type = MemoryType::new(1, None, false);
-
-        // Create the memory object
-        //let memory = Memory::new(&mut store, memory_type).unwrap();
-        //env.as_mut(&mut store).memory = Some(memory.clone()); //Some(Self::get_memory(&instance).clone());
-
         let import_object: Imports = imports! {
             "env" => {
                 "abort" => import!(abort),
@@ -177,21 +173,8 @@ impl WasmerInstance {
                 "log" => import!(handle_console_log),
                 "encodeAddress" => import_external!(encode_address, encode_address_external),
                 "sha256" => import!(sha256_internal),
-                //"memory" => memory.clone(),
             }
         };
-
-        //let mut fs_cache = FileSystemCache::new("./cache")?;
-        //let hash = Hash::generate(bytecode);
-
-        /*let module = fs_cache.load(&store, hash).or::<Module>({
-            let module = Module::new(&store, &bytecode)?;
-            fs_cache.store(hash, &module)?;
-            Ok(module)
-        }).map_err(|e| anyhow::anyhow!("Error loading module: {:?}", e))?;*/
-
-        //let module = Module::new(&store, &bytecode)?;
-        //fs_cache.store(hash, &module)?;
 
         let module = Module::new(&store, &bytecode)?;
         let instance = Instance::new(&mut store, &module, &import_object)?;

@@ -205,7 +205,12 @@ impl CustomEnv {
 
             // check for error
             if byte.is_err() {
-                return Err(RuntimeError::new("Out of bounds memory access"));
+                return Err(RuntimeError::new(format!(
+                    "Failed to read byte at offset {} length {}. Error: {:?}",
+                    offset + i,
+                    length,
+                    byte.unwrap_err()
+                )));
             }
 
             buffer[i as usize] = byte.unwrap();
