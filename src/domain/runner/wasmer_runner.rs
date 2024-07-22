@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::Local;
 use wasmer::{
-    CompilerConfig, Function, FunctionEnv, imports, Imports, Instance, Memory, MemoryAccessError,
+    CompilerConfig, Function, FunctionEnv, imports, Imports, Instance, MemoryAccessError,
     Module, Store, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
@@ -102,10 +102,6 @@ impl WasmerRunner {
             instance: instance_wrapper,
             env,
         })
-    }
-
-    fn get_memory(instance: &Instance) -> &Memory {
-        instance.exports.get_memory("memory").unwrap()
     }
 }
 
