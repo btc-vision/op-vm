@@ -173,7 +173,6 @@ impl WasmerInstance {
                 "log" => import!(handle_console_log),
                 "encodeAddress" => import_external!(encode_address, encode_address_external),
                 "sha256" => import!(sha256_internal),
-                //"memory" => memory.clone(),
             }
         };
 
