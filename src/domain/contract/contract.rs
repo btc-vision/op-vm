@@ -74,9 +74,3 @@ impl Contract {
         println!("Gas used: {gas_used}/{max_gas}");
     }
 }
-
-/*impl Drop for Contract {
-    fn drop(&mut self) {
-        println!("Dropping contract!");
-    }
-}*/

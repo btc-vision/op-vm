@@ -163,13 +163,6 @@ impl WasmerInstance {
             };
         }
 
-        // Define the memory type
-        //let memory_type = MemoryType::new(1, None, false);
-
-        // Create the memory object
-        //let memory = Memory::new(&mut store, memory_type).unwrap();
-        //env.as_mut(&mut store).memory = Some(memory.clone()); //Some(Self::get_memory(&instance).clone());
-
         let import_object: Imports = imports! {
             "env" => {
                 "abort" => import!(abort),
@@ -183,18 +176,6 @@ impl WasmerInstance {
                 //"memory" => memory.clone(),
             }
         };
-
-        //let mut fs_cache = FileSystemCache::new("./cache")?;
-        //let hash = Hash::generate(bytecode);
-
-        /*let module = fs_cache.load(&store, hash).or::<Module>({
-            let module = Module::new(&store, &bytecode)?;
-            fs_cache.store(hash, &module)?;
-            Ok(module)
-        }).map_err(|e| anyhow::anyhow!("Error loading module: {:?}", e))?;*/
-
-        //let module = Module::new(&store, &bytecode)?;
-        //fs_cache.store(hash, &module)?;
 
         let module = Module::new(&store, &bytecode)?;
         let instance = Instance::new(&mut store, &module, &import_object)?;
@@ -222,12 +203,6 @@ impl WasmerInstance {
         instance.exports.get_function(function)
     }
 }
-
-/*impl Drop for WasmerInstance {
-    fn drop(&mut self) {
-        println!("Dropping WasmerInstance!");
-    }
-}*/
 
 impl RunnerInstance for WasmerInstance {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {

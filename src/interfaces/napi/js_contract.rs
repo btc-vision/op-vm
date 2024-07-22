@@ -52,29 +52,6 @@ pub struct JsContract {
     encode_address_tsfn:
     ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
-/*
-struct CallbackContext {
-    callback: Ref<()>,
-}
-
-
-impl Drop for CallbackContext {
-    fn drop(&mut self) {
-        println!("Dropping CallbackContext!");
-    }
-}
-#[napi]
-pub fn wrap_in_obj(env: Env, js_fn: JsFunction) -> Result<JsObject> {
-    let mut js_obj = env.create_object()?;
-    // create a reference for the javascript function
-    let js_fn_ref = env.create_reference(js_fn)?;
-    let ctx = CallbackContext {
-        callback: js_fn_ref,
-    };
-    // wrap it in an object
-    env.wrap(&mut js_obj, ctx)?;
-    Ok(js_obj)
-}*/
 
 #[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
