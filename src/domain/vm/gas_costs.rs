@@ -1,4 +1,5 @@
 use wasmer::wasmparser::Operator;
+use wasmer::wasmparser::Operator::{I32Clz, I32Eqz, I32Popcnt};
 
 pub fn get_gas_cost(operator: &Operator) -> u64 {
     use Operator::*;
@@ -7,43 +8,42 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
     let gas_cost = match operator {
         Unreachable | Return | Nop | I32Const {..} | I64Const {..} => 1,
         Drop => 10,
-
         Block {..} | Loop {..} | Else | End => 1,
         Br {..} | BrIf {..} | If {..} => 750,
         Select {..} => 1200,
         Call {..} => 3750,
-        LocalGet {..} | LocalTee {..} => 75,
+        LocalTee {..} => 75,
+        LocalGet {..} => 75,
         LocalSet {..} => 200,
         GlobalGet {..} => 225,
         GlobalSet {..} => 575,
-        I32Load {..} | I32Load8S {..} | I32Load8U {..} | I32Load16S {..} | I32Load16U {..} => 675,
-        I64Load {..} | I64Load8S {..} | I64Load8U {..} | I64Load16S {..} | I64Load16U {..} | I64Load32S {..} | I64Load32U {..} => 700,
-        I32Store {..} | I32Store8 {..} | I32Store16 {..} => 850,
-        I64Store {..} | I64Store8 {..} | I64Store16 {..} | I64Store32 {..} => 1000,
-
-        MemorySize {..} => 3000,
-        MemoryGrow {..} => 8000,
 
         I32Eqz | I32Eq | I32Ne | I32LtS | I32LtU | I32GtS | I32GtU | I32LeS | I32LeU | I32GeS | I32GeU => 175,
-        I64Eqz | I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => 225,
         I32Clz => 225,
         I32Ctz => 2750,
         I32Add | I32Sub => 75,
         I32Mul => 150,
         I32DivS | I32DivU | I32RemS | I32RemU => 1100,
         I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr => 75,
+        I32Popcnt => 2750,
+        I32Load {..} | I32Load8S {..} | I32Load8U {..} | I32Load16S {..} | I32Load16U {..} => 675,
+        I32Store {..} | I32Store8 {..} | I32Store16 {..} => 850,
+
+        I64Eqz | I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => 225,
         I64Clz => 225,
         I64Ctz => 6000,
         I64Add | I64Sub => 100,
         I64Mul => 150,
         I64DivS | I64DivU | I64RemS | I64RemU => 1250,
         I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr => 100,
-        I32Popcnt => 2750,
         I64Popcnt => 6000,
+        I64Load {..} | I64Load8S {..} | I64Load8U {..} | I64Load16S {..} | I64Load16U {..} | I64Load32S {..} | I64Load32U {..} => 700,
+        I64Store {..} | I64Store8 {..} | I64Store16 {..} | I64Store32 {..} => 1000,
 
-        I32WrapI64 | I64ExtendI32S | I64ExtendI32U => 100,
-        I32Extend8S | I32Extend16S | I64Extend8S | I64Extend16S | I64Extend32S => 100,
+        I32WrapI64 | I64ExtendI32S | I64ExtendI32U | I32Extend8S | I32Extend16S | I64Extend8S | I64Extend16S | I64Extend32S => 100,
 
+        MemorySize {..} => 3000,
+        MemoryGrow {..} => 8000,
         MemoryCopy {..} => 1000,
         MemoryFill {..} => 1000,
 
