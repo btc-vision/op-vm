@@ -34,7 +34,8 @@ macro_rules! abort_tsfn {
             $id.clone().abort()?;
         }
 
-        $id.unref(&$env).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+        $id.unref(&$env)
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
     };
 }
 
@@ -43,14 +44,14 @@ pub struct JsContract {
     contract: Arc<Mutex<Contract>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     storage_store_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     call_other_contract_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     deploy_from_address_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     encode_address_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -117,7 +118,7 @@ impl JsContract {
                 console_log_external,
                 encode_address_external,
             )
-                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner = Arc::new(Mutex::new(runner));
             let contract = Contract::new(max_gas, runner);
@@ -134,7 +135,7 @@ impl JsContract {
                 encode_address_tsfn: encode_address_tsfn,
             })
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -187,7 +188,7 @@ impl JsContract {
 
             Ok(result)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -206,7 +207,7 @@ impl JsContract {
 
             Ok(Buffer::from(resp))
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -221,7 +222,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -235,7 +236,7 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -248,7 +249,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -262,7 +263,7 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -275,7 +276,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -288,7 +289,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -304,7 +305,7 @@ impl JsContract {
 
             Ok(result)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -318,7 +319,7 @@ impl JsContract {
 
             result.ok_or(Error::from_reason("No abort data")).into()
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 }
 
