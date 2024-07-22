@@ -16,6 +16,9 @@ use crate::domain::runner::{CustomEnv, RunnerInstance};
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, ExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
+const MAX_PAGES: u32 = 128; // 1 page = 64KB
+const STACK_SIZE: usize = 1024 * 1024; // 1MB
+
 pub struct WasmerInstance {
     store: Store,
     instance: Instance,
@@ -42,7 +45,7 @@ impl WasmerInstance {
         compiler.enable_verifier();
 
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, 128, 1024 * 1024);
+        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
 
         let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
         engine.set_tunables(tunables);
