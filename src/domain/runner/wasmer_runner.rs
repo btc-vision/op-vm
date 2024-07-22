@@ -11,12 +11,7 @@ use wasmer_middlewares::Metering;
 use wasmer_types::Target;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::contract::AbortData;
-use crate::domain::runner::{
-    abort_import, call_other_contract_import, console_log_import, ContractRunner,
-    CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper, sha256_import,
-    storage_load_import, storage_store_import,
-};
+use crate::domain::runner::{abort_import, AbortData, call_other_contract_import, console_log_import, ContractRunner, CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper, sha256_import, storage_load_import, storage_store_import};
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,

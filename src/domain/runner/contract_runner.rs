@@ -1,6 +1,6 @@
 use wasmer::{MemoryAccessError, Value};
 
-use crate::domain::contract::AbortData;
+use crate::domain::runner::AbortData;
 
 pub trait ContractRunner: Send + Sync {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>>;

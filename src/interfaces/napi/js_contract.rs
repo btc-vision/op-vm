@@ -12,7 +12,7 @@ use napi::JsUnknown;
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::Value;
 
-use crate::domain::contract::ContractService;
+use crate::application::contract::ContractService;
 use crate::domain::runner::WasmerRunner;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::{

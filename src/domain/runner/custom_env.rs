@@ -1,8 +1,7 @@
 use sha2::{Digest, Sha256};
 use wasmer::RuntimeError;
 
-use crate::domain::contract::AbortData;
-use crate::domain::runner::InstanceWrapper;
+use crate::domain::runner::{AbortData, InstanceWrapper};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction,

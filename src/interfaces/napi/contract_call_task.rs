@@ -5,7 +5,7 @@ use napi::{Env, Error, Task};
 use napi::bindgen_prelude::BigInt;
 use wasmer::Value;
 
-use crate::domain::contract::ContractService;
+use crate::application::contract::ContractService;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::CallResponse;
 use crate::interfaces::napi::js_contract::JsContract;

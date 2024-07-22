@@ -3,8 +3,7 @@ use std::sync::{Arc, Mutex};
 use napi::Error;
 use wasmer::{MemoryAccessError, Value};
 
-use crate::domain::contract::AbortData;
-use crate::domain::runner::ContractRunner;
+use crate::domain::runner::{AbortData, ContractRunner};
 
 pub struct ContractService {
     max_gas: u64,

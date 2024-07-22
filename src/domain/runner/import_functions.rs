@@ -1,8 +1,7 @@
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::contract::AbortData;
-use crate::domain::runner::CustomEnv;
+use crate::domain::runner::{AbortData, CustomEnv};
 use crate::interfaces::ExternalFunction;
 
 pub fn abort_import(
