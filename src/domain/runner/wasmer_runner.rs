@@ -27,13 +27,13 @@ use crate::interfaces::{
 const MAX_PAGES: u32 = 128; // 1 page = 64KB
 const STACK_SIZE: usize = 1024 * 1024; // 1MB
 
-pub struct WasmerInstance {
+pub struct WasmerRunner {
     store: Store,
     instance: InstanceWrapper,
     env: FunctionEnv<CustomEnv>,
 }
 
-impl WasmerInstance {
+impl WasmerRunner {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
@@ -109,7 +109,7 @@ impl WasmerInstance {
     }
 }
 
-impl RunnerInstance for WasmerInstance {
+impl RunnerInstance for WasmerRunner {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         self.instance.call(&mut self.store, function, params)
     }

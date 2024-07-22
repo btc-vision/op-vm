@@ -13,7 +13,7 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::Value;
 
 use crate::domain::contract::Contract;
-use crate::domain::runner::WasmerInstance;
+use crate::domain::runner::WasmerRunner;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
@@ -107,7 +107,7 @@ impl JsContract {
             let encode_address_external =
                 EncodeAddressExternalFunction::new(encode_address_tsfn.clone());
 
-            let runner = WasmerInstance::new(
+            let runner = WasmerRunner::new(
                 &bytecode_vec,
                 max_gas,
                 storage_load_external,
