@@ -1,7 +1,7 @@
-pub use self::{custom_env::*, import_functions::*, instance_wrapper::*, runner_instance::*, wasmer_runner::*};
+pub use self::{contract_runner::*, custom_env::*, import_functions::*, instance_wrapper::*, wasmer_runner::*};
 
 mod custom_env;
-mod runner_instance;
+mod contract_runner;
 mod wasmer_runner;
 mod import_functions;
 mod instance_wrapper;

@@ -13,8 +13,8 @@ use wasmer_types::Target;
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
 use crate::domain::runner::{
-    abort_import, call_other_contract_import, console_log_import, CustomEnv,
-    deploy_from_address_import, encode_address_import, InstanceWrapper, RunnerInstance, sha256_import,
+    abort_import, call_other_contract_import, console_log_import, ContractRunner,
+    CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper, sha256_import,
     storage_load_import, storage_store_import,
 };
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
@@ -109,7 +109,7 @@ impl WasmerRunner {
     }
 }
 
-impl RunnerInstance for WasmerRunner {
+impl ContractRunner for WasmerRunner {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         self.instance.call(&mut self.store, function, params)
     }

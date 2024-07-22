@@ -2,7 +2,7 @@ use wasmer::{MemoryAccessError, Value};
 
 use crate::domain::contract::AbortData;
 
-pub trait RunnerInstance: Send + Sync {
+pub trait ContractRunner: Send + Sync {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>>;
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, MemoryAccessError>;
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError>;

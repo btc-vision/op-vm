@@ -4,15 +4,15 @@ use napi::Error;
 use wasmer::{MemoryAccessError, Value};
 
 use crate::domain::contract::AbortData;
-use crate::domain::runner::RunnerInstance;
+use crate::domain::runner::ContractRunner;
 
 pub struct Contract {
     max_gas: u64,
-    runner: Arc<Mutex<dyn RunnerInstance>>,
+    runner: Arc<Mutex<dyn ContractRunner>>,
 }
 
 impl Contract {
-    pub fn new(max_gas: u64, runner: Arc<Mutex<dyn RunnerInstance>>) -> Self {
+    pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
         Self { max_gas, runner }
     }
 
