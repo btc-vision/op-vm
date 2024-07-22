@@ -23,11 +23,19 @@ impl Contract {
     }
 
     pub fn get_used_gas(&mut self) -> u64 {
-        let mut runner = self.runner.lock().unwrap();
-        self.max_gas - runner.get_remaining_gas()
+        self.max_gas - self.get_remaining_gas()
     }
 
     pub fn set_used_gas(&mut self, gas: u64) {
+        self.set_remaining_gas(self.max_gas - gas);
+    }
+
+    pub fn get_remaining_gas(&mut self) -> u64 {
+        let mut runner = self.runner.lock().unwrap();
+        runner.get_remaining_gas()
+    }
+
+    pub fn set_remaining_gas(&mut self, gas: u64) {
         let mut runner = self.runner.lock().unwrap();
         runner.set_remaining_gas(self.max_gas - gas);
     }

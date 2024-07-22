@@ -252,6 +252,33 @@ impl JsContract {
     }
 
     #[napi]
+    pub fn get_remaining_gas(&self) -> Result<BigInt> {
+        catch_unwind(|| {
+            let contract = self.contract.clone();
+            let gas = {
+                let mut contract = contract.lock().unwrap();
+                contract.get_remaining_gas()
+            };
+
+            Ok(BigInt::from(gas))
+        })
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+
+    #[napi]
+    pub fn set_remaining_gas(&self, gas: BigInt) -> Result<()> {
+        catch_unwind(|| {
+            let gas = gas.get_u64().1;
+            let contract = self.contract.clone();
+            let mut contract = contract.lock().unwrap();
+            contract.set_remaining_gas(gas);
+
+            Ok(())
+        })
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+
+    #[napi]
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
