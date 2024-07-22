@@ -1,6 +1,6 @@
-use wasmer::{FunctionEnvMut, Instance, RuntimeError, StoreMut};
-use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
+use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
+use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
 use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
@@ -44,7 +44,13 @@ pub fn call_other_contract_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.call_other_contract_external, ptr, 500_000_000)
+    external_import_with_param_and_return(
+        env,
+        store,
+        &env.call_other_contract_external,
+        ptr,
+        500_000_000,
+    )
 }
 
 pub fn deploy_from_address_import(
@@ -52,7 +58,13 @@ pub fn deploy_from_address_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.deploy_from_address_external, ptr, 1_000_000_000)
+    external_import_with_param_and_return(
+        env,
+        store,
+        &env.deploy_from_address_external,
+        ptr,
+        1_000_000_000,
+    )
 }
 
 pub fn encode_address_import(
@@ -73,7 +85,7 @@ pub fn sha256_import(
         .memory
         .clone()
         .ok_or(RuntimeError::new("Memory not found"))?;
-    let instance = env
+    let wrapper = env
         .instance
         .clone()
         .ok_or(RuntimeError::new("Instance not found"))?;
@@ -86,11 +98,10 @@ pub fn sha256_import(
 
     let result = env.sha256(&data)?;
 
-    let value = env
-        .write_buffer(&instance, &mut store, &result, 13, 0)
+    let value = AssemblyScript::write_buffer(&mut store, &wrapper, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    subtract_gas(store, &instance, 300_000);
+    wrapper.subtract_gas(store, 300_000);
 
     Ok(value as u32)
 }
@@ -124,7 +135,7 @@ fn external_import_with_param_and_return(
         .memory
         .clone()
         .ok_or(RuntimeError::new("Memory not found"))?;
-    let instance = env
+    let wrapper = env
         .instance
         .clone()
         .ok_or(RuntimeError::new("Instance not found"))?;
@@ -137,27 +148,10 @@ fn external_import_with_param_and_return(
 
     let result = external_function.execute(&data)?;
 
-    let value = env
-        .write_buffer(&instance, &mut store, &result, 13, 0)
+    let value = AssemblyScript::write_buffer(&mut store, &wrapper, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    subtract_gas(store, &instance, gas_cost);
+    wrapper.subtract_gas(store, gas_cost);
 
     Ok(value as u32)
-}
-
-fn subtract_gas(mut store: StoreMut, instance: &Instance, gas_cost: u64) {
-    let points_before = get_remaining_points(&mut store, &instance);
-    let gas_before = match points_before {
-        MeteringPoints::Remaining(points) => points,
-        MeteringPoints::Exhausted => 0,
-    };
-
-    let gas_after = if gas_before <= gas_cost {
-        0
-    } else {
-        gas_before - gas_cost
-    };
-
-    set_remaining_points(&mut store, &instance, gas_after);
 }

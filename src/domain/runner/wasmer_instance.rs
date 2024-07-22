@@ -2,26 +2,34 @@ use std::sync::Arc;
 
 use chrono::Local;
 use wasmer::{
-    CompilerConfig, ExportError, Function, FunctionEnv, imports, Imports, Instance,
-    Memory, MemoryAccessError, Module, RuntimeError, Store, Value,
+    CompilerConfig, Function, FunctionEnv, imports, Imports, Instance, Memory, MemoryAccessError,
+    Module, RuntimeError, Store, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
-use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 use wasmer_middlewares::Metering;
 use wasmer_types::Target;
 
+use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
-use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, CustomEnv, deploy_from_address_import, encode_address_import, RunnerInstance, sha256_import, storage_load_import, storage_store_import};
+use crate::domain::runner::{
+    abort_import, call_other_contract_import, console_log_import, CustomEnv,
+    deploy_from_address_import, encode_address_import, InstanceWrapper, RunnerInstance, sha256_import,
+    storage_load_import, storage_store_import,
+};
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
-use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{
+    CallOtherContractExternalFunction, ConsoleLogExternalFunction,
+    DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction,
+    StorageStoreExternalFunction,
+};
 
 const MAX_PAGES: u32 = 128; // 1 page = 64KB
 const STACK_SIZE: usize = 1024 * 1024; // 1MB
 
 pub struct WasmerInstance {
     store: Store,
-    instance: Instance,
+    instance: InstanceWrapper,
     env: FunctionEnv<CustomEnv>,
 }
 
@@ -83,15 +91,16 @@ impl WasmerInstance {
 
         let module = Module::new(&store, &bytecode)?;
         let instance = Instance::new(&mut store, &module, &import_object)?;
+        let instance_wrapper = InstanceWrapper::new(instance.clone());
 
         env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
-        env.as_mut(&mut store).instance = Some(instance.clone());
+        env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
 
         log_time_diff(&time, "WasmerInstance::new");
 
         Ok(Self {
             store,
-            instance,
+            instance: instance_wrapper,
             env,
         })
     }
@@ -99,49 +108,31 @@ impl WasmerInstance {
     fn get_memory(instance: &Instance) -> &Memory {
         instance.exports.get_memory("memory").unwrap()
     }
-
-    fn get_function<'a>(
-        instance: &'a Instance,
-        function: &str,
-    ) -> Result<&'a Function, ExportError> {
-        instance.exports.get_function(function)
-    }
 }
 
 impl RunnerInstance for WasmerInstance {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        let export = Self::get_function(&self.instance, function)?;
-        let result = export.call(&mut self.store, params)?;
-
-        Ok(result)
+        self.instance.call(&mut self.store, function, params)
     }
 
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&self.store);
-
-        let mut buffer: Vec<u8> = vec![0; length as usize];
-        view.read(offset, &mut buffer)?;
-
-        Ok(buffer)
+        self.instance.read_memory(&self.store, offset, length)
     }
 
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
-        let view = memory.view(&self.store);
-        view.write(offset, data)
+        self.instance.write_memory(&self.store, offset, data)
+    }
+
+    fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, napi::Error> {
+        AssemblyScript::write_buffer(&mut self.store, &self.instance, value, id, align)
     }
 
     fn get_remaining_gas(&mut self) -> u64 {
-        let remaining_points = get_remaining_points(&mut self.store, &self.instance);
-        match remaining_points {
-            MeteringPoints::Remaining(remaining) => remaining,
-            MeteringPoints::Exhausted => 0,
-        }
+        self.instance.get_remaining_gas(&mut self.store)
     }
 
     fn set_remaining_gas(&mut self, gas: u64) {
-        set_remaining_points(&mut self.store, &self.instance, gas);
+        self.instance.set_remaining_gas(&mut self.store, gas)
     }
 
     fn get_abort_data(&self) -> Option<AbortData> {

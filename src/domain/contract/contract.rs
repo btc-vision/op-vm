@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use napi::Error;
 use wasmer::{MemoryAccessError, RuntimeError, Value};
 
-use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::contract::AbortData;
 use crate::domain::runner::RunnerInstance;
 
@@ -45,7 +44,7 @@ impl Contract {
 
     pub fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, Error> {
         let mut runner = self.runner.lock().unwrap();
-        AssemblyScript::write_buffer(&mut *runner, value, id, align)
+        runner.write_buffer(value, id, align)
     }
 
     pub fn get_abort_data(&self) -> Option<AbortData> {
