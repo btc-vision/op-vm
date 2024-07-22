@@ -6,12 +6,12 @@ use wasmer::{MemoryAccessError, Value};
 use crate::domain::contract::AbortData;
 use crate::domain::runner::ContractRunner;
 
-pub struct Contract {
+pub struct ContractService {
     max_gas: u64,
     runner: Arc<Mutex<dyn ContractRunner>>,
 }
 
-impl Contract {
+impl ContractService {
     pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
         Self { max_gas, runner }
     }

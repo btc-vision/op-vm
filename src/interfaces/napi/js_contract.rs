@@ -12,7 +12,7 @@ use napi::JsUnknown;
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use wasmer::Value;
 
-use crate::domain::contract::Contract;
+use crate::domain::contract::ContractService;
 use crate::domain::runner::WasmerRunner;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::{
@@ -41,7 +41,7 @@ macro_rules! abort_tsfn {
 
 #[napi(js_name = "Contract")]
 pub struct JsContract {
-    contract: Arc<Mutex<Contract>>,
+    contract: Arc<Mutex<ContractService>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     storage_store_tsfn:
         ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
@@ -121,7 +121,7 @@ impl JsContract {
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner = Arc::new(Mutex::new(runner));
-            let contract = Contract::new(max_gas, runner);
+            let contract = ContractService::new(max_gas, runner);
 
             log_time_diff(&time, "JsContract::new");
 

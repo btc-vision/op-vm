@@ -5,20 +5,20 @@ use napi::{Env, Error, Task};
 use napi::bindgen_prelude::BigInt;
 use wasmer::Value;
 
-use crate::domain::contract::Contract;
+use crate::domain::contract::ContractService;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::CallResponse;
 use crate::interfaces::napi::js_contract::JsContract;
 
 pub struct ContractCallTask {
-    contract: Arc<Mutex<Contract>>,
+    contract: Arc<Mutex<ContractService>>,
     func_name: String,
     wasm_params: Vec<Value>,
     time: DateTime<Local>,
 }
 
 impl ContractCallTask {
-    pub fn new(contract: Arc<Mutex<Contract>>, func_name: &str, wasm_params: &[Value], time: DateTime<Local>) -> Self {
+    pub fn new(contract: Arc<Mutex<ContractService>>, func_name: &str, wasm_params: &[Value], time: DateTime<Local>) -> Self {
         Self {
             contract,
             func_name: func_name.to_string(),
