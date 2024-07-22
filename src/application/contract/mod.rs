@@ -1,3 +1,3 @@
-pub use self::contract::*;
+pub use self::contract_service::*;
 
-mod contract;
+mod contract_service;
