@@ -1,7 +1,6 @@
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use wasmer::RuntimeError;
 
-use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 pub struct ConsoleLogExternalFunction {
@@ -22,11 +21,11 @@ impl ConsoleLogExternalFunction {
             buffer: Vec::from(data),
         };
 
-        let time = chrono::offset::Local::now();
-        
+        //let time = chrono::offset::Local::now();
+
         self.tsfn.call(Ok(request), ThreadsafeFunctionCallMode::NonBlocking);
 
-        log_time_diff(&time, "GenericExternalFunction::execute");
+        //log_time_diff(&time, "GenericExternalFunction::log");
 
         Ok(())
     }

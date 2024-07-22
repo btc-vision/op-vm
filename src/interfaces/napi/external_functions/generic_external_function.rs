@@ -3,7 +3,6 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
-use crate::domain::vm::log_time_diff;
 use crate::interfaces::ExternalFunction;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
@@ -26,7 +25,6 @@ impl ExternalFunction for GenericExternalFunction {
         };
 
         let deploy = async move {
-            let time = chrono::offset::Local::now();
             let response: Result<Promise<Buffer>, RuntimeError> = self
                 .tsfn
                 .call_async(Ok(request))
@@ -40,8 +38,6 @@ impl ExternalFunction for GenericExternalFunction {
                 .map_err(|e| RuntimeError::new(e.reason))?;
 
             let data = data.to_vec();
-
-            log_time_diff(&time, "GenericExternalFunction::execute");
 
             Ok(data.into())
         };
