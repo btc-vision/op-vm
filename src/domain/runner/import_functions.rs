@@ -94,7 +94,7 @@ pub fn sha256_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    instance.use_gas(store, 300_000);
+    instance.use_gas(&mut store, 300_000);
 
     Ok(value as u32)
 }
@@ -134,7 +134,7 @@ fn external_import_with_param_and_return(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    instance.use_gas(store, gas_cost);
+    instance.use_gas(&mut store, gas_cost);
 
     Ok(value as u32)
 }

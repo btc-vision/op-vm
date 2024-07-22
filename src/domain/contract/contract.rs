@@ -32,6 +32,11 @@ impl Contract {
         runner.set_remaining_gas(self.max_gas - gas);
     }
 
+    pub fn use_gas(&mut self, gas: u64) {
+        let mut runner = self.runner.lock().unwrap();
+        runner.use_gas(gas);
+    }
+
     pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, MemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.read_memory(offset, length)

@@ -1,5 +1,5 @@
 use wasmer::{
-    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError, StoreMut,
+    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError,
     Value,
 };
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
@@ -62,8 +62,8 @@ impl InstanceWrapper {
         view.write(offset, data)
     }
 
-    pub fn use_gas(&self, mut store: StoreMut, gas_cost: u64) {
-        let gas_before = self.get_remaining_gas(&mut store);
+    pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
+        let gas_before = self.get_remaining_gas(store);
 
         let gas_after = if gas_before <= gas_cost {
             0
@@ -71,7 +71,7 @@ impl InstanceWrapper {
             gas_before - gas_cost
         };
 
-        self.set_remaining_gas(&mut store, gas_after);
+        self.set_remaining_gas(store, gas_after);
     }
 
     pub fn get_remaining_gas(&self, store: &mut impl AsStoreMut) -> u64 {

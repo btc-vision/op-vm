@@ -252,6 +252,19 @@ impl JsContract {
     }
 
     #[napi]
+    pub fn use_gas(&self, gas: BigInt) -> Result<()> {
+        catch_unwind(|| {
+            let gas = gas.get_u64().1;
+            let contract = self.contract.clone();
+            let mut contract = contract.lock().unwrap();
+            contract.use_gas(gas);
+
+            Ok(())
+        })
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+
+    #[napi]
     pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
         catch_unwind(|| {
             let value = value.to_vec();

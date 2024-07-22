@@ -130,6 +130,10 @@ impl ContractRunner for WasmerRunner {
         self.instance.set_remaining_gas(&mut self.store, gas)
     }
 
+    fn use_gas(&mut self, gas: u64) {
+        self.instance.use_gas(&mut self.store, gas)
+    }
+
     fn get_abort_data(&self) -> Option<AbortData> {
         self.env.as_ref(&self.store).abort_data
     }
