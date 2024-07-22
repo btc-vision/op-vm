@@ -1,6 +1,6 @@
 use wasmer::wasmparser::Operator;
 
-pub fn get_op_cost(operator: &Operator) -> u64 {
+pub fn get_gas_cost(operator: &Operator) -> u64 {
     use Operator::*;
 
     #[rustfmt::skip]

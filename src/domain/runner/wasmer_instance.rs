@@ -13,7 +13,7 @@ use wasmer_types::Target;
 
 use crate::domain::contract::AbortData;
 use crate::domain::runner::{CustomEnv, RunnerInstance};
-use crate::domain::vm::{get_op_cost, LimitingTunables, log_time_diff};
+use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, ExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
 pub struct WasmerInstance {
@@ -34,7 +34,7 @@ impl WasmerInstance {
         encode_address_external: EncodeAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
-        let metering = Arc::new(Metering::new(max_gas, get_op_cost));
+        let metering = Arc::new(Metering::new(max_gas, get_gas_cost));
 
         let mut compiler = Singlepass::default();
         compiler.canonicalize_nans(true);
