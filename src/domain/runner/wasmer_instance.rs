@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use chrono::Local;
 use wasmer::{
-    CompilerConfig, ExportError, Function, FunctionEnv, FunctionEnvMut, imports, Imports, Instance,
-    Memory, MemoryAccessError, Module, RuntimeError, Store, StoreMut, Value,
+    CompilerConfig, ExportError, Function, FunctionEnv, imports, Imports, Instance,
+    Memory, MemoryAccessError, Module, RuntimeError, Store, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
@@ -12,9 +12,9 @@ use wasmer_middlewares::Metering;
 use wasmer_types::Target;
 
 use crate::domain::contract::AbortData;
-use crate::domain::runner::{CustomEnv, RunnerInstance};
+use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, CustomEnv, deploy_from_address_import, encode_address_import, RunnerInstance, sha256_import, storage_load_import, storage_store_import};
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
-use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, ExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
 const MAX_PAGES: u32 = 128; // 1 page = 64KB
 const STACK_SIZE: usize = 1024 * 1024; // 1MB
@@ -62,101 +62,6 @@ impl WasmerInstance {
 
         let env = FunctionEnv::new(&mut store, instance);
 
-        fn abort(
-            mut env: FunctionEnvMut<CustomEnv>,
-            message: u32,
-            file_name: u32,
-            line: u32,
-            column: u32,
-        ) -> Result<(), RuntimeError> {
-            let data = env.data_mut();
-            data.abort_data = Some(AbortData {
-                message,
-                file_name,
-                line,
-                column,
-            });
-
-            return Err(RuntimeError::new("Execution aborted"));
-        }
-
-        fn handle_import_call(
-            env: &CustomEnv,
-            mut store: &mut StoreMut,
-            external_function: &impl ExternalFunction,
-            ptr: u32,
-        ) -> Result<u32, RuntimeError> {
-            let memory = env.memory.clone().ok_or(RuntimeError::new("Memory not found"))?;
-            let instance = env.instance.clone().ok_or(RuntimeError::new("Instance not found"))?;
-
-            let view = memory.view(&store);
-
-            let data = env
-                .read_buffer(&view, ptr)
-                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-            let result = external_function.execute(&data)?;
-
-            let value = env
-                .write_buffer(&instance, &mut store, &result, 13, 0)
-                .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
-
-            Ok(value as u32)
-        }
-
-        fn handle_console_log(
-            mut context: FunctionEnvMut<CustomEnv>,
-            ptr: u32,
-        ) -> Result<(), RuntimeError> {
-            let (env, store) = context.data_and_store_mut();
-            let memory = env.memory.clone().ok_or(RuntimeError::new("Memory not found"))?;
-            let view = memory.view(&store);
-
-            let data = env
-                .read_buffer(&view, ptr)
-                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-            env.console_log_external.execute(&data)
-        }
-
-        fn sha256_internal(
-            mut context: FunctionEnvMut<CustomEnv>,
-            ptr: u32,
-        ) -> Result<u32, RuntimeError> {
-            let (env, mut store) = context.data_and_store_mut();
-
-            let memory = env.memory.clone().ok_or(RuntimeError::new("Memory not found"))?;
-            let instance = env.instance.clone().ok_or(RuntimeError::new("Instance not found"))?;
-
-            let view = memory.view(&store);
-
-            let data = env
-                .read_buffer(&view, ptr)
-                .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-            let result = env.sha256(&data)?;
-
-            let value = env
-                .write_buffer(&instance, &mut store, &result, 13, 0)
-                .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
-
-            Ok(value as u32)
-        }
-
-        macro_rules! import_external {
-            ($func:tt, $external:ident) => {{
-                fn $func(
-                    mut context: FunctionEnvMut<CustomEnv>,
-                    ptr: u32,
-                ) -> Result<u32, RuntimeError> {
-                    let (env, mut store) = context.data_and_store_mut();
-                    handle_import_call(env, &mut store, &env.$external, ptr)
-                }
-
-                import!($func)
-            }};
-        }
-
         macro_rules! import {
             ($func:tt) => {
                 Function::new_typed_with_env(&mut store, &env, $func)
@@ -165,14 +70,14 @@ impl WasmerInstance {
 
         let import_object: Imports = imports! {
             "env" => {
-                "abort" => import!(abort),
-                "load" => import_external!(storage_load, storage_load_external),
-                "store" => import_external!(storage_store, storage_store_external),
-                "call" => import_external!(call_other_contract, call_other_contract_external),
-                "deployFromAddress" => import_external!(deploy_from_address, deploy_from_address_external),
-                "log" => import!(handle_console_log),
-                "encodeAddress" => import_external!(encode_address, encode_address_external),
-                "sha256" => import!(sha256_internal),
+                "abort" => import!(abort_import),
+                "load" => import!(storage_load_import),
+                "store" => import!(storage_store_import),
+                "call" => import!(call_other_contract_import),
+                "deployFromAddress" => import!(deploy_from_address_import),
+                "encodeAddress" => import!(encode_address_import),
+                "sha256" => import!(sha256_import),
+                "log" => import!(console_log_import),
             }
         };
 
