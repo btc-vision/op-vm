@@ -19,7 +19,7 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
         GlobalSet {..} => 575,
 
         I32Eqz | I32Eq | I32Ne | I32LtS | I32LtU | I32GtS | I32GtU | I32LeS | I32LeU | I32GeS | I32GeU => 175,
-        I32Clz => 225,
+        I32Clz => 250,
         I32Ctz => 2750,
         I32Add | I32Sub => 75,
         I32Mul => 150,
@@ -30,7 +30,7 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
         I32Store {..} | I32Store8 {..} | I32Store16 {..} => 850,
 
         I64Eqz | I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => 225,
-        I64Clz => 225,
+        I64Clz => 250,
         I64Ctz => 6000,
         I64Add | I64Sub => 100,
         I64Mul => 150,
