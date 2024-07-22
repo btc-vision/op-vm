@@ -62,7 +62,7 @@ impl InstanceWrapper {
         view.write(offset, data)
     }
 
-    pub fn subtract_gas(&self, mut store: StoreMut, gas_cost: u64) {
+    pub fn use_gas(&self, mut store: StoreMut, gas_cost: u64) {
         let gas_before = self.get_remaining_gas(&mut store);
 
         let gas_after = if gas_before <= gas_cost {
