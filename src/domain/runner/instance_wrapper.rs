@@ -1,6 +1,6 @@
 use wasmer::{
-    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError,
-    RuntimeError, StoreMut, Value,
+    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError, StoreMut,
+    Value,
 };
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
 
@@ -31,7 +31,7 @@ impl InstanceWrapper {
         store: &(impl AsStoreRef + ?Sized),
         offset: u64,
         length: u64,
-    ) -> Result<Vec<u8>, RuntimeError> {
+    ) -> Result<Vec<u8>, MemoryAccessError> {
         let memory = Self::get_memory(&self.instance);
         let view = memory.view(store);
 
@@ -39,6 +39,16 @@ impl InstanceWrapper {
         view.read(offset, &mut buffer)?;
 
         Ok(buffer)
+    }
+
+    pub fn read_memory_u8(
+        &self,
+        store: &(impl AsStoreRef + ?Sized),
+        offset: u64,
+    ) -> Result<u8, MemoryAccessError> {
+        let memory = Self::get_memory(&self.instance);
+        let view = memory.view(store);
+        view.read_u8(offset)
     }
 
     pub fn write_memory(

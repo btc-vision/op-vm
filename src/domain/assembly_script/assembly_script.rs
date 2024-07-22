@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use napi::Error;
-use wasmer::{AsStoreMut, AsStoreRef, MemoryAccessError, Value};
+use wasmer::{AsStoreMut, AsStoreRef, MemoryAccessError, RuntimeError, Value};
 
 use crate::domain::runner::InstanceWrapper;
 
@@ -107,5 +107,56 @@ impl AssemblyScript {
         value: u32,
     ) -> Result<(), MemoryAccessError> {
         instance.write_memory(store, offset as u64, &value.to_le_bytes())
+    }
+
+    pub fn read_pointer(
+        store: &(impl AsStoreRef + ?Sized),
+        instance: &InstanceWrapper,
+        offset: u64,
+        length: u64,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        let mut buffer: Vec<u8> = vec![0; length as usize];
+        for i in 0..length {
+            let byte = instance.read_memory_u8(store, offset + i);
+
+            // check for error
+            if byte.is_err() {
+                return Err(RuntimeError::new(format!(
+                    "Failed to read byte at offset {} length {}. Error: {:?}",
+                    offset + i,
+                    length,
+                    byte.unwrap_err()
+                )));
+            }
+
+            buffer[i as usize] = byte.unwrap();
+        }
+
+        Ok(buffer)
+    }
+
+    pub fn read_buffer(
+        store: &(impl AsStoreRef + ?Sized),
+        instance: &InstanceWrapper,
+        offset: u32,
+    ) -> Result<Vec<u8>, Error> {
+        let pointer = Self::read_pointer(store, instance, (offset + 4) as u64, 8);
+        let pointer_buffer = pointer.map_err(|e| Error::from_reason(e.to_string()))?;
+
+        let data_offset = Self::bytes_to_u32_le(pointer_buffer.clone(), 0);
+        let length = Self::bytes_to_u32_le(pointer_buffer, 4);
+
+        let result = Self::read_pointer(store, instance, data_offset as u64, length as u64)
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    fn bytes_to_u32_le(bytes: Vec<u8>, offset: u32) -> u32 {
+        let mut result = 0;
+        for i in 0..4 {
+            result |= (bytes[i + offset as usize] as u32) << (i * 8);
+        }
+        result
     }
 }

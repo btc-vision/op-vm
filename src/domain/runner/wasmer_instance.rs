@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::Local;
 use wasmer::{
     CompilerConfig, Function, FunctionEnv, imports, Imports, Instance, Memory, MemoryAccessError,
-    Module, RuntimeError, Store, Value,
+    Module, Store, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
@@ -93,7 +93,6 @@ impl WasmerInstance {
         let instance = Instance::new(&mut store, &module, &import_object)?;
         let instance_wrapper = InstanceWrapper::new(instance.clone());
 
-        env.as_mut(&mut store).memory = Some(Self::get_memory(&instance).clone());
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
 
         log_time_diff(&time, "WasmerInstance::new");
@@ -115,7 +114,7 @@ impl RunnerInstance for WasmerInstance {
         self.instance.call(&mut self.store, function, params)
     }
 
-    fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+    fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, MemoryAccessError> {
         self.instance.read_memory(&self.store, offset, length)
     }
 

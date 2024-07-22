@@ -81,27 +81,20 @@ pub fn sha256_import(
 ) -> Result<u32, RuntimeError> {
     let (env, mut store) = context.data_and_store_mut();
 
-    let memory = env
-        .memory
-        .clone()
-        .ok_or(RuntimeError::new("Memory not found"))?;
-    let wrapper = env
+    let instance = env
         .instance
         .clone()
         .ok_or(RuntimeError::new("Instance not found"))?;
 
-    let view = memory.view(&store);
-
-    let data = env
-        .read_buffer(&view, ptr)
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     let result = env.sha256(&data)?;
 
-    let value = AssemblyScript::write_buffer(&mut store, &wrapper, &result, 13, 0)
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    wrapper.subtract_gas(store, 300_000);
+    instance.subtract_gas(store, 300_000);
 
     Ok(value as u32)
 }
@@ -111,14 +104,11 @@ pub fn console_log_import(
     ptr: u32,
 ) -> Result<(), RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    let memory = env
-        .memory
+    let instance = env
+        .instance
         .clone()
         .ok_or(RuntimeError::new("Memory not found"))?;
-    let view = memory.view(&store);
-
-    let data = env
-        .read_buffer(&view, ptr)
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     env.console_log_external.execute(&data)
@@ -131,27 +121,20 @@ fn external_import_with_param_and_return(
     ptr: u32,
     gas_cost: u64,
 ) -> Result<u32, RuntimeError> {
-    let memory = env
-        .memory
-        .clone()
-        .ok_or(RuntimeError::new("Memory not found"))?;
-    let wrapper = env
+    let instance = env
         .instance
         .clone()
         .ok_or(RuntimeError::new("Instance not found"))?;
 
-    let view = memory.view(&store);
-
-    let data = env
-        .read_buffer(&view, ptr)
+    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     let result = external_function.execute(&data)?;
 
-    let value = AssemblyScript::write_buffer(&mut store, &wrapper, &result, 13, 0)
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    wrapper.subtract_gas(store, gas_cost);
+    instance.subtract_gas(store, gas_cost);
 
     Ok(value as u32)
 }
