@@ -20,7 +20,7 @@ use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction,
+    DeployFromAddressExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
 
@@ -43,7 +43,6 @@ impl WasmerRunner {
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
         console_log_external: ConsoleLogExternalFunction,
-        encode_address_external: EncodeAddressExternalFunction,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
         let metering = Arc::new(Metering::new(max_gas, get_gas_cost));
@@ -67,7 +66,6 @@ impl WasmerRunner {
             call_other_contract_external,
             deploy_from_address_external,
             console_log_external,
-            encode_address_external,
         )?;
 
         let env = FunctionEnv::new(&mut store, instance);

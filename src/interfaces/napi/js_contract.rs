@@ -17,7 +17,7 @@ use crate::domain::runner::WasmerRunner;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    ContractCallTask, DeployFromAddressExternalFunction, EncodeAddressExternalFunction,
+    ContractCallTask, DeployFromAddressExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
@@ -51,8 +51,6 @@ pub struct JsContract {
     deploy_from_address_tsfn:
         ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    encode_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -82,10 +80,6 @@ impl JsContract {
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
         )]
         console_log_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )]
-        encode_address_function: JsFunction,
     ) -> Result<Self> {
         catch_unwind(|| {
             let time = Local::now();
@@ -97,7 +91,6 @@ impl JsContract {
             let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
             let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
             let console_log_tsfn = create_tsfn!(console_log_js_function);
-            let encode_address_tsfn = create_tsfn!(encode_address_function);
 
             let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn.clone());
             let storage_store_external =
@@ -107,8 +100,6 @@ impl JsContract {
             let deploy_from_address_external =
                 DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
             let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn.clone());
-            let encode_address_external =
-                EncodeAddressExternalFunction::new(encode_address_tsfn.clone());
 
             let runner = WasmerRunner::new(
                 &bytecode_vec,
@@ -119,7 +110,6 @@ impl JsContract {
                 call_other_contract_external,
                 deploy_from_address_external,
                 console_log_external,
-                encode_address_external,
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
@@ -135,7 +125,6 @@ impl JsContract {
                 call_other_contract_tsfn: call_other_contract_tsfn,
                 deploy_from_address_tsfn: deploy_from_address_tsfn,
                 console_log_tsfn: console_log_tsfn,
-                encode_address_tsfn: encode_address_tsfn,
             })
         })
         .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
@@ -149,7 +138,6 @@ impl JsContract {
         abort_tsfn!(self.call_other_contract_tsfn, &env);
         abort_tsfn!(self.deploy_from_address_tsfn, &env);
         abort_tsfn!(self.console_log_tsfn, &env);
-        abort_tsfn!(self.encode_address_tsfn, &env);
 
         Ok(())
         //})
