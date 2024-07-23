@@ -16,7 +16,7 @@ use crate::domain::runner::{
     ContractRunner, CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper,
     sha256_import, storage_load_import, storage_store_import,
 };
-use crate::domain::runner::network::Network;
+use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
@@ -37,7 +37,7 @@ impl WasmerRunner {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
-        network: Network,
+        network: BitcoinNetwork,
         storage_load_external: StorageLoadExternalFunction,
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,

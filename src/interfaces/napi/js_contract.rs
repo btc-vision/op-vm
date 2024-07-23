@@ -20,7 +20,7 @@ use crate::interfaces::{
     ContractCallTask, DeployFromAddressExternalFunction, EncodeAddressExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
-use crate::interfaces::napi::network_request::NetworkRequest;
+use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 macro_rules! create_tsfn {
@@ -61,7 +61,7 @@ impl JsContract {
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
-        network: NetworkRequest,
+        network: BitcoinNetworkRequest,
         #[napi(
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
         )]
