@@ -24,7 +24,7 @@ use crate::interfaces::{
     StorageStoreExternalFunction,
 };
 
-const MAX_PAGES: u32 = 128; // 1 page = 64KB
+const MAX_PAGES: u32 = 128 * 4; // 1 page = 64KB, 32 MB.
 const STACK_SIZE: usize = 1024 * 1024; // 1MB
 
 pub struct WasmerRunner {
