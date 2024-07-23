@@ -7,6 +7,7 @@ use std::panic;
 
 mod domain;
 mod interfaces;
+mod application;
 
 #[napi]
 pub fn init() {

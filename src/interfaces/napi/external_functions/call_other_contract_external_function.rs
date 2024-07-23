@@ -21,6 +21,11 @@ impl CallOtherContractExternalFunction {
 
 impl ExternalFunction for CallOtherContractExternalFunction {
     fn execute(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
-        self.external_function.execute(data)
+        //let time = chrono::offset::Local::now();
+        let resp = self.external_function.execute(data);
+
+        //log_time_diff(&time, "GenericExternalFunction::call");
+
+        resp
     }
 }

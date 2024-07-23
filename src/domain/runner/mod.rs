@@ -1,5 +1,12 @@
-pub use self::{custom_env::*, runner_instance::*, wasmer_instance::*};
+pub use self::{
+    abort_data::*, bitcoin_network::*, contract_runner::*, custom_env::*, import_functions::*,
+    instance_wrapper::*, wasmer_runner::*,
+};
 
+mod abort_data;
+mod contract_runner;
 mod custom_env;
-mod runner_instance;
-mod wasmer_instance;
+mod import_functions;
+mod instance_wrapper;
+mod wasmer_runner;
+mod bitcoin_network;

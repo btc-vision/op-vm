@@ -1,15 +1,20 @@
 use anyhow::anyhow;
 use napi::Error;
-use wasmer::{MemoryAccessError, Value};
+use wasmer::{AsStoreMut, AsStoreRef, MemoryAccessError, RuntimeError, Value};
 
-use crate::domain::runner::RunnerInstance;
+use crate::domain::runner::InstanceWrapper;
 
 pub struct AssemblyScript;
 
 impl AssemblyScript {
-    pub fn __new(runner: &mut dyn RunnerInstance, size: i32, id: i32) -> anyhow::Result<i32> {
+    pub fn __new(
+        store: &mut impl AsStoreMut,
+        instance: &InstanceWrapper,
+        size: i32,
+        id: i32,
+    ) -> anyhow::Result<i32> {
         let params = &[Value::I32(size), Value::I32(id)];
-        let result = runner.call("__new", params)?;
+        let result = instance.call(store, "__new", params)?;
 
         let pointer = result
             .get(0)
@@ -21,21 +26,24 @@ impl AssemblyScript {
     }
 
     pub fn __pin(
-        runner: &mut dyn RunnerInstance,
+        store: &mut impl AsStoreMut,
+        instance: &InstanceWrapper,
         pointer: i32,
     ) -> anyhow::Result<Box<[Value]>> {
-        runner.call("__pin", &[Value::I32(pointer)])
+        instance.call(store, "__pin", &[Value::I32(pointer)])
     }
 
     pub fn __unpin(
-        runner: &mut dyn RunnerInstance,
+        store: &mut impl AsStoreMut,
+        instance: &InstanceWrapper,
         pointer: i32,
     ) -> anyhow::Result<Box<[Value]>> {
-        runner.call("__unpin", &[Value::I32(pointer)])
+        instance.call(store, "__unpin", &[Value::I32(pointer)])
     }
 
     pub fn write_buffer(
-        runner: &mut dyn RunnerInstance,
+        store: &mut impl AsStoreMut,
+        instance: &InstanceWrapper,
         value: &[u8],
         id: i32,
         align: u32,
@@ -43,7 +51,7 @@ impl AssemblyScript {
         // Calculate the length and create a new buffer
         let length = value.len();
         let buffer_size = length << align;
-        let buffer = Self::__new(runner, buffer_size as i32, 1);
+        let buffer = Self::__new(store, instance, buffer_size as i32, 1);
         if buffer.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to get buffer from __new: {:?}",
@@ -54,7 +62,7 @@ impl AssemblyScript {
         let buffer_value = buffer.unwrap();
 
         // Pin the buffer
-        let pinned_buffer = Self::__pin(runner, buffer_value);
+        let pinned_buffer = Self::__pin(store, instance, buffer_value);
         if pinned_buffer.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to pin buffer: {:?}",
@@ -66,7 +74,7 @@ impl AssemblyScript {
         let pinned_buffer_value = pin_value.unwrap_i32() as u32;
 
         // Create the header
-        let header = Self::__new(runner, 12, id);
+        let header = Self::__new(store, instance, 12, id);
         if header.is_err() {
             return Err(Error::from_reason(format!(
                 "Failed to get header from __new: {:?}",
@@ -77,20 +85,78 @@ impl AssemblyScript {
         let header_value = header.unwrap();
 
         // Set the header values
-        Self::set_u32(runner, header_value, pinned_buffer_value).unwrap();
-        Self::set_u32(runner, header_value + 4, pinned_buffer_value).unwrap();
-        Self::set_u32(runner, header_value + 8, buffer_size as u32).unwrap();
+        Self::set_u32(store, instance, header_value, pinned_buffer_value).unwrap();
+        Self::set_u32(store, instance, header_value + 4, pinned_buffer_value).unwrap();
+        Self::set_u32(store, instance, header_value + 8, buffer_size as u32).unwrap();
 
         // Write the buffer value to the contract's memory
-        runner.write_memory(pinned_buffer_value as u64, &value).unwrap();
+        instance
+            .write_memory(store, pinned_buffer_value as u64, &value)
+            .unwrap();
 
         // Unpin the buffer
-        Self::__unpin(runner, pinned_buffer_value as i32).unwrap();
+        Self::__unpin(store, instance, pinned_buffer_value as i32).unwrap();
 
         return Ok(header_value as i64);
     }
 
-    pub fn set_u32(runner: &mut dyn RunnerInstance, offset: i32, value: u32) -> Result<(), MemoryAccessError> {
-        runner.write_memory(offset as u64, &value.to_le_bytes())
+    pub fn set_u32(
+        store: &(impl AsStoreRef + ?Sized),
+        instance: &InstanceWrapper,
+        offset: i32,
+        value: u32,
+    ) -> Result<(), MemoryAccessError> {
+        instance.write_memory(store, offset as u64, &value.to_le_bytes())
+    }
+
+    pub fn read_pointer(
+        store: &(impl AsStoreRef + ?Sized),
+        instance: &InstanceWrapper,
+        offset: u64,
+        length: u64,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        let mut buffer: Vec<u8> = vec![0; length as usize];
+        for i in 0..length {
+            let byte = instance.read_memory_u8(store, offset + i);
+
+            // check for error
+            if byte.is_err() {
+                return Err(RuntimeError::new(format!(
+                    "Failed to read byte at offset {} length {}. Error: {:?}",
+                    offset + i,
+                    length,
+                    byte.unwrap_err()
+                )));
+            }
+
+            buffer[i as usize] = byte.unwrap();
+        }
+
+        Ok(buffer)
+    }
+
+    pub fn read_buffer(
+        store: &(impl AsStoreRef + ?Sized),
+        instance: &InstanceWrapper,
+        offset: u32,
+    ) -> Result<Vec<u8>, Error> {
+        let pointer = Self::read_pointer(store, instance, (offset + 4) as u64, 8);
+        let pointer_buffer = pointer.map_err(|e| Error::from_reason(e.to_string()))?;
+
+        let data_offset = Self::bytes_to_u32_le(pointer_buffer.clone(), 0);
+        let length = Self::bytes_to_u32_le(pointer_buffer, 4);
+
+        let result = Self::read_pointer(store, instance, data_offset as u64, length as u64)
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    fn bytes_to_u32_le(bytes: Vec<u8>, offset: u32) -> u32 {
+        let mut result = 0;
+        for i in 0..4 {
+            result |= (bytes[i + offset as usize] as u32) << (i * 8);
+        }
+        result
     }
 }

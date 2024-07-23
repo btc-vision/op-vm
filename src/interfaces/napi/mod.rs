@@ -8,3 +8,4 @@ mod contract_call_task;
 mod external_functions;
 mod js_contract;
 mod thread_safe_js_import_response;
+mod bitcoin_network_request;

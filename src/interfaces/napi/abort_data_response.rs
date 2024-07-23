@@ -1,4 +1,4 @@
-use crate::domain::contract::AbortData;
+use crate::domain::runner::AbortData;
 
 #[napi(object)]
 pub struct AbortDataResponse {

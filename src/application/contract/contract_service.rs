@@ -1,19 +1,17 @@
 use std::sync::{Arc, Mutex};
 
 use napi::Error;
-use wasmer::{MemoryAccessError, RuntimeError, Value};
+use wasmer::{MemoryAccessError, Value};
 
-use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::contract::AbortData;
-use crate::domain::runner::RunnerInstance;
+use crate::domain::runner::{AbortData, ContractRunner};
 
-pub struct Contract {
+pub struct ContractService {
     max_gas: u64,
-    runner: Arc<Mutex<dyn RunnerInstance>>,
+    runner: Arc<Mutex<dyn ContractRunner>>,
 }
 
-impl Contract {
-    pub fn new(max_gas: u64, runner: Arc<Mutex<dyn RunnerInstance>>) -> Self {
+impl ContractService {
+    pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
         Self { max_gas, runner }
     }
 
@@ -24,16 +22,29 @@ impl Contract {
     }
 
     pub fn get_used_gas(&mut self) -> u64 {
-        let mut runner = self.runner.lock().unwrap();
-        self.max_gas - runner.get_remaining_gas()
+        self.max_gas - self.get_remaining_gas()
     }
 
     pub fn set_used_gas(&mut self, gas: u64) {
+        self.set_remaining_gas(self.max_gas - gas);
+    }
+
+    pub fn get_remaining_gas(&mut self) -> u64 {
+        let mut runner = self.runner.lock().unwrap();
+        runner.get_remaining_gas()
+    }
+
+    pub fn set_remaining_gas(&mut self, gas: u64) {
         let mut runner = self.runner.lock().unwrap();
         runner.set_remaining_gas(self.max_gas - gas);
     }
 
-    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, RuntimeError> {
+    pub fn use_gas(&mut self, gas: u64) {
+        let mut runner = self.runner.lock().unwrap();
+        runner.use_gas(gas);
+    }
+
+    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, MemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.read_memory(offset, length)
     }
@@ -45,7 +56,7 @@ impl Contract {
 
     pub fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, Error> {
         let mut runner = self.runner.lock().unwrap();
-        AssemblyScript::write_buffer(&mut *runner, value, id, align)
+        runner.write_buffer(value, id, align)
     }
 
     pub fn get_abort_data(&self) -> Option<AbortData> {
