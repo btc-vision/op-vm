@@ -101,10 +101,10 @@ pub fn encode_address_import(
     let hrp = Hrp::parse(&network.address_prefix()).expect("Valid hrp");
     let address = bech32::segwit::encode_v0(hrp, &data).map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
-    let result = address.as_bytes().to_vec();
+    let mut result = address.as_bytes().to_vec();
 
     // add 0 at the end of the buffer
-    let result = [result, vec![0]].concat();
+    result.push(0);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
