@@ -1,4 +1,4 @@
-use bech32::Hrp;
+use bech32::{Hrp, segwit};
 use ripemd::{Digest, Ripemd160};
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
@@ -99,7 +99,8 @@ pub fn encode_address_import(
     let data = ripemd.finalize();
 
     let hrp = Hrp::parse(&network.address_prefix()).expect("Valid hrp");
-    let address = bech32::segwit::encode_v0(hrp, &data).map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
+    let address = segwit::encode_v0(hrp, &data)
+        .map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
     let mut result = address.as_bytes().to_vec();
 
