@@ -262,8 +262,10 @@ impl JsContract {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
             let contract = self.contract.clone();
-            let mut contract = contract.lock().unwrap();
-            contract.set_remaining_gas(gas);
+            {
+                let mut contract = contract.lock().unwrap();
+                contract.set_remaining_gas(gas);
+            }
 
             Ok(())
         })
@@ -275,9 +277,11 @@ impl JsContract {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
             let contract = self.contract.clone();
-            let mut contract = contract.lock().unwrap();
-            contract.use_gas(gas);
-
+            {
+                let mut contract = contract.lock().unwrap();
+                contract.use_gas(gas);
+            }
+            
             Ok(())
         })
         .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
