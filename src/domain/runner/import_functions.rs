@@ -103,7 +103,6 @@ pub fn encode_address_import(
 
     let mut result = address.as_bytes().to_vec();
 
-    // add 0 at the end of the buffer
     result.push(0);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
