@@ -1,4 +1,4 @@
-use bech32::{Bech32, Hrp};
+use bech32::Hrp;
 use ripemd::{Digest, Ripemd160};
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
@@ -84,8 +84,14 @@ pub fn encode_address_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
+    // skip 4 bytes for length
+    let data = data[4..].to_vec();
+
     if data.len() != 32 {
-        return Err(RuntimeError::new("Invalid hash length"));
+        return Err(RuntimeError::new(format!(
+            "Invalid data length. Expected 32, got {}",
+            data.len()
+        )));
     }
 
     let mut ripemd = Ripemd160::new();
@@ -93,9 +99,12 @@ pub fn encode_address_import(
     let data = ripemd.finalize();
 
     let hrp = Hrp::parse(&network.address_prefix()).expect("Valid hrp");
-    let address = bech32::encode::<Bech32>(hrp, &data).expect("Failed to encode address");
+    let address = bech32::segwit::encode_v0(hrp, &data).map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
-    let result = address.as_bytes();
+    let result = address.as_bytes().to_vec();
+
+    // add 0 at the end of the buffer
+    let result = [result, vec![0]].concat();
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
