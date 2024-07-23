@@ -2,6 +2,7 @@ use sha2::{Digest, Sha256};
 use wasmer::RuntimeError;
 
 use crate::domain::runner::{AbortData, InstanceWrapper};
+use crate::domain::runner::network::Network;
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EncodeAddressExternalFunction, StorageLoadExternalFunction,
@@ -10,6 +11,7 @@ use crate::interfaces::{
 
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
+    pub network: Network,
     pub abort_data: Option<AbortData>,
     pub storage_load_external: StorageLoadExternalFunction,
     pub storage_store_external: StorageStoreExternalFunction,
@@ -21,6 +23,7 @@ pub struct CustomEnv {
 
 impl CustomEnv {
     pub fn new(
+        network: Network,
         storage_load_external: StorageLoadExternalFunction,
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,
@@ -30,6 +33,7 @@ impl CustomEnv {
     ) -> anyhow::Result<Self> {
         Ok(Self {
             instance: None,
+            network,
             abort_data: None,
             storage_load_external,
             storage_store_external,

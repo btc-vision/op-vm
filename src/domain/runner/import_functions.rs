@@ -1,3 +1,5 @@
+use bech32::{Bech32, Hrp};
+use ripemd::{Digest, Ripemd160};
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
@@ -70,8 +72,37 @@ pub fn encode_address_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
-    let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.encode_address_external, ptr, 300_000)
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = &env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let network = &env.network;
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    if data.len() != 32 {
+        return Err(RuntimeError::new("Invalid hash length"));
+    }
+
+    let mut ripemd = Ripemd160::new();
+    ripemd.update(&data);
+    let data = ripemd.finalize();
+
+    let hrp = Hrp::parse(&network.address_prefix()).expect("Valid hrp");
+    let address = bech32::encode::<Bech32>(hrp, &data).expect("Failed to encode address");
+
+    let result = address.as_bytes();
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+
+    instance.use_gas(&mut store, 300_000);
+
+    Ok(value as u32)
 }
 
 pub fn sha256_import(
@@ -103,7 +134,7 @@ pub fn console_log_import(
     ptr: u32,
 ) -> Result<(), RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    let instance = env
+    let instance = &env
         .instance
         .clone()
         .ok_or(RuntimeError::new("Memory not found"))?;

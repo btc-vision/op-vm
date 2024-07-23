@@ -1,6 +1,6 @@
 pub use self::{
     abort_data::*, contract_runner::*, custom_env::*, import_functions::*, instance_wrapper::*,
-    wasmer_runner::*,
+    network::*, wasmer_runner::*,
 };
 
 mod abort_data;
@@ -9,3 +9,4 @@ mod custom_env;
 mod import_functions;
 mod instance_wrapper;
 mod wasmer_runner;
+mod network;

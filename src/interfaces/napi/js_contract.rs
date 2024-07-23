@@ -20,6 +20,7 @@ use crate::interfaces::{
     ContractCallTask, DeployFromAddressExternalFunction, EncodeAddressExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
+use crate::interfaces::napi::network_request::NetworkRequest;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 macro_rules! create_tsfn {
@@ -60,6 +61,7 @@ impl JsContract {
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
+        network: NetworkRequest,
         #[napi(
             ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
         )]
@@ -111,6 +113,7 @@ impl JsContract {
             let runner = WasmerRunner::new(
                 &bytecode_vec,
                 max_gas,
+                network.into(),
                 storage_load_external,
                 storage_store_external,
                 call_other_contract_external,

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use chrono::Local;
 use wasmer::{
-    CompilerConfig, Function, FunctionEnv, imports, Imports, Instance, MemoryAccessError,
-    Module, Store, Value,
+    CompilerConfig, Function, FunctionEnv, imports, Imports, Instance, MemoryAccessError, Module,
+    Store, Value,
 };
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer_compiler_singlepass::Singlepass;
@@ -11,7 +11,12 @@ use wasmer_middlewares::Metering;
 use wasmer_types::Target;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{abort_import, AbortData, call_other_contract_import, console_log_import, ContractRunner, CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper, sha256_import, storage_load_import, storage_store_import};
+use crate::domain::runner::{
+    abort_import, AbortData, call_other_contract_import, console_log_import,
+    ContractRunner, CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper,
+    sha256_import, storage_load_import, storage_store_import,
+};
+use crate::domain::runner::network::Network;
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
@@ -32,6 +37,7 @@ impl WasmerRunner {
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
+        network: Network,
         storage_load_external: StorageLoadExternalFunction,
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,
@@ -55,6 +61,7 @@ impl WasmerRunner {
 
         let mut store = Store::new(engine);
         let instance = CustomEnv::new(
+            network,
             storage_load_external,
             storage_store_external,
             call_other_contract_external,
