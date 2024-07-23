@@ -99,7 +99,7 @@ pub fn encode_address_import(
     let data = ripemd.finalize();
 
     let hrp = Hrp::parse(&network.address_prefix()).expect("Valid hrp");
-    let address = segwit::encode_v0(hrp, &data)
+    let address = segwit::encode(hrp, segwit::VERSION_0, &data)
         .map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
     let mut result = address.as_bytes().to_vec();
