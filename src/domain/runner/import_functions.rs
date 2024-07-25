@@ -63,7 +63,6 @@ pub fn call_other_contract_import(
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
     let call_execution_cost = u64::from_le_bytes(call_execution_cost_bytes.try_into().unwrap());
-    println!("Execution cost: {}", call_execution_cost);
     instance.use_gas(&mut store, 343_000_000 + call_execution_cost);
 
     Ok(value as u32)
