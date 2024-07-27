@@ -1,4 +1,4 @@
-use bech32::Hrp;
+use bech32::{Hrp, segwit};
 use ripemd::{Digest, Ripemd160};
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
@@ -44,14 +44,28 @@ pub fn call_other_contract_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
-    let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(
-        env,
-        store,
-        &env.call_other_contract_external,
-        ptr,
-        500_000_000,
-    )
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    let result = &env.call_other_contract_external.execute(&data)?;
+
+    let call_execution_cost_bytes = &result[0..8];
+    let response = &result[8..];
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0)
+        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+
+    let call_execution_cost = u64::from_le_bytes(call_execution_cost_bytes.try_into().unwrap());
+    instance.use_gas(&mut store, 343_000_000 + call_execution_cost);
+
+    Ok(value as u32)
 }
 
 pub fn deploy_from_address_import(
@@ -99,12 +113,12 @@ pub fn encode_address_import(
     let data = ripemd.finalize();
 
     let hrp = Hrp::parse(&network.address_prefix()).expect("Valid hrp");
-    let address = bech32::segwit::encode_v0(hrp, &data).map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
+    let address = segwit::encode(hrp, segwit::VERSION_0, &data)
+        .map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
-    let result = address.as_bytes().to_vec();
+    let mut result = address.as_bytes().to_vec();
 
-    // add 0 at the end of the buffer
-    let result = [result, vec![0]].concat();
+    result.push(0);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
