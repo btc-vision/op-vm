@@ -1,6 +1,3 @@
-use sha2::{Digest, Sha256};
-use wasmer::RuntimeError;
-
 use crate::domain::runner::{AbortData, InstanceWrapper};
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::interfaces::{
@@ -39,12 +36,5 @@ impl CustomEnv {
             deploy_from_address_external,
             console_log_external,
         })
-    }
-
-    pub fn sha256(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
-        let hash = Sha256::digest(data);
-        let hash_as_vec: Vec<u8> = hash.to_vec();
-
-        Ok(hash_as_vec)
     }
 }

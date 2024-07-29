@@ -1,5 +1,6 @@
 use bech32::{Hrp, segwit};
 use ripemd::{Digest, Ripemd160};
+use sha2::Sha256;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
@@ -142,7 +143,7 @@ pub fn sha256_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    let result = env.sha256(&data)?;
+    let result = sha256(&data)?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
@@ -150,6 +151,13 @@ pub fn sha256_import(
     instance.use_gas(&mut store, 300_000);
 
     Ok(value as u32)
+}
+
+fn sha256(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    let hash = Sha256::digest(data);
+    let hash_as_vec: Vec<u8> = hash.to_vec();
+
+    Ok(hash_as_vec)
 }
 
 pub fn console_log_import(
@@ -190,4 +198,29 @@ fn external_import_with_param_and_return(
     instance.use_gas(&mut store, gas_cost);
 
     Ok(value as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sha256_hashes_number_correctly() {
+        let data_to_hash = vec![9];
+        let expected_hash = hex::decode("2b4c342f5433ebe591a1da77e013d1b72475562d48578dca8b84bac6651c3cb9").unwrap();
+
+        let result = sha256(&data_to_hash).unwrap();
+
+        assert_eq!(result, expected_hash);
+    }
+
+    #[test]
+    fn sha256_hashes_hex_data_correctly() {
+        let data_to_hash = hex::decode("e3b0c44298fc1c149afbf4c8").unwrap().to_vec();
+        let expected_hash = hex::decode("10dac508c2a7d7f0f3474c6ecc23f2a4d9ddbabec1009c4810f2ff677f4c1a83").unwrap();
+
+        let result = sha256(&data_to_hash).unwrap();
+
+        assert_eq!(result, expected_hash);
+    }
 }
