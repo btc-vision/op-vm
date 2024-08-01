@@ -33,26 +33,20 @@ immediately without notice from the Licensor if User fails to comply with any
 provision of this License. Upon termination, User must destroy all copies of the
 Software.
 
-## 5. Release to Public
-
-This License restricts the above rights until the Software is officially
-released to the public by the Licensor. Upon such release, the terms of this
-License may be modified by the Licensor to allow broader use rights.
-
-## 6. Governing Law
+## 5. Governing Law
 
 This License shall be governed by and construed in accordance with the laws
 of [Toronto, Canada]. Any legal action or proceeding arising under this License
 will be brought exclusively in the courts located in [Toronto], and the parties
 hereby consent to personal jurisdiction and venue therein.
 
-## 7. Limitation of Liability
+## 6. Limitation of Liability
 
 In no event will the Licensor be liable for any damages, including, without
 limitation, indirect, incidental, special, consequential, or punitive damages
 arising out of the use of or inability to use the Software.
 
-## 8. Indemnification
+## 7. Indemnification
 
 User agrees to indemnify, defend, and hold harmless the Licensor and its
 affiliates, officers, agents, employees, and partners from any claim or demand,
@@ -60,13 +54,13 @@ including reasonable attorneys' fees, made by any third party due to or arising
 out of User's use of the Software, User's violation of this License, or User's
 violation of any rights of another.
 
-## 9. Breach of License
+## 8. Breach of License
 
 Any breach of this License will result in immediate termination of User's rights
 under this License. Additionally, the Licensor reserves the right to pursue any
 legal action against the User in the event of a breach of this License.
 
-## 10. Acknowledgment
+## 9. Acknowledgment
 
 User acknowledges that they have read this License, understand it, and agree to
 be bound by its terms and conditions. User also agrees that this License is the

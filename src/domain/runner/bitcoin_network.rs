@@ -5,7 +5,7 @@ pub enum BitcoinNetwork {
 }
 
 impl BitcoinNetwork {
-    pub fn address_prefix(&self) -> String {
+    pub fn contract_address_prefix(&self) -> String {
         let prefix = match self {
             BitcoinNetwork::Mainnet => "bc",
             BitcoinNetwork::Testnet => "tb",
