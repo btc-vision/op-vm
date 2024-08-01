@@ -101,8 +101,6 @@ pub fn encode_address_import(
 
     // skip 4 bytes for length
     let data = data[4..].to_vec();
-    println!("raw data: {:?}", data);
-
     if data.len() != 32 {
         return Err(RuntimeError::new(format!(
             "Invalid data length. Expected 32, got {}",
@@ -114,10 +112,8 @@ pub fn encode_address_import(
     ripemd.update(&data);
     let data = ripemd.finalize();
 
-    println!("ripemd data: {:?}", data);
-
     let hrp = Hrp::parse(&network.contract_address_prefix()).expect("Valid hrp");
-    let address = segwit::encode(hrp, segwit::VERSION_0, &data)
+    let address = segwit::encode_v0(hrp, &data)
         .map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
     let mut result = address.as_bytes().to_vec();
