@@ -101,6 +101,7 @@ pub fn encode_address_import(
 
     // skip 4 bytes for length
     let data = data[4..].to_vec();
+    println!("raw data: {:?}", data);
 
     if data.len() != 32 {
         return Err(RuntimeError::new(format!(
@@ -113,7 +114,7 @@ pub fn encode_address_import(
     ripemd.update(&data);
     let data = ripemd.finalize();
 
-    println!("data: {:?}", data);
+    println!("ripemd data: {:?}", data);
 
     let hrp = Hrp::parse(&network.contract_address_prefix()).expect("Valid hrp");
     let address = segwit::encode(hrp, segwit::VERSION_0, &data)
