@@ -40,47 +40,54 @@ macro_rules! abort_tsfn {
     };
 }
 
-#[napi(js_name = "Contract")]
+//#[napi(js_name = "Contract")]
 pub struct JsContract {
     contract: Arc<Mutex<ContractService>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     storage_store_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     call_other_contract_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     deploy_from_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
-#[napi] //noinspection RsCompileErrorMacro
+//#[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    #[napi(constructor)]
+    //#[napi]
+    pub fn validate_bytecode(bytecode: Buffer,
+                             max_gas: BigInt) -> Result<bool> {
+        catch_unwind(|| {
+            let time = Local::now();
+            let bytecode_vec = bytecode.to_vec();
+            let max_gas = max_gas.get_u64().1;
+
+            let is_valid = WasmerRunner::validate_bytecode(
+                &bytecode_vec,
+                max_gas,
+            ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+            log_time_diff(&time, "JsContract::validate");
+
+            Ok(is_valid)
+        })
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e)))
+            )
+    }
+
+    //#[napi(constructor)]
     pub fn new(
         bytecode: Buffer,
         max_gas: BigInt,
         network: BitcoinNetworkRequest,
-        #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )]
         storage_load_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )]
         storage_store_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )]
         call_other_contract_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )]
         deploy_from_address_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
-        )]
         console_log_js_function: JsFunction,
     ) -> Result<Self> {
+        //let deploy = async move {
         catch_unwind(|| {
             let time = Local::now();
             let bytecode_vec = bytecode.to_vec();
@@ -111,7 +118,7 @@ impl JsContract {
                 deploy_from_address_external,
                 console_log_external,
             )
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner = Arc::new(Mutex::new(runner));
             let contract = ContractService::new(max_gas, runner);
@@ -120,17 +127,23 @@ impl JsContract {
 
             Ok(Self {
                 contract: Arc::new(Mutex::new(contract)),
-                storage_load_tsfn: storage_load_tsfn,
-                storage_store_tsfn: storage_store_tsfn,
-                call_other_contract_tsfn: call_other_contract_tsfn,
-                deploy_from_address_tsfn: deploy_from_address_tsfn,
-                console_log_tsfn: console_log_tsfn,
+                storage_load_tsfn,
+                storage_store_tsfn,
+                call_other_contract_tsfn,
+                deploy_from_address_tsfn,
+                console_log_tsfn,
             })
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        //};
+
+        //let rt = Runtime::new().unwrap();
+        //let response = rt.block_on(deploy);
+
+        //response
     }
 
-    #[napi]
+    //#[napi]
     pub fn destroy(&mut self, env: Env) -> Result<()> {
         //catch_unwind(|| {
         abort_tsfn!(self.storage_load_tsfn, &env);
@@ -144,7 +157,7 @@ impl JsContract {
         //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi(ts_return_type = "Promise<CallResponse>")]
+    //#[napi(ts_return_type = "Promise<CallResponse>")]
     pub fn call(
         &self,
         func_name: String,
@@ -179,10 +192,10 @@ impl JsContract {
 
             Ok(result)
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
         catch_unwind(|| {
             let offset = offset.get_u64().1;
@@ -198,10 +211,10 @@ impl JsContract {
 
             Ok(Buffer::from(resp))
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
         catch_unwind(|| {
             let data: Vec<u8> = data.into();
@@ -213,10 +226,10 @@ impl JsContract {
 
             Ok(())
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn get_used_gas(&self) -> Result<BigInt> {
         catch_unwind(|| {
             let contract = self.contract.clone();
@@ -227,10 +240,10 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn set_used_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
@@ -240,10 +253,10 @@ impl JsContract {
 
             Ok(())
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn get_remaining_gas(&self) -> Result<BigInt> {
         catch_unwind(|| {
             let contract = self.contract.clone();
@@ -254,10 +267,10 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn set_remaining_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
@@ -269,10 +282,10 @@ impl JsContract {
 
             Ok(())
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
@@ -281,13 +294,13 @@ impl JsContract {
                 let mut contract = contract.lock().unwrap();
                 contract.use_gas(gas);
             }
-            
+
             Ok(())
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
         catch_unwind(|| {
             let value = value.to_vec();
@@ -300,10 +313,10 @@ impl JsContract {
 
             Ok(result)
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    #[napi]
+    //#[napi]
     pub fn get_abort_data(&self) -> Result<AbortDataResponse> {
         catch_unwind(|| {
             let contract = self.contract.clone();
@@ -314,7 +327,7 @@ impl JsContract {
 
             result.ok_or(Error::from_reason("No abort data")).into()
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 }
 
