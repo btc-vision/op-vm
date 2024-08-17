@@ -11,11 +11,7 @@ use wasmer_middlewares::Metering;
 use wasmer_types::Target;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{
-    abort_import, AbortData, call_other_contract_import, console_log_import,
-    ContractRunner, CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper,
-    sha256_import, storage_load_import, storage_store_import,
-};
+use crate::domain::runner::{abort_import, AbortData, call_other_contract_import, console_log_import, ContractRunner, CustomEnv, deploy_from_address_import, encode_address_import, InstanceWrapper, sha256_import, storage_load_import, storage_store_import};
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::domain::vm::{get_gas_cost, LimitingTunables, log_time_diff};
 use crate::interfaces::{
@@ -34,6 +30,65 @@ pub struct WasmerRunner {
 }
 
 impl WasmerRunner {
+    pub fn validate_bytecode(bytecode: &[u8], max_gas: u64, /*network: BitcoinNetwork, storage_load_external: StorageLoadExternalFunction,
+                             storage_store_external: StorageStoreExternalFunction,
+                             call_other_contract_external: CallOtherContractExternalFunction,
+                             deploy_from_address_external: DeployFromAddressExternalFunction,
+                             console_log_external: ConsoleLogExternalFunction*/) -> anyhow::Result<bool> {
+        let time = Local::now();
+        let metering = Arc::new(Metering::new(max_gas, get_gas_cost));
+
+        let mut compiler = Singlepass::default();
+        compiler.canonicalize_nans(true);
+        compiler.push_middleware(metering);
+        compiler.enable_verifier();
+
+        let engine = EngineBuilder::new(compiler).set_features(None).engine();
+        let store = Store::new(engine);
+
+        Module::validate(&store, &bytecode)?;
+
+        /*let instance = CustomEnv::new(
+            network,
+            storage_load_external,
+            storage_store_external,
+            call_other_contract_external,
+            deploy_from_address_external,
+            console_log_external,
+        )?;
+
+        let env = FunctionEnv::new(&mut store, instance);
+
+        macro_rules! import {
+            ($func:tt) => {
+                Function::new_typed_with_env(&mut store, &env, $func)
+            };
+        }
+
+        let module = Module::from_binary(&store, &bytecode)?;
+        let import_object: Imports = imports! {
+            "env" => {
+                "abort" => import!(abort_import),
+                "load" => import!(storage_load_import),
+                "store" => import!(storage_store_import),
+                "call" => import!(call_other_contract_import),
+                "deployFromAddress" => import!(deploy_from_address_import),
+                "encodeAddress" => import!(encode_address_import),
+                "sha256" => import!(sha256_import),
+                "log" => import!(console_log_import),
+            }
+        };
+
+        let instance = Instance::new(&mut store, &module, &import_object)?;
+        let instance_wrapper = InstanceWrapper::new(instance.clone());
+
+        env.as_mut(&mut store).instance = Some(instance_wrapper.clone());*/
+
+        log_time_diff(&time, "WasmerRunner::validate_bytecode");
+
+        Ok(true)
+    }
+
     pub fn new(
         bytecode: &[u8],
         max_gas: u64,
@@ -89,7 +144,7 @@ impl WasmerRunner {
             }
         };
 
-        let module = Module::new(&store, &bytecode)?;
+        let module = Module::from_binary(&store, &bytecode)?;
         let instance = Instance::new(&mut store, &module, &import_object)?;
         let instance_wrapper = InstanceWrapper::new(instance.clone());
 
@@ -104,6 +159,12 @@ impl WasmerRunner {
         })
     }
 }
+
+/*impl Drop for WasmerRunner {
+    fn drop(&mut self) {
+        println!("Dropping WasmerRunner")
+    }
+}*/
 
 impl ContractRunner for WasmerRunner {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
