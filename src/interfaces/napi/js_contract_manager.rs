@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::panic::catch_unwind;
 
 use anyhow::anyhow;
 use napi::{Env, Error, JsFunction, JsNumber};
@@ -46,6 +47,7 @@ impl ContractManager {
                            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
                        )]
                        console_log_js_function: JsFunction) -> Result<BigInt, Error> {
+        //catch_unwind(|| {
         let js_contract = JsContract::new(
             bytecode,
             max_gas,
@@ -60,6 +62,8 @@ impl ContractManager {
         let id = self.add_contract(js_contract)?;
 
         Ok(BigInt::from(id))
+        //})
+        //     .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -69,6 +73,7 @@ impl ContractManager {
 
     #[napi]
     pub fn destroy(&mut self, env: Env, id: BigInt) -> Result<bool, Error> {
+        //catch_unwind(|| {
         let id = id.get_u64().1;
 
         let contract = self.contracts.get_mut(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
@@ -78,10 +83,27 @@ impl ContractManager {
             Some(_) => Ok(true),
             None => Ok(false),
         }
+        //})
+        //   .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+
+    #[napi]
+    pub fn destroy_all(&mut self, env: Env) -> Result<(), Error> {
+        //catch_unwind(|| {
+        for contract in self.contracts.values_mut() {
+            contract.destroy(env)?;
+        }
+
+        self.contracts.clear();
+
+        Ok(())
+        //})
+        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     // Add a JsContract to the map and return its ID
     fn add_contract(&mut self, contract: JsContract) -> Result<u64, Error> {
+        //catch_unwind(|| {
         if self.next_id > u64::MAX - 1 {
             //return Err(Error::from_reason(anyhow!("Maximum number of contracts reached").to_string()));
             self.next_id = 1;
@@ -92,6 +114,8 @@ impl ContractManager {
         self.contracts.insert(id, contract);
 
         Ok(id)
+        //})
+        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
