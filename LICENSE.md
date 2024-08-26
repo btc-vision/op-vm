@@ -14,13 +14,10 @@ Copyright (c) 2024-2025 to the user BlobMaster41 on GitHub
 
 This License permits User to view the Software via the repository hosting the
 Software ("Hosting Service"). Except as provided in this Section, no other use
-of the Software is permitted. The User may not modify, copy, reproduce,
-republish, upload, post, transmit, or distribute the Software in any way.
+of the Software is permitted. The User may not copy, republish, or distribute the Software in any way.
 
 ## 3. Restrictions
 
-- **Modification and Distribution**: User is prohibited from modifying, merging,
-  distributing, sublicensing, and/or selling copies of the Software.
 - **Commercial Use**: User is prohibited from using the Software for any
   commercial purposes.
 - **Reverse Engineering**: User is prohibited from reverse engineering,
