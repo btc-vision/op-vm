@@ -18,7 +18,9 @@ permissions:
       - '**/*.gitignore'
       - .editorconfig
       - docs/**
-  pull_request: null
+  pull_request:
+    types:
+      - closed
 jobs:
   build:
     strategy:
