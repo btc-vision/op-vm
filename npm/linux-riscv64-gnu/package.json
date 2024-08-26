@@ -1,21 +1,21 @@
 {
-  "name": "@btc-vision/bsi-wasmer-vm-linux-riscv64-gnu",
-  "version": "0.0.0",
-  "os": [
-    "linux"
-  ],
-  "cpu": [
-    "riscv64"
-  ],
-  "main": "bsi-wasmer-vm.linux-riscv64-gnu.node",
-  "files": [
-    "bsi-wasmer-vm.linux-riscv64-gnu.node"
-  ],
-  "license": "MIT",
-  "engines": {
-    "node": ">= 10"
-  },
-  "libc": [
-    "glibc"
-  ]
+    "name": "@btc-vision/op-vm-linux-riscv64-gnu",
+    "version": "0.0.0",
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "riscv64"
+    ],
+    "main": "op-vm.linux-riscv64-gnu.node",
+    "files": [
+        "op-vm.linux-riscv64-gnu.node"
+    ],
+    "license": "MIT",
+    "engines": {
+        "node": ">= 10"
+    },
+    "libc": [
+        "glibc"
+    ]
 }

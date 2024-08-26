@@ -1,18 +1,18 @@
 {
-  "name": "@btc-vision/bsi-wasmer-vm-freebsd-x64",
-  "version": "0.0.0",
-  "os": [
-    "freebsd"
-  ],
-  "cpu": [
-    "x64"
-  ],
-  "main": "bsi-wasmer-vm.freebsd-x64.node",
-  "files": [
-    "bsi-wasmer-vm.freebsd-x64.node"
-  ],
-  "license": "MIT",
-  "engines": {
-    "node": ">= 10"
-  }
+    "name": "@btc-vision/op-vm-freebsd-x64",
+    "version": "0.0.0",
+    "os": [
+        "freebsd"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "op-vm.freebsd-x64.node",
+    "files": [
+        "op-vm.freebsd-x64.node"
+    ],
+    "license": "MIT",
+    "engines": {
+        "node": ">= 10"
+    }
 }

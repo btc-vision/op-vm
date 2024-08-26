@@ -19,10 +19,10 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git://github.com/btc-vision/bsi-wasmer-vm.git"
+        "url": "git://github.com/btc-vision/op-vm.git"
     },
     "napi": {
-        "name": "bsi-wasmer-vm",
+        "name": "op-vm",
         "triples": {
             "additional": [
                 "aarch64-apple-darwin",
