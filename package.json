@@ -1,5 +1,5 @@
 {
-    "name": "@btc-vision/bsi-wasmer-vm",
+    "name": "@btc-vision/op-vm",
     "version": "0.1.0",
     "license": "MIT",
     "main": "index.js",
