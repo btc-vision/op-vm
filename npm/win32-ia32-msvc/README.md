@@ -1,3 +1,3 @@
-# `@btc-vision/bsi-wasmer-vm-win32-ia32-msvc`
+# `@btc-vision/op-vm-win32-ia32-msvc`
 
-This is the **i686-pc-windows-msvc** binary for `@btc-vision/bsi-wasmer-vm`
+This is the **i686-pc-windows-msvc** binary for `@btc-vision/op-vm`

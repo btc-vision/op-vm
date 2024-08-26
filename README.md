@@ -59,7 +59,7 @@ The project is organized into the following directories:
 
    ```bash
    git clone git://github.com/btc-vision/op-vm.git
-   cd bsi-wasmer-vm
+   cd op-vm
    ```
 
 2. **Install dependencies**:

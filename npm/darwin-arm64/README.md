@@ -1,3 +1,3 @@
-# `@btc-vision/bsi-wasmer-vm-darwin-arm64`
+# `@btc-vision/op-vm-darwin-arm64`
 
-This is the **aarch64-apple-darwin** binary for `@btc-vision/bsi-wasmer-vm`
+This is the **aarch64-apple-darwin** binary for `@btc-vision/op-vm`

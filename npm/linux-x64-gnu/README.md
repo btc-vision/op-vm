@@ -1,3 +1,3 @@
-# `@btc-vision/bsi-wasmer-vm-linux-x64-gnu`
+# `@btc-vision/op-vm-linux-x64-gnu`
 
-This is the **x86_64-unknown-linux-gnu** binary for `@btc-vision/bsi-wasmer-vm`
+This is the **x86_64-unknown-linux-gnu** binary for `@btc-vision/op-vm`

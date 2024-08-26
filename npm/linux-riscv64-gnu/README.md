@@ -1,3 +1,3 @@
-# `@btc-vision/bsi-wasmer-vm-linux-riscv64-gnu`
+# `@btc-vision/op-vm-linux-riscv64-gnu`
 
-This is the **riscv64gc-unknown-linux-gnu** binary for `@btc-vision/bsi-wasmer-vm`
+This is the **riscv64gc-unknown-linux-gnu** binary for `@btc-vision/op-vm`
