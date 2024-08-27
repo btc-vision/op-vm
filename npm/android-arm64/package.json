@@ -7,6 +7,10 @@
     "cpu": [
         "arm64"
     ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/btc-vision/op-vm.git"
+    },
     "main": "op-vm.android-arm64.node",
     "files": [
         "op-vm.android-arm64.node"

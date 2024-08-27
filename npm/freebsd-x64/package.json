@@ -7,6 +7,10 @@
     "cpu": [
         "x64"
     ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/btc-vision/op-vm.git"
+    },
     "main": "op-vm.freebsd-x64.node",
     "files": [
         "op-vm.freebsd-x64.node"
