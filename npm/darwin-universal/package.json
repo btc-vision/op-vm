@@ -4,6 +4,10 @@
     "os": [
         "darwin"
     ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/btc-vision/op-vm.git"
+    },
     "main": "op-vm.darwin-universal.node",
     "files": [
         "op-vm.darwin-universal.node"

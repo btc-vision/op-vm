@@ -438,6 +438,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     needs:
       - build
       - universal-macOS
