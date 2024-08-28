@@ -28,19 +28,19 @@ impl ContractManager {
     #[napi]
     pub fn instantiate(&mut self, bytecode: Buffer,
                        max_gas: BigInt, network: BitcoinNetworkRequest, #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
                        storage_load_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
                        )]
                        storage_store_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
                        )]
                        call_other_contract_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
                        )]
                        deploy_from_address_js_function: JsFunction,
                        #[napi(
