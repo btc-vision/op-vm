@@ -89,16 +89,16 @@ impl ContractManager {
 
     #[napi]
     pub fn destroy_all(&mut self, env: Env) -> Result<(), Error> {
-        catch_unwind(|| {
-            for contract in self.contracts.values_mut() {
-                contract.destroy(env)?;
-            }
+        //catch_unwind(|| {
+        for contract in self.contracts.values_mut() {
+            contract.destroy(env)?;
+        }
 
-            self.contracts.clear();
+        self.contracts.clear();
 
-            Ok(())
-        })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        Ok(())
+        //})
+        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     // Add a JsContract to the map and return its ID
