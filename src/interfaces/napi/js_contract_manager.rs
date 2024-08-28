@@ -28,23 +28,23 @@ impl ContractManager {
     #[napi]
     pub fn instantiate(&mut self, bytecode: Buffer,
                        max_gas: BigInt, network: BitcoinNetworkRequest, #[napi(
-            ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
         )]
                        storage_load_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
                        )]
                        storage_store_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
                        )]
                        call_other_contract_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<ThreadSafeJsImportResponse>"
                        )]
                        deploy_from_address_js_function: JsFunction,
                        #[napi(
-                           ts_arg_type = "(_: never, result: Array<number>) => Promise<ThreadSafeJsImportResponse>"
+                           ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
                        )]
                        console_log_js_function: JsFunction) -> Result<BigInt, Error> {
         //catch_unwind(|| {
@@ -89,16 +89,16 @@ impl ContractManager {
 
     #[napi]
     pub fn destroy_all(&mut self, env: Env) -> Result<(), Error> {
-        //catch_unwind(|| {
-        for contract in self.contracts.values_mut() {
-            contract.destroy(env)?;
-        }
+        catch_unwind(|| {
+            for contract in self.contracts.values_mut() {
+                contract.destroy(env)?;
+            }
 
-        self.contracts.clear();
+            self.contracts.clear();
 
-        Ok(())
-        //})
-        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+            Ok(())
+        })
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     // Add a JsContract to the map and return its ID

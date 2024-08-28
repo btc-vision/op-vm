@@ -20,8 +20,8 @@ of the Software is permitted. The User may not copy, republish, or distribute th
 
 - **Commercial Use**: User is prohibited from using the Software for any
   commercial purposes.
-- **Reverse Engineering**: User is prohibited from reverse engineering,
-  decompiling, or disassembling the Software.
+- **Claim of Ownership**: User acknowledges that the Software is the property of the Licensor and that they do not have
+  any ownership rights to the Software.
 
 ## 4. Termination
 
