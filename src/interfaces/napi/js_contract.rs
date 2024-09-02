@@ -1,27 +1,26 @@
-use std::panic::catch_unwind;
-use std::sync::{Arc, Mutex};
-
+use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use napi::Env;
 use napi::Error;
-use napi::JsFunction;
 use napi::JsNumber;
 use napi::JsUnknown;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use std::panic::catch_unwind;
+use std::sync::{Arc, Mutex};
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
-use crate::domain::runner::WasmerRunner;
+use crate::domain::runner::{CustomEnv, WasmerRunner};
 use crate::domain::vm::log_time_diff;
+use crate::interfaces::napi::contract::JsContractParameter;
+use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     ContractCallTask, DeployFromAddressExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
-use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 macro_rules! create_tsfn {
     ($id:ident) => {
@@ -40,22 +39,20 @@ macro_rules! abort_tsfn {
     };
 }
 
-//#[napi(js_name = "Contract")]
 pub struct JsContract {
+    runner: Arc<Mutex<WasmerRunner>>,
     contract: Arc<Mutex<ContractService>>,
     storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     storage_store_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     call_other_contract_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     deploy_from_address_tsfn:
-    ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
-//#[napi] //noinspection RsCompileErrorMacro
 impl JsContract {
-    //#[napi]
     pub fn validate_bytecode(bytecode: Buffer,
                              max_gas: BigInt) -> Result<bool> {
         catch_unwind(|| {
@@ -76,22 +73,15 @@ impl JsContract {
             )
     }
 
-    //#[napi(constructor)]
-    pub fn new(
-        bytecode: Buffer,
-        max_gas: BigInt,
-        network: BitcoinNetworkRequest,
-        storage_load_js_function: JsFunction,
-        storage_store_js_function: JsFunction,
-        call_other_contract_js_function: JsFunction,
-        deploy_from_address_js_function: JsFunction,
-        console_log_js_function: JsFunction,
-    ) -> Result<Self> {
-        //let deploy = async move {
-        catch_unwind(|| {
+    pub fn from(params: JsContractParameter) -> Result<Self> {
+        catch_unwind(|| unsafe {
             let time = Local::now();
-            let bytecode_vec = bytecode.to_vec();
-            let max_gas = max_gas.get_u64().1;
+
+            let storage_load_js_function = params.storage_load_js_function;
+            let storage_store_js_function = params.storage_store_js_function;
+            let call_other_contract_js_function = params.call_other_contract_js_function;
+            let deploy_from_address_js_function = params.deploy_from_address_js_function;
+            let console_log_js_function = params.console_log_js_function;
 
             let storage_load_tsfn = create_tsfn!(storage_load_js_function);
             let storage_store_tsfn = create_tsfn!(storage_store_js_function);
@@ -108,42 +98,85 @@ impl JsContract {
                 DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
             let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn.clone());
 
-            let runner = WasmerRunner::new(
-                &bytecode_vec,
-                max_gas,
-                network.into(),
+            let custom_env: CustomEnv = CustomEnv::new(
+                params.network.into(),
                 storage_load_external,
                 storage_store_external,
                 call_other_contract_external,
                 deploy_from_address_external,
                 console_log_external,
-            )
-                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
-            let runner = Arc::new(Mutex::new(runner));
-            let contract = ContractService::new(max_gas, runner);
+            let runner: WasmerRunner;
 
-            log_time_diff(&time, "JsContract::new");
+            if let Some(bytecode) = params.bytecode {
+                runner = WasmerRunner::from_bytecode(
+                    &bytecode,
+                    params.max_gas,
+                    custom_env,
+                )
+                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            } else if let Some(serialized) = params.serialized {
+                runner = WasmerRunner::from_serialized(
+                    serialized,
+                    params.max_gas,
+                    custom_env,
+                )
+                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            } else {
+                return Err(Error::from_reason("No bytecode or serialized data"));
+            }
 
-            Ok(Self {
-                contract: Arc::new(Mutex::new(contract)),
-                storage_load_tsfn,
-                storage_store_tsfn,
-                call_other_contract_tsfn,
-                deploy_from_address_tsfn,
-                console_log_tsfn,
-            })
+            let contract = JsContract::from_runner(runner, params.max_gas, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn)?;
+            log_time_diff(&time, "JsContract::from");
+
+            Ok(contract)
         })
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
-        //};
-
-        //let rt = Runtime::new().unwrap();
-        //let response = rt.block_on(deploy);
-
-        //response
     }
 
-    //#[napi]
+    fn from_runner(
+        runner: WasmerRunner,
+        max_gas: u64,
+        storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        storage_store_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        call_other_contract_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        deploy_from_address_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    ) -> Result<Self> {
+        //catch_unwind(|| {
+        let time = Local::now();
+
+        let runner = Arc::new(Mutex::new(runner));
+        let contract = ContractService::new(max_gas, runner.clone());
+
+        log_time_diff(&time, "JsContract::from_runner");
+
+        Ok(Self {
+            runner,
+            contract: Arc::new(Mutex::new(contract)),
+            storage_load_tsfn,
+            storage_store_tsfn,
+            call_other_contract_tsfn,
+            deploy_from_address_tsfn,
+            console_log_tsfn,
+        })
+        //})
+        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e)))
+        //    )
+    }
+
+    pub fn serialize(&self) -> Result<Bytes> {
+        catch_unwind(|| {
+            let runner = self.runner.clone();
+            let runner = runner.lock().map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            let serialized = runner.serialize().map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+            Ok(serialized)
+        })
+            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+
     pub fn destroy(&mut self, env: Env) -> Result<()> {
         //catch_unwind(|| {
         abort_tsfn!(self.storage_load_tsfn, &env);
@@ -157,7 +190,6 @@ impl JsContract {
         //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi(ts_return_type = "Promise<CallResponse>")]
     pub fn call(
         &self,
         func_name: String,
@@ -195,7 +227,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
         catch_unwind(|| {
             let offset = offset.get_u64().1;
@@ -214,7 +245,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
         catch_unwind(|| {
             let data: Vec<u8> = data.into();
@@ -229,7 +259,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn get_used_gas(&self) -> Result<BigInt> {
         catch_unwind(|| {
             let contract = self.contract.clone();
@@ -243,7 +272,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn set_used_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
@@ -256,7 +284,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn get_remaining_gas(&self) -> Result<BigInt> {
         catch_unwind(|| {
             let contract = self.contract.clone();
@@ -270,7 +297,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn set_remaining_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
@@ -285,7 +311,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
         catch_unwind(|| {
             let gas = gas.get_u64().1;
@@ -300,7 +325,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
         catch_unwind(|| {
             let value = value.to_vec();
@@ -316,7 +340,6 @@ impl JsContract {
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    //#[napi]
     pub fn get_abort_data(&self) -> Result<AbortDataResponse> {
         catch_unwind(|| {
             let contract = self.contract.clone();
@@ -335,35 +358,35 @@ impl JsContract {
     fn value_to_js(env: &Env, value: &Value) -> Result<JsUnknown> {
         match value {
             Value::I32(v) => {
-                let js_value = env.create_int32(*v).unwrap();
+                let js_value = env.create_int32(*v)?;
                 let unknown = js_value.into_unknown();
 
                 Ok(unknown)
             }
             Value::I64(v) => {
-                let js_value = env.create_int64(*v).unwrap();
+                let js_value = env.create_int64(*v)?;
                 let unknown = js_value.into_unknown();
 
                 Ok(unknown)
             }
 
             Value::F32(v) => {
-                let js_value = env.create_double(*v as f64).unwrap();
+                let js_value = env.create_double(*v as f64)?;
                 let unknown = js_value.into_unknown();
 
                 Ok(unknown)
             }
 
             Value::F64(v) => {
-                let js_value = env.create_double(*v).unwrap();
+                let js_value = env.create_double(*v)?;
                 let unknown = js_value.into_unknown();
 
                 Ok(unknown)
             }
 
             Value::V128(v) => {
-                let js_value = env.create_bigint_from_u128(*v).unwrap();
-                let unknown = js_value.into_unknown().unwrap();
+                let js_value = env.create_bigint_from_u128(*v)?;
+                let unknown = js_value.into_unknown()?;
 
                 Ok(unknown)
             }
@@ -374,10 +397,10 @@ impl JsContract {
 
     pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
         let vals: Vec<Value> = values.clone().into_vec();
-        let mut js_array = env.create_array(vals.len() as u32).unwrap();
+        let mut js_array = env.create_array(vals.len() as u32)?;
 
         for value in values.iter() {
-            let js_value = JsContract::value_to_js(env, value).unwrap();
+            let js_value = JsContract::value_to_js(env, value)?;
             let _ = js_array.insert(js_value);
         }
 

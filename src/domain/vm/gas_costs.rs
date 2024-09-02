@@ -4,7 +4,7 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
     use Operator::*;
 
     #[rustfmt::skip]
-        let gas_cost = match operator {
+    let gas_cost = match operator {
         Unreachable | Return | Nop | I32Const { .. } | I64Const { .. } => 1,
         Drop => 10,
         Block { .. } | Loop { .. } | Else | End => 1,
@@ -145,7 +145,9 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
         | F64x2RelaxedNmadd { .. } | I8x16RelaxedLaneselect { .. } | I16x8RelaxedLaneselect { .. } | I32x4RelaxedLaneselect { .. }
         | I64x2RelaxedLaneselect { .. } | F32x4RelaxedMin { .. } | F32x4RelaxedMax { .. } | F64x2RelaxedMin { .. } | F64x2RelaxedMax { .. }
         | I16x8RelaxedQ15mulrS { .. } | I16x8RelaxedDotI8x16I7x16S { .. } | I32x4RelaxedDotI8x16I7x16AddS { .. }
-        => u64::MAX
+        => {
+            u64::MAX
+        }
     };
     gas_cost
 }

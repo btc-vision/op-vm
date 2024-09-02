@@ -1,10 +1,10 @@
-use bech32::{Hrp, segwit};
+use bech32::{segwit, Hrp};
 use ripemd::{Digest, Ripemd160};
 use sha2::Sha256;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{AbortData, CustomEnv};
+use crate::domain::runner::{AbortData, CustomEnv, CALL_COST, DEPLOY_COST, ENCODE_ADDRESS_COST, LOAD_COST, SHA256_COST, STORE_COST};
 use crate::interfaces::ExternalFunction;
 
 pub fn abort_import(
@@ -22,7 +22,7 @@ pub fn abort_import(
         column,
     });
 
-    return Err(RuntimeError::new("Execution aborted"));
+    Err(RuntimeError::new("Execution aborted"))
 }
 
 pub fn storage_load_import(
@@ -30,7 +30,7 @@ pub fn storage_load_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, 21_000_000)
+    external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, LOAD_COST)
 }
 
 pub fn storage_store_import(
@@ -38,7 +38,7 @@ pub fn storage_store_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, 221_000_000)
+    external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, STORE_COST)
 }
 
 pub fn call_other_contract_import(
@@ -52,6 +52,8 @@ pub fn call_other_contract_import(
         .clone()
         .ok_or(RuntimeError::new("Instance not found"))?;
 
+    instance.use_gas(&mut store, CALL_COST);
+
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
@@ -64,7 +66,7 @@ pub fn call_other_contract_import(
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
     let call_execution_cost = u64::from_le_bytes(call_execution_cost_bytes.try_into().unwrap());
-    instance.use_gas(&mut store, 343_000_000 + call_execution_cost);
+    instance.use_gas(&mut store, call_execution_cost);
 
     Ok(value as u32)
 }
@@ -79,7 +81,7 @@ pub fn deploy_from_address_import(
         store,
         &env.deploy_from_address_external,
         ptr,
-        1_000_000_000,
+        DEPLOY_COST,
     )
 }
 
@@ -123,7 +125,7 @@ pub fn encode_address_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    instance.use_gas(&mut store, 300_000);
+    instance.use_gas(&mut store, ENCODE_ADDRESS_COST);
 
     Ok(value as u32)
 }
@@ -147,7 +149,7 @@ pub fn sha256_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
 
-    instance.use_gas(&mut store, 300_000);
+    instance.use_gas(&mut store, SHA256_COST);
 
     Ok(value as u32)
 }
@@ -186,6 +188,8 @@ fn external_import_with_param_and_return(
         .clone()
         .ok_or(RuntimeError::new("Instance not found"))?;
 
+    instance.use_gas(&mut store, gas_cost);
+
     let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
@@ -193,8 +197,6 @@ fn external_import_with_param_and_return(
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
-
-    instance.use_gas(&mut store, gas_cost);
 
     Ok(value as u32)
 }

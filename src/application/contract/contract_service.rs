@@ -16,13 +16,34 @@ impl ContractService {
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        let mut runner = self.runner.lock().unwrap();
-        let response = runner.call(function, params);
+        let mut runner = self.runner.lock().map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
+        let response = runner.call(function, params).map_err(|e| {
+            if e.to_string().contains("unreachable") {
+                let gas_used = runner.get_remaining_gas();
+                if gas_used == 0 {
+                    anyhow::anyhow!("out of gas")
+                } else {
+                    let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
+
+                    if out_of_memory {
+                        anyhow::anyhow!("out of memory")
+                    } else {
+                        anyhow::anyhow!(e)
+                    }
+                }
+            } else {
+                anyhow::anyhow!(e)
+            }
+        });
+
         response
     }
 
     pub fn get_used_gas(&mut self) -> u64 {
-        self.max_gas - self.get_remaining_gas()
+        let remaining_gas = self.get_remaining_gas();
+        let gas_used = self.max_gas - remaining_gas;
+
+        gas_used
     }
 
     pub fn set_used_gas(&mut self, gas: u64) {

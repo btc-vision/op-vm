@@ -1194,6 +1194,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytemuck",
+ "bytes",
  "chrono",
  "futures",
  "hex",

@@ -1,8 +1,9 @@
+use crate::domain::runner::MAX_MEMORY_SIZE;
 use wasmer::{
     AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError,
     Value,
 };
-use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints, set_remaining_points};
+use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, MeteringPoints};
 
 #[derive(Clone)]
 pub struct InstanceWrapper {
@@ -24,6 +25,14 @@ impl InstanceWrapper {
         let result = export.call(store, params)?;
 
         Ok(result)
+    }
+
+    pub fn is_out_of_memory(&self, store: &(impl AsStoreRef + ?Sized)) -> Result<bool, MemoryAccessError> {
+        let memory = Self::get_memory(&self.instance);
+        let view = memory.view(store);
+        let size = view.data_size();
+
+        Ok(MAX_MEMORY_SIZE <= size)
     }
 
     pub fn read_memory(
