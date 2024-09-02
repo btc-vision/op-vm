@@ -97,7 +97,7 @@ impl AssemblyScript {
         // Unpin the buffer
         Self::__unpin(store, instance, pinned_buffer_value as i32).unwrap();
 
-        return Ok(header_value as i64);
+        Ok(header_value as i64)
     }
 
     pub fn set_u32(

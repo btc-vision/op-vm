@@ -8,6 +8,7 @@ pub trait ContractRunner: Send + Sync {
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError>;
     fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, napi::Error>;
     fn get_remaining_gas(&mut self) -> u64;
+    fn is_out_of_memory(&self) -> Result<bool, MemoryAccessError>;
     fn set_remaining_gas(&mut self, gas: u64);
     fn use_gas(&mut self, gas: u64);
     fn get_abort_data(&self) -> Option<AbortData>;

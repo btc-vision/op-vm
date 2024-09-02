@@ -10,3 +10,4 @@ mod js_contract;
 mod thread_safe_js_import_response;
 mod bitcoin_network_request;
 mod js_contract_manager;
+mod contract;

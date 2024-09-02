@@ -1,17 +1,19 @@
 use std::collections::HashMap;
-use std::panic::catch_unwind;
 
 use anyhow::anyhow;
-use napi::{Env, Error, JsFunction, JsNumber};
+use bytes::Bytes;
 use napi::bindgen_prelude::{AsyncTask, BigInt, Buffer, Undefined};
+use napi::{Env, Error, JsFunction, JsNumber};
 
-use crate::interfaces::{AbortDataResponse, ContractCallTask};
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
+use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract::JsContract;
+use crate::interfaces::{AbortDataResponse, ContractCallTask};
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
     contracts: HashMap<u64, JsContract>,
+    contract_cache: HashMap<String, Bytes>,
     next_id: u64,
 }
 
@@ -21,12 +23,13 @@ impl ContractManager {
     pub fn new() -> Self {
         ContractManager {
             contracts: HashMap::new(),
+            contract_cache: HashMap::new(),
             next_id: 1, // Start the ID counter at 1 (or 0, if preferred)
         }
     }
 
     #[napi]
-    pub fn instantiate(&mut self, bytecode: Buffer,
+    pub fn instantiate(&mut self, address: String, bytecode: Option<Buffer>,
                        max_gas: BigInt, network: BitcoinNetworkRequest, #[napi(
             ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
         )]
@@ -47,9 +50,11 @@ impl ContractManager {
                            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
                        )]
                        console_log_js_function: JsFunction) -> Result<BigInt, Error> {
-        //catch_unwind(|| {
-        let js_contract = JsContract::new(
-            bytecode,
+        let max_gas = max_gas.get_u64().1;
+
+        let mut params: JsContractParameter = JsContractParameter {
+            bytecode: None,
+            serialized: None,
             max_gas,
             network,
             storage_load_js_function,
@@ -57,13 +62,27 @@ impl ContractManager {
             call_other_contract_js_function,
             deploy_from_address_js_function,
             console_log_js_function,
-        )?;
+        };
+
+        let mut should_cache: bool = false;
+        if self.contract_cache.contains_key(&address) {
+            let serialized = self.contract_cache.get(&address).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+            params.serialized = Some(serialized.clone());
+        } else {
+            let bytecode = bytecode.ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?.to_vec();
+
+            should_cache = true;
+            params.bytecode = Some(bytecode);
+        }
+
+        let js_contract: JsContract = JsContract::from(params)?;
+        if should_cache {
+            let serialized = js_contract.serialize()?;
+            self.contract_cache.insert(address, serialized);
+        }
 
         let id = self.add_contract(js_contract)?;
-
         Ok(BigInt::from(id))
-        //})
-        //     .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
@@ -95,6 +114,7 @@ impl ContractManager {
         }
 
         self.contracts.clear();
+        self.contract_cache.clear();
 
         Ok(())
         //})
@@ -103,9 +123,7 @@ impl ContractManager {
 
     // Add a JsContract to the map and return its ID
     fn add_contract(&mut self, contract: JsContract) -> Result<u64, Error> {
-        //catch_unwind(|| {
         if self.next_id > u64::MAX - 1 {
-            //return Err(Error::from_reason(anyhow!("Maximum number of contracts reached").to_string()));
             self.next_id = 1;
         }
 
@@ -114,8 +132,6 @@ impl ContractManager {
         self.contracts.insert(id, contract);
 
         Ok(id)
-        //})
-        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     #[napi]
