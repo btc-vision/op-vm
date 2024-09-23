@@ -3,8 +3,8 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
-use crate::interfaces::ExternalFunction;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+use crate::interfaces::ExternalFunction;
 
 pub struct GenericExternalFunction {
     tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
@@ -19,7 +19,7 @@ impl GenericExternalFunction {
 }
 
 impl ExternalFunction for GenericExternalFunction {
-    fn execute(&self, data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         let request = ThreadSafeJsImportResponse {
             buffer: Vec::from(data),
         };
@@ -42,8 +42,7 @@ impl ExternalFunction for GenericExternalFunction {
             Ok(data.into())
         };
 
-        let rt = Runtime::new().unwrap();
-        let response = rt.block_on(deploy);
+        let response = runtime.block_on(deploy);
 
         response
     }

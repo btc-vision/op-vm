@@ -9,6 +9,7 @@ use napi::JsNumber;
 use napi::JsUnknown;
 use std::panic::catch_unwind;
 use std::sync::{Arc, Mutex};
+use tokio::runtime::Runtime;
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
@@ -98,6 +99,7 @@ impl JsContract {
                 DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
             let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn.clone());
 
+            let runtime = Arc::new(Runtime::new()?);
             let custom_env: CustomEnv = CustomEnv::new(
                 params.network.into(),
                 storage_load_external,
@@ -105,6 +107,7 @@ impl JsContract {
                 call_other_contract_external,
                 deploy_from_address_external,
                 console_log_external,
+                runtime,
             ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner: WasmerRunner;
