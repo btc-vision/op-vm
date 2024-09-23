@@ -3,6 +3,7 @@ use chrono::Local;
 use std::sync::Arc;
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer::{imports, CompilerConfig, Function, FunctionEnv, Imports, Instance, MemoryAccessError, Module, Store, Value};
+use wasmer_compiler::Engine;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::Metering;
 use wasmer_types::{SerializeError, Target};
@@ -49,7 +50,6 @@ impl WasmerRunner {
 
         let store = Self::create_engine()?;
         let module = Module::from_binary(&store, &bytecode)?;
-
         let instance = Self::create_instance(max_gas, custom_env, store, module)?;
 
         log_time_diff(&time, "WasmerInstance::from_bytecode");
@@ -66,7 +66,8 @@ impl WasmerRunner {
     pub unsafe fn from_serialized(serialized: Bytes, max_gas: u64, custom_env: CustomEnv) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let store = Self::create_engine()?;
+        let engine = EngineBuilder::headless().set_features(None).engine();
+        let store = Store::new(Self::create_tunable(engine));
         let module = Module::deserialize(&store, serialized)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module)?;
 
@@ -129,6 +130,24 @@ impl WasmerRunner {
         Ok(imp)
     }
 
+    /*fn reset(&mut self) {
+        let engine = EngineBuilder::headless().set_features(None).engine();
+        self.store = Store::new(Self::create_tunable(engine));
+
+        self.set_remaining_gas(MAX_GAS_CONSTRUCTOR);
+
+        let instance = Instance::new(&mut self.store, &self.module, &imports! {}).unwrap();
+    }*/
+
+    fn create_tunable(mut engine: Engine) -> Engine {
+        let base = BaseTunables::for_target(&Target::default());
+        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
+
+        engine.set_tunables(tunables);
+
+        engine
+    }
+
     fn create_engine() -> anyhow::Result<Store> {
         let meter = Metering::new(MAX_GAS_CONSTRUCTOR, get_gas_cost);
         let metering = Arc::new(meter);
@@ -138,24 +157,13 @@ impl WasmerRunner {
         compiler.push_middleware(metering);
         compiler.enable_verifier();
 
-        let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
-
-        let mut engine = EngineBuilder::new(compiler).set_features(None).engine();
-        engine.set_tunables(tunables);
-
-        let store = Store::new(engine);
+        let engine = EngineBuilder::new(compiler).set_features(None).engine();
+        let store = Store::new(Self::create_tunable(engine));
         Ok(
             store
         )
     }
 }
-
-/*impl Drop for WasmerRunner {
-    fn drop(&mut self) {
-        println!("Dropping WasmerRunner")
-    }
-}*/
 
 impl ContractRunner for WasmerRunner {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {

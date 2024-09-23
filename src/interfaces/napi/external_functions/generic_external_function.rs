@@ -1,4 +1,4 @@
-use napi::bindgen_prelude::{Buffer, Promise};
+use napi::bindgen_prelude::{BigInt, Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
@@ -8,13 +8,15 @@ use crate::interfaces::ExternalFunction;
 
 pub struct GenericExternalFunction {
     tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    contract_id: u64,
 }
 
 impl GenericExternalFunction {
     pub fn new(
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        contract_id: u64,
     ) -> Self {
-        Self { tsfn }
+        Self { tsfn, contract_id }
     }
 }
 
@@ -22,6 +24,7 @@ impl ExternalFunction for GenericExternalFunction {
     fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         let request = ThreadSafeJsImportResponse {
             buffer: Vec::from(data),
+            contract_id: BigInt::from(self.contract_id),
         };
 
         let deploy = async move {

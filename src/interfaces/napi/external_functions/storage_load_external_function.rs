@@ -13,9 +13,10 @@ pub struct StorageLoadExternalFunction {
 impl StorageLoadExternalFunction {
     pub fn new(
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        id: u64,
     ) -> Self {
         Self {
-            external_function: GenericExternalFunction::new(tsfn),
+            external_function: GenericExternalFunction::new(tsfn, id)
         }
     }
 }
@@ -23,10 +24,15 @@ impl StorageLoadExternalFunction {
 impl ExternalFunction for StorageLoadExternalFunction {
     fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         //let time = chrono::offset::Local::now();
-        let resp = self.external_function.execute(data, runtime);
+        /*if self.is_destroyed.load(Ordering::SeqCst) {
+            return Err(RuntimeError::new("Contract is being destroyed"));
+        }*/
 
+        //self.pending_calls.fetch_add(1, Ordering::SeqCst);
+        let result = self.external_function.execute(data, runtime);
+        //self.pending_calls.fetch_sub(1, Ordering::SeqCst);
         //log_time_diff(&time, "GenericExternalFunction::load");
 
-        resp
+        result
     }
 }
