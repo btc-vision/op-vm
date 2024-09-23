@@ -22,7 +22,7 @@ impl AssemblyScript {
             .i32()
             .ok_or(anyhow!("can't get pointer"))?;
 
-        return Ok(pointer);
+        Ok(pointer)
     }
 
     pub fn __pin(

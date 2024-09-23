@@ -13,9 +13,10 @@ pub struct DeployFromAddressExternalFunction {
 impl DeployFromAddressExternalFunction {
     pub fn new(
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        id: u64,
     ) -> Self {
         Self {
-            external_function: GenericExternalFunction::new(tsfn),
+            external_function: GenericExternalFunction::new(tsfn, id),
         }
     }
 }

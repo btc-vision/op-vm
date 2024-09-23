@@ -2,7 +2,6 @@ use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use napi::Env;
 use napi::Error;
 use napi::JsNumber;
@@ -16,41 +15,22 @@ use crate::application::contract::ContractService;
 use crate::domain::runner::{CustomEnv, WasmerRunner};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+use crate::interfaces::napi::js_contract_manager::ContractManager;
+use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     ContractCallTask, DeployFromAddressExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
-
-macro_rules! create_tsfn {
-    ($id:ident) => {
-        $id.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?
-    };
-}
-
-macro_rules! abort_tsfn {
-    ($id:expr, $env:expr) => {
-        if !$id.aborted() {
-            $id.clone().abort()?;
-        }
-
-        $id.unref(&$env)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-    };
-}
+/**/
 
 pub struct JsContract {
+    //pending_calls: Arc<AtomicUsize>,
+    //is_destroyed: Arc<AtomicBool>,
     runner: Arc<Mutex<WasmerRunner>>,
     contract: Arc<Mutex<ContractService>>,
-    storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    storage_store_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    call_other_contract_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    deploy_from_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    runtime: Arc<Runtime>,
+    runtime_pool: Arc<RuntimePool>,
 }
 
 impl JsContract {
@@ -74,32 +54,30 @@ impl JsContract {
             )
     }
 
-    pub fn from(params: JsContractParameter) -> Result<Self> {
+    pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
         catch_unwind(|| unsafe {
             let time = Local::now();
 
-            let storage_load_js_function = params.storage_load_js_function;
-            let storage_store_js_function = params.storage_store_js_function;
-            let call_other_contract_js_function = params.call_other_contract_js_function;
-            let deploy_from_address_js_function = params.deploy_from_address_js_function;
-            let console_log_js_function = params.console_log_js_function;
+            let storage_load_tsfn = manager.storage_load_tsfn.clone();
+            let storage_store_tsfn = manager.storage_store_tsfn.clone();
+            let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
+            let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
+            let console_log_tsfn = manager.console_log_tsfn.clone();
 
-            let storage_load_tsfn = create_tsfn!(storage_load_js_function);
-            let storage_store_tsfn = create_tsfn!(storage_store_js_function);
-            let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
-            let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
-            let console_log_tsfn = create_tsfn!(console_log_js_function);
+            // Create ExternalFunction instances with contract_id
+            let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
+            let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
+            let call_other_contract_external = CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
+            let deploy_from_address_external = DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
+            let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
 
-            let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn.clone());
-            let storage_store_external =
-                StorageStoreExternalFunction::new(storage_store_tsfn.clone());
-            let call_other_contract_external =
-                CallOtherContractExternalFunction::new(call_other_contract_tsfn.clone());
-            let deploy_from_address_external =
-                DeployFromAddressExternalFunction::new(deploy_from_address_tsfn.clone());
-            let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn.clone());
+            // Obtain a Runtime from the pool
+            let runtime = manager
+                .runtime_pool
+                .get_runtime()
+                .ok_or_else(|| Error::from_reason("No available runtimes in the pool".to_string()))?;
 
-            let runtime = Arc::new(Runtime::new()?);
+            //let runtime = Arc::new(Runtime::new()?);
             let custom_env: CustomEnv = CustomEnv::new(
                 params.network.into(),
                 storage_load_external,
@@ -107,7 +85,7 @@ impl JsContract {
                 call_other_contract_external,
                 deploy_from_address_external,
                 console_log_external,
-                runtime,
+                runtime.clone(),
             ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner: WasmerRunner;
@@ -130,7 +108,7 @@ impl JsContract {
                 return Err(Error::from_reason("No bytecode or serialized data"));
             }
 
-            let contract = JsContract::from_runner(runner, params.max_gas, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn)?;
+            let contract = JsContract::from_runner(runner, params.max_gas, runtime.clone(), manager.runtime_pool.clone())?; //, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn
             log_time_diff(&time, "JsContract::from");
 
             Ok(contract)
@@ -141,13 +119,9 @@ impl JsContract {
     fn from_runner(
         runner: WasmerRunner,
         max_gas: u64,
-        storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        storage_store_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        call_other_contract_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        deploy_from_address_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        runtime: Arc<Runtime>,
+        runtime_pool: Arc<RuntimePool>,
     ) -> Result<Self> {
-        //catch_unwind(|| {
         let time = Local::now();
 
         let runner = Arc::new(Mutex::new(runner));
@@ -158,15 +132,9 @@ impl JsContract {
         Ok(Self {
             runner,
             contract: Arc::new(Mutex::new(contract)),
-            storage_load_tsfn,
-            storage_store_tsfn,
-            call_other_contract_tsfn,
-            deploy_from_address_tsfn,
-            console_log_tsfn,
+            runtime,
+            runtime_pool,
         })
-        //})
-        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e)))
-        //    )
     }
 
     pub fn serialize(&self) -> Result<Bytes> {
@@ -178,19 +146,6 @@ impl JsContract {
             Ok(serialized)
         })
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
-    }
-
-    pub fn destroy(&mut self, env: Env) -> Result<()> {
-        //catch_unwind(|| {
-        abort_tsfn!(self.storage_load_tsfn, &env);
-        abort_tsfn!(self.storage_store_tsfn, &env);
-        abort_tsfn!(self.call_other_contract_tsfn, &env);
-        abort_tsfn!(self.deploy_from_address_tsfn, &env);
-        abort_tsfn!(self.console_log_tsfn, &env);
-
-        Ok(())
-        //})
-        //    .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn call(
@@ -354,6 +309,15 @@ impl JsContract {
             result.ok_or(Error::from_reason("No abort data")).into()
         })
             .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+}
+
+impl Drop for JsContract {
+    fn drop(&mut self) {
+        //println!("Dropping JsContract");
+
+        // Return the runtime to the pool
+        self.runtime_pool.return_runtime(self.runtime.clone());
     }
 }
 
