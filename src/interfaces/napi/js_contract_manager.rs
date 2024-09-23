@@ -168,6 +168,13 @@ impl ContractManager {
     }
 
     #[napi]
+    pub fn destroy_cache(&mut self) -> () {
+        self.contract_cache.clear();
+
+        ()
+    }
+
+    #[napi]
     pub fn destroy_all(&mut self) -> () {
         self.contracts.clear();
         self.contract_cache.clear();
