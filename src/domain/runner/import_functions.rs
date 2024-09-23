@@ -1,6 +1,7 @@
 use bech32::{segwit, Hrp};
 use ripemd::{Digest, Ripemd160};
 use sha2::Sha256;
+use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
@@ -30,7 +31,7 @@ pub fn storage_load_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, LOAD_COST)
+    external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, LOAD_COST, &env.runtime)
 }
 
 pub fn storage_store_import(
@@ -38,8 +39,32 @@ pub fn storage_store_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, STORE_COST)
+    external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, STORE_COST, &env.runtime)
 }
+
+/*pub fn storage_store_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    instance.use_gas(&mut store, STORE_COST);
+
+    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    let result = env.storage_store_external.execute(&data)?;
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+
+    Ok(value as u32)
+}*/
 
 pub fn call_other_contract_import(
     mut context: FunctionEnvMut<CustomEnv>,
@@ -57,7 +82,7 @@ pub fn call_other_contract_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    let result = &env.call_other_contract_external.execute(&data)?;
+    let result = &env.call_other_contract_external.execute(&data, &env.runtime)?;
 
     let call_execution_cost_bytes = &result[0..8];
     let response = &result[8..];
@@ -82,6 +107,7 @@ pub fn deploy_from_address_import(
         &env.deploy_from_address_external,
         ptr,
         DEPLOY_COST,
+        &env.runtime,
     )
 }
 
@@ -182,6 +208,7 @@ fn external_import_with_param_and_return(
     external_function: &impl ExternalFunction,
     ptr: u32,
     gas_cost: u64,
+    runtime: &Runtime,
 ) -> Result<u32, RuntimeError> {
     let instance = env
         .instance
@@ -193,7 +220,7 @@ fn external_import_with_param_and_return(
     let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    let result = external_function.execute(&data)?;
+    let result = external_function.execute(&data, runtime)?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
