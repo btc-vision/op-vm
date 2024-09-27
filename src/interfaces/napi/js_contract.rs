@@ -19,7 +19,7 @@ use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    ContractCallTask, DeployFromAddressExternalFunction,
+    ContractCallTask, DeployFromAddressExternalFunction, FlushEventsExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 /**/
@@ -34,24 +34,20 @@ pub struct JsContract {
 }
 
 impl JsContract {
-    pub fn validate_bytecode(bytecode: Buffer,
-                             max_gas: BigInt) -> Result<bool> {
+    pub fn validate_bytecode(bytecode: Buffer, max_gas: BigInt) -> Result<bool> {
         catch_unwind(|| {
             let time = Local::now();
             let bytecode_vec = bytecode.to_vec();
             let max_gas = max_gas.get_u64().1;
 
-            let is_valid = WasmerRunner::validate_bytecode(
-                &bytecode_vec,
-                max_gas,
-            ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            let is_valid = WasmerRunner::validate_bytecode(&bytecode_vec, max_gas)
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             log_time_diff(&time, "JsContract::validate");
 
             Ok(is_valid)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e)))
-            )
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
@@ -63,19 +59,22 @@ impl JsContract {
             let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
             let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
             let console_log_tsfn = manager.console_log_tsfn.clone();
+            let flush_events_tsfn = manager.flush_events_tsfn.clone();
 
             // Create ExternalFunction instances with contract_id
             let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
             let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
-            let call_other_contract_external = CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
-            let deploy_from_address_external = DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
+            let call_other_contract_external =
+                CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
+            let deploy_from_address_external =
+                DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
             let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
+            let flush_events_external = FlushEventsExternalFunction::new(flush_events_tsfn, id);
 
             // Obtain a Runtime from the pool
-            let runtime = manager
-                .runtime_pool
-                .get_runtime()
-                .ok_or_else(|| Error::from_reason("No available runtimes in the pool".to_string()))?;
+            let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
+                Error::from_reason("No available runtimes in the pool".to_string())
+            })?;
 
             //let runtime = Arc::new(Runtime::new()?);
             let custom_env: CustomEnv = CustomEnv::new(
@@ -85,35 +84,34 @@ impl JsContract {
                 call_other_contract_external,
                 deploy_from_address_external,
                 console_log_external,
+                flush_events_external,
                 runtime.clone(),
-            ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            )
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let runner: WasmerRunner;
 
             if let Some(bytecode) = params.bytecode {
-                runner = WasmerRunner::from_bytecode(
-                    &bytecode,
-                    params.max_gas,
-                    custom_env,
-                )
+                runner = WasmerRunner::from_bytecode(&bytecode, params.max_gas, custom_env)
                     .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
             } else if let Some(serialized) = params.serialized {
-                runner = WasmerRunner::from_serialized(
-                    serialized,
-                    params.max_gas,
-                    custom_env,
-                )
+                runner = WasmerRunner::from_serialized(serialized, params.max_gas, custom_env)
                     .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
             } else {
                 return Err(Error::from_reason("No bytecode or serialized data"));
             }
 
-            let contract = JsContract::from_runner(runner, params.max_gas, runtime.clone(), manager.runtime_pool.clone())?; //, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn
+            let contract = JsContract::from_runner(
+                runner,
+                params.max_gas,
+                runtime.clone(),
+                manager.runtime_pool.clone(),
+            )?; //, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn
             log_time_diff(&time, "JsContract::from");
 
             Ok(contract)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     fn from_runner(
@@ -140,12 +138,16 @@ impl JsContract {
     pub fn serialize(&self) -> Result<Bytes> {
         catch_unwind(|| {
             let runner = self.runner.clone();
-            let runner = runner.lock().map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-            let serialized = runner.serialize().map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            let runner = runner
+                .lock()
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            let serialized = runner
+                .serialize()
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             Ok(serialized)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn call(
@@ -182,7 +184,7 @@ impl JsContract {
 
             Ok(result)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
@@ -200,7 +202,7 @@ impl JsContract {
 
             Ok(Buffer::from(resp))
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
@@ -214,7 +216,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn get_used_gas(&self) -> Result<BigInt> {
@@ -227,7 +229,7 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn set_used_gas(&self, gas: BigInt) -> Result<()> {
@@ -239,7 +241,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn get_remaining_gas(&self) -> Result<BigInt> {
@@ -252,7 +254,7 @@ impl JsContract {
 
             Ok(BigInt::from(gas))
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn set_remaining_gas(&self, gas: BigInt) -> Result<()> {
@@ -266,7 +268,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
@@ -280,7 +282,7 @@ impl JsContract {
 
             Ok(())
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
@@ -295,7 +297,7 @@ impl JsContract {
 
             Ok(result)
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn get_abort_data(&self) -> Result<AbortDataResponse> {
@@ -308,7 +310,7 @@ impl JsContract {
 
             result.ok_or(Error::from_reason("No abort data")).into()
         })
-            .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 }
 

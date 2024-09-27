@@ -5,7 +5,10 @@ use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{AbortData, CustomEnv, CALL_COST, DEPLOY_COST, ENCODE_ADDRESS_COST, LOAD_COST, SHA256_COST, STORE_COST};
+use crate::domain::runner::{
+    AbortData, CustomEnv, CALL_COST, DEPLOY_COST, ENCODE_ADDRESS_COST, LOAD_COST, SHA256_COST,
+    STORE_COST,
+};
 use crate::interfaces::ExternalFunction;
 
 pub fn abort_import(
@@ -31,7 +34,14 @@ pub fn storage_load_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, LOAD_COST, &env.runtime)
+    external_import_with_param_and_return(
+        env,
+        store,
+        &env.storage_load_external,
+        ptr,
+        LOAD_COST,
+        &env.runtime,
+    )
 }
 
 pub fn storage_store_import(
@@ -39,7 +49,14 @@ pub fn storage_store_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, STORE_COST, &env.runtime)
+    external_import_with_param_and_return(
+        env,
+        store,
+        &env.storage_store_external,
+        ptr,
+        STORE_COST,
+        &env.runtime,
+    )
 }
 
 /*pub fn storage_store_import(
@@ -82,7 +99,9 @@ pub fn call_other_contract_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    let result = &env.call_other_contract_external.execute(&data, &env.runtime)?;
+    let result = &env
+        .call_other_contract_external
+        .execute(&data, &env.runtime)?;
 
     let call_execution_cost_bytes = &result[0..8];
     let response = &result[8..];
@@ -228,6 +247,22 @@ fn external_import_with_param_and_return(
     Ok(value as u32)
 }
 
+pub fn flush_events_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<(), RuntimeError> {
+    let (env, store) = context.data_and_store_mut();
+
+    let instance = &env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Memory not found"))?;
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    env.flush_events_external.execute(&data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,7 +270,9 @@ mod tests {
     #[test]
     fn sha256_hashes_number_correctly() {
         let data_to_hash = vec![9];
-        let expected_hash = hex::decode("2b4c342f5433ebe591a1da77e013d1b72475562d48578dca8b84bac6651c3cb9").unwrap();
+        let expected_hash =
+            hex::decode("2b4c342f5433ebe591a1da77e013d1b72475562d48578dca8b84bac6651c3cb9")
+                .unwrap();
 
         let result = sha256(&data_to_hash).unwrap();
 
@@ -245,7 +282,9 @@ mod tests {
     #[test]
     fn sha256_hashes_hex_data_correctly() {
         let data_to_hash = hex::decode("e3b0c44298fc1c149afbf4c8").unwrap().to_vec();
-        let expected_hash = hex::decode("10dac508c2a7d7f0f3474c6ecc23f2a4d9ddbabec1009c4810f2ff677f4c1a83").unwrap();
+        let expected_hash =
+            hex::decode("10dac508c2a7d7f0f3474c6ecc23f2a4d9ddbabec1009c4810f2ff677f4c1a83")
+                .unwrap();
 
         let result = sha256(&data_to_hash).unwrap();
 

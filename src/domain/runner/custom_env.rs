@@ -2,7 +2,7 @@ use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::domain::runner::{AbortData, InstanceWrapper};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    DeployFromAddressExternalFunction, StorageLoadExternalFunction,
+    DeployFromAddressExternalFunction, FlushEventsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
 use std::sync::Arc;
@@ -17,6 +17,7 @@ pub struct CustomEnv {
     pub call_other_contract_external: CallOtherContractExternalFunction,
     pub deploy_from_address_external: DeployFromAddressExternalFunction,
     pub console_log_external: ConsoleLogExternalFunction,
+    pub flush_events_external: FlushEventsExternalFunction,
     pub runtime: Arc<Runtime>,
 }
 
@@ -28,6 +29,7 @@ impl CustomEnv {
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
         console_log_external: ConsoleLogExternalFunction,
+        flush_events_external: FlushEventsExternalFunction,
         runtime: Arc<Runtime>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -39,6 +41,7 @@ impl CustomEnv {
             call_other_contract_external,
             deploy_from_address_external,
             console_log_external,
+            flush_events_external,
             runtime,
         })
     }

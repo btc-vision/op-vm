@@ -38,15 +38,23 @@ pub struct ContractManager {
     #[napi(skip)]
     pub runtime_pool: Arc<RuntimePool>,
     #[napi(skip)]
-    pub storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_load_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
-    pub storage_store_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_store_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
-    pub call_other_contract_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub call_other_contract_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
-    pub deploy_from_address_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub deploy_from_address_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
-    pub console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub console_log_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    #[napi(skip)]
+    pub flush_events_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi]
@@ -70,16 +78,17 @@ impl ContractManager {
             ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
         )]
         deploy_from_address_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
-        )]
+        #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
         console_log_js_function: JsFunction,
+        #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        flush_events_js_function: JsFunction,
     ) -> Result<Self, Error> {
         let storage_load_tsfn = create_tsfn!(storage_load_js_function);
         let storage_store_tsfn = create_tsfn!(storage_store_js_function);
         let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
         let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
         let console_log_tsfn = create_tsfn!(console_log_js_function);
+        let flush_events_tsfn = create_tsfn!(flush_events_js_function);
 
         let max_idling_runtimes = max_idling_runtimes as usize;
 
@@ -95,6 +104,7 @@ impl ContractManager {
             deploy_from_address_tsfn,
             console_log_tsfn,
             runtime_pool,
+            flush_events_tsfn,
         })
     }
 
@@ -106,8 +116,14 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn instantiate(&mut self, reserved_id: BigInt, address: String, bytecode: Option<Buffer>,
-                       max_gas: BigInt, network: BitcoinNetworkRequest) -> Result<(), Error> {
+    pub fn instantiate(
+        &mut self,
+        reserved_id: BigInt,
+        address: String,
+        bytecode: Option<Buffer>,
+        max_gas: BigInt,
+        network: BitcoinNetworkRequest,
+    ) -> Result<(), Error> {
         let max_gas = max_gas.get_u64().1;
         let id = reserved_id.get_u64().1;
 
@@ -120,10 +136,15 @@ impl ContractManager {
 
         let mut should_cache: bool = false;
         if self.contract_cache.contains_key(&address) {
-            let serialized = self.contract_cache.get(&address).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+            let serialized = self
+                .contract_cache
+                .get(&address)
+                .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
             params.serialized = Some(serialized.clone());
         } else {
-            let bytecode = bytecode.ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?.to_vec();
+            let bytecode = bytecode
+                .ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?
+                .to_vec();
 
             should_cache = true;
             params.bytecode = Some(bytecode);
@@ -204,15 +225,27 @@ impl ContractManager {
     pub fn use_gas(&self, contract_id: BigInt, gas: BigInt) -> Result<(), Error> {
         let id = contract_id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.use_gas(gas)
     }
 
     #[napi]
-    pub fn write_buffer(&self, contract_id: BigInt, value: Buffer, id: i32, align: u32) -> Result<i64, Error> {
+    pub fn write_buffer(
+        &self,
+        contract_id: BigInt,
+        value: Buffer,
+        id: i32,
+        align: u32,
+    ) -> Result<i64, Error> {
         let contract_id = contract_id.get_u64().1;
 
-        let contract = self.contracts.get(&contract_id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&contract_id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.write_buffer(value, id, align)
     }
 
@@ -220,16 +253,21 @@ impl ContractManager {
     pub fn get_abort_data(&self, contract_id: BigInt) -> Result<AbortDataResponse, Error> {
         let id = contract_id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_abort_data()
     }
-
 
     #[napi]
     pub fn set_remaining_gas(&self, id: BigInt, gas: BigInt) -> Result<(), Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.set_remaining_gas(gas)
     }
 
@@ -237,7 +275,10 @@ impl ContractManager {
     pub fn get_remaining_gas(&self, id: BigInt) -> Result<BigInt, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_remaining_gas()
     }
 
@@ -245,7 +286,10 @@ impl ContractManager {
     pub fn set_used_gas(&self, id: BigInt, gas: BigInt) -> Result<(), Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.set_used_gas(gas)
     }
 
@@ -253,15 +297,26 @@ impl ContractManager {
     pub fn get_used_gas(&self, id: BigInt) -> Result<BigInt, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_used_gas()
     }
 
     #[napi]
-    pub fn write_memory(&self, id: BigInt, offset: BigInt, data: Buffer) -> Result<Undefined, Error> {
+    pub fn write_memory(
+        &self,
+        id: BigInt,
+        offset: BigInt,
+        data: Buffer,
+    ) -> Result<Undefined, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.write_memory(offset, data)
     }
 
@@ -269,7 +324,10 @@ impl ContractManager {
     pub fn read_memory(&self, id: BigInt, offset: BigInt, length: BigInt) -> Result<Buffer, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.read_memory(offset, length)
     }
 
@@ -282,7 +340,10 @@ impl ContractManager {
     ) -> Result<AsyncTask<ContractCallTask>, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         let result = contract.call(func_name, params)?;
 
         Ok(result)
