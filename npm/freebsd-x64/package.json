@@ -1,22 +1,22 @@
 {
-    "name": "@btc-vision/op-vm-freebsd-x64",
-    "version": "0.0.0",
-    "os": [
-        "freebsd"
-    ],
-    "cpu": [
-        "x64"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/btc-vision/op-vm.git"
-    },
-    "main": "op-vm.freebsd-x64.node",
-    "files": [
-        "op-vm.freebsd-x64.node"
-    ],
-    "license": "MIT",
-    "engines": {
-        "node": ">= 10"
-    }
+  "name": "@btc-vision/op-vm-freebsd-x64",
+  "version": "0.1.7",
+  "os": [
+    "freebsd"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/op-vm.git"
+  },
+  "main": "op-vm.freebsd-x64.node",
+  "files": [
+    "op-vm.freebsd-x64.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
 }

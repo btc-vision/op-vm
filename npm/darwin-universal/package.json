@@ -1,19 +1,19 @@
 {
-    "name": "@btc-vision/op-vm-darwin-universal",
-    "version": "0.0.0",
-    "os": [
-        "darwin"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/btc-vision/op-vm.git"
-    },
-    "main": "op-vm.darwin-universal.node",
-    "files": [
-        "op-vm.darwin-universal.node"
-    ],
-    "license": "MIT",
-    "engines": {
-        "node": ">= 10"
-    }
+  "name": "@btc-vision/op-vm-darwin-universal",
+  "version": "0.1.7",
+  "os": [
+    "darwin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/op-vm.git"
+  },
+  "main": "op-vm.darwin-universal.node",
+  "files": [
+    "op-vm.darwin-universal.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
 }

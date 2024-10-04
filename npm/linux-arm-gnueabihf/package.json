@@ -1,22 +1,22 @@
 {
-    "name": "@btc-vision/op-vm-linux-arm-gnueabihf",
-    "version": "0.0.0",
-    "os": [
-        "linux"
-    ],
-    "cpu": [
-        "arm"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/btc-vision/op-vm.git"
-    },
-    "main": "op-vm.linux-arm-gnueabihf.node",
-    "files": [
-        "op-vm.linux-arm-gnueabihf.node"
-    ],
-    "license": "MIT",
-    "engines": {
-        "node": ">= 10"
-    }
+  "name": "@btc-vision/op-vm-linux-arm-gnueabihf",
+  "version": "0.1.7",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/op-vm.git"
+  },
+  "main": "op-vm.linux-arm-gnueabihf.node",
+  "files": [
+    "op-vm.linux-arm-gnueabihf.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
 }

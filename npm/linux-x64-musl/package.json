@@ -1,25 +1,25 @@
 {
-    "name": "@btc-vision/op-vm-linux-x64-musl",
-    "version": "0.0.0",
-    "os": [
-        "linux"
-    ],
-    "cpu": [
-        "x64"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/btc-vision/op-vm.git"
-    },
-    "main": "op-vm.linux-x64-musl.node",
-    "files": [
-        "op-vm.linux-x64-musl.node"
-    ],
-    "license": "MIT",
-    "engines": {
-        "node": ">= 10"
-    },
-    "libc": [
-        "musl"
-    ]
+  "name": "@btc-vision/op-vm-linux-x64-musl",
+  "version": "0.1.7",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/op-vm.git"
+  },
+  "main": "op-vm.linux-x64-musl.node",
+  "files": [
+    "op-vm.linux-x64-musl.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  },
+  "libc": [
+    "musl"
+  ]
 }

@@ -79,21 +79,21 @@ impl RuntimePool {
         runtimes.pop_front()
     }
 
-    pub fn return_runtime(&self, runtime: Arc<Runtime>) {
-        let idling = self.idling.lock().unwrap();
-        let expected_size = self.expected_size.lock().unwrap();
+    pub fn return_runtime(&self, runtime: Arc<Runtime>) -> anyhow::Result<()> {
+        let idling = self.idling.lock().map_err(|_| anyhow::anyhow!("Failed to lock idling"))?;
+        let expected_size = self.expected_size.lock().map_err(|_| anyhow::anyhow!("Failed to lock expected_size"))?;
 
         if idling.load(Relaxed) > expected_size.load(Relaxed) {
             //println!("RuntimePool: Destroying runtime. idling: {}, expected_size: {}", idling.load(Relaxed), expected_size.load(Relaxed));
 
-            return;
+            return Ok(());
         }
 
         idling.fetch_add(1, Relaxed);
 
         //println!("RuntimePool: Returning runtime. idling: {}, expected_size: {}", idling.load(Relaxed), expected_size.load(Relaxed));
 
-        let mut runtimes = self.runtimes.lock().unwrap();
-        runtimes.push_back(runtime);
+        let mut runtimes = self.runtimes.lock().map_err(|_| anyhow::anyhow!("Failed to lock runtimes"))?;
+        Ok(runtimes.push_back(runtime))
     }
 }
