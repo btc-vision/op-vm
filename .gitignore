@@ -246,3 +246,5 @@ fabric.properties
 *.node
 index.js
 index.d.ts
+*.swp
+*.swo
