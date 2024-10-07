@@ -82,20 +82,31 @@ impl AssemblyScript {
             )));
         }
 
-        let header_value = header.unwrap();
+        let header_value = header.map_err(|e| {
+            Error::from_reason(format!("Failed to get header from __new: {:?}", e))
+        })?;
 
         // Set the header values
-        Self::set_u32(store, instance, header_value, pinned_buffer_value).unwrap();
-        Self::set_u32(store, instance, header_value + 4, pinned_buffer_value).unwrap();
-        Self::set_u32(store, instance, header_value + 8, buffer_size as u32).unwrap();
+        Self::set_u32(store, instance, header_value, pinned_buffer_value).map_err(|e| {
+            Error::from_reason(format!("Failed to set header value: {:?}", e))
+        })?;
+        Self::set_u32(store, instance, header_value + 4, pinned_buffer_value).map_err(|e| {
+            Error::from_reason(format!("Failed to set header value: {:?}", e))
+        })?;
+        Self::set_u32(store, instance, header_value + 8, buffer_size as u32).map_err(|e| {
+            Error::from_reason(format!("Failed to set header value: {:?}", e))
+        })?;
 
         // Write the buffer value to the contract's memory
         instance
-            .write_memory(store, pinned_buffer_value as u64, &value)
-            .unwrap();
+            .write_memory(store, pinned_buffer_value as u64, &value).map_err(|e| {
+            Error::from_reason(format!("Failed to write buffer to memory: {:?}", e))
+        })?;
 
         // Unpin the buffer
-        Self::__unpin(store, instance, pinned_buffer_value as i32).unwrap();
+        Self::__unpin(store, instance, pinned_buffer_value as i32).map_err(|e| {
+            Error::from_reason(format!("Failed to unpin buffer: {:?}", e))
+        })?;
 
         Ok(header_value as i64)
     }

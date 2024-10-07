@@ -87,10 +87,10 @@ pub fn call_other_contract_import(
     let call_execution_cost_bytes = &result[0..8];
     let response = &result[8..];
 
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    let call_execution_cost = u64::from_le_bytes(call_execution_cost_bytes.try_into().unwrap());
+    let bytes = call_execution_cost_bytes.try_into().map_err(|_e| RuntimeError::new("Error converting bytes"))?;
+    let call_execution_cost = u64::from_le_bytes(bytes);
     instance.use_gas(&mut store, call_execution_cost);
 
     Ok(value as u32)
@@ -149,7 +149,7 @@ pub fn encode_address_import(
     result.push(0);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     instance.use_gas(&mut store, ENCODE_ADDRESS_COST);
 
@@ -173,7 +173,7 @@ pub fn sha256_import(
     let result = sha256(&data)?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     instance.use_gas(&mut store, SHA256_COST);
 
@@ -223,7 +223,7 @@ fn external_import_with_param_and_return(
     let result = external_function.execute(&data, runtime)?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     Ok(value as u32)
 }
