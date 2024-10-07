@@ -85,11 +85,11 @@ impl ContractManager {
         )]
         emit_js_function: JsFunction,
         #[napi(
-            ts_arg_type = "(_: never) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
         )]
         inputs_js_function: JsFunction,
         #[napi(
-            ts_arg_type = "(_: never) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
         )]
         outputs_js_function: JsFunction,
     ) -> Result<Self, Error> {
