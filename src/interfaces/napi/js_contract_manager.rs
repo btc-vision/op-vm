@@ -185,6 +185,9 @@ impl ContractManager {
         abort_tsfn!(self.call_other_contract_tsfn, &env);
         abort_tsfn!(self.deploy_from_address_tsfn, &env);
         abort_tsfn!(self.console_log_tsfn, &env);
+        abort_tsfn!(self.emit_tsfn, &env);
+        abort_tsfn!(self.inputs_tsfn, &env);
+        abort_tsfn!(self.outputs_tsfn, &env);
 
         Ok(())
     }
