@@ -17,11 +17,7 @@ use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
-use crate::interfaces::{
-    AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    ContractCallTask, DeployFromAddressExternalFunction, StorageLoadExternalFunction,
-    StorageStoreExternalFunction,
-};
+use crate::interfaces::{AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction, ContractCallTask, DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
@@ -53,6 +49,9 @@ impl JsContract {
             let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
             let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
             let console_log_tsfn = manager.console_log_tsfn.clone();
+            let emit_tsfn = manager.emit_tsfn.clone();
+            let inputs_tsfn = manager.inputs_tsfn.clone();
+            let outputs_tsfn = manager.outputs_tsfn.clone();
 
             // Create ExternalFunction instances with contract_id
             let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
@@ -60,6 +59,9 @@ impl JsContract {
             let call_other_contract_external = CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
             let deploy_from_address_external = DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
             let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
+            let emit_external = EmitExternalFunction::new(emit_tsfn, id);
+            let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
+            let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
 
             // Obtain a Runtime from the pool
             let runtime = manager
@@ -75,6 +77,9 @@ impl JsContract {
                 call_other_contract_external,
                 deploy_from_address_external,
                 console_log_external,
+                emit_external,
+                inputs_external,
+                outputs_external,
                 runtime.clone(),
             ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 

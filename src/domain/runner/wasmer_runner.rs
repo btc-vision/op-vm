@@ -9,7 +9,7 @@ use wasmer_middlewares::Metering;
 use wasmer_types::{SerializeError, Target};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, deploy_from_address_import, encode_address_import, sha256_import, storage_load_import, storage_store_import, AbortData, ContractRunner, CustomEnv, InstanceWrapper};
+use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, deploy_from_address_import, emit_import, encode_address_import, inputs_import, outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_store_import, AbortData, ContractRunner, CustomEnv, InstanceWrapper};
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
@@ -100,6 +100,10 @@ impl WasmerRunner {
                 "encodeAddress" => import!(encode_address_import),
                 "sha256" => import!(sha256_import),
                 "log" => import!(console_log_import),
+                "emit" => import!(emit_import),
+                "inputs" => import!(inputs_import),
+                "outputs" => import!(outputs_import),
+                "ripemd160" => import!(ripemd160_import),
             }
         };
 

@@ -21,7 +21,10 @@ impl ContractService {
             if e.to_string().contains("unreachable") {
                 let gas_used = runner.get_remaining_gas();
                 if gas_used == 0 {
-                    anyhow::anyhow!("out of gas")
+                    anyhow::anyhow!(
+                    "out of gas (consumed: {})",
+                    self.max_gas
+                )
                 } else {
                     let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
 

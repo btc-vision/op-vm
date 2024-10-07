@@ -5,7 +5,7 @@ use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{AbortData, CustomEnv, CALL_COST, DEPLOY_COST, ENCODE_ADDRESS_COST, LOAD_COST, SHA256_COST, STORE_COST};
+use crate::domain::runner::{AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, LOAD_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST};
 use crate::interfaces::ExternalFunction;
 
 pub fn abort_import(
@@ -42,30 +42,6 @@ pub fn storage_store_import(
     external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, STORE_COST, &env.runtime)
 }
 
-/*pub fn storage_store_import(
-    mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
-    let (env, mut store) = context.data_and_store_mut();
-
-    let instance = env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Instance not found"))?;
-
-    instance.use_gas(&mut store, STORE_COST);
-
-    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-    let result = env.storage_store_external.execute(&data)?;
-
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
-
-    Ok(value as u32)
-}*/
-
 pub fn call_other_contract_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
@@ -87,10 +63,62 @@ pub fn call_other_contract_import(
     let call_execution_cost_bytes = &result[0..8];
     let response = &result[8..];
 
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    let call_execution_cost = u64::from_le_bytes(call_execution_cost_bytes.try_into().unwrap());
+    let bytes = call_execution_cost_bytes.try_into().map_err(|_e| RuntimeError::new("Error converting bytes"))?;
+    let call_execution_cost = u64::from_le_bytes(bytes);
+    instance.use_gas(&mut store, call_execution_cost);
+
+    Ok(value as u32)
+}
+
+pub fn inputs_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    instance.use_gas(&mut store, INPUTS_COST);
+
+    let result = &env.inputs_external.execute(&env.runtime)?;
+
+    let call_execution_cost_bytes = &result[0..8];
+    let response = &result[8..];
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    let bytes = call_execution_cost_bytes.try_into().map_err(|_e| RuntimeError::new("Error converting bytes"))?;
+    let call_execution_cost = u64::from_le_bytes(bytes);
+    instance.use_gas(&mut store, call_execution_cost);
+
+    Ok(value as u32)
+}
+
+pub fn outputs_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    instance.use_gas(&mut store, OUTPUTS_COST);
+
+    let result = &env.outputs_external.execute(&env.runtime)?;
+
+    let call_execution_cost_bytes = &result[0..8];
+    let response = &result[8..];
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    let bytes = call_execution_cost_bytes.try_into().map_err(|_e| RuntimeError::new("Error converting bytes"))?;
+    let call_execution_cost = u64::from_le_bytes(bytes);
     instance.use_gas(&mut store, call_execution_cost);
 
     Ok(value as u32)
@@ -149,7 +177,7 @@ pub fn encode_address_import(
     result.push(0);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     instance.use_gas(&mut store, ENCODE_ADDRESS_COST);
 
@@ -173,15 +201,49 @@ pub fn sha256_import(
     let result = sha256(&data)?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     instance.use_gas(&mut store, SHA256_COST);
 
     Ok(value as u32)
 }
 
+pub fn ripemd160_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    let result = rimemd160(&data)?;
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    instance.use_gas(&mut store, RIMD160_COST);
+
+    Ok(value as u32)
+}
+
 fn sha256(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
     let hash = Sha256::digest(data);
+    let hash_as_vec: Vec<u8> = hash.to_vec();
+
+    Ok(hash_as_vec)
+}
+
+fn rimemd160(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    let mut ripemd = Ripemd160::new();
+    ripemd.update(data);
+
+    let hash = ripemd.finalize();
     let hash_as_vec: Vec<u8> = hash.to_vec();
 
     Ok(hash_as_vec)
@@ -200,6 +262,24 @@ pub fn console_log_import(
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     env.console_log_external.execute(&data)
+}
+
+pub fn emit_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<(), RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+    let instance = &env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Memory not found"))?;
+
+    instance.use_gas(&mut store, EMIT_COST);
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    env.emit_external.execute(&data)
 }
 
 fn external_import_with_param_and_return(
@@ -223,7 +303,7 @@ fn external_import_with_param_and_return(
     let result = external_function.execute(&data, runtime)?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|_e| RuntimeError::new("Error writing buffer"))?;
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     Ok(value as u32)
 }
