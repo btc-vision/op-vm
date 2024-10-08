@@ -12,8 +12,6 @@ pub const DEPLOY_COST: u64 = 2_500_000_000;
 pub const ENCODE_ADDRESS_COST: u64 = 4_000_000;
 pub const SHA256_COST: u64 = 1_000_000;
 pub const RIMD160_COST: u64 = 1_000_000;
-
 pub const INPUTS_COST: u64 = 500_000_000;
 pub const OUTPUTS_COST: u64 = 500_000_000;
-
-pub const EMIT_COST: u64 = 100_000_000;
+pub const EMIT_COST: u64 = 1_000_000;
