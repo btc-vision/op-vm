@@ -1,7 +1,7 @@
 {
   "name": "@btc-vision/op-vm",
   "description": "OP-VM executable for Bitcoin Smart Contracts",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "license": "LICENSE.MD",
   "main": "index.js",
   "types": "index.d.ts",
@@ -59,21 +59,21 @@
     "postinstall": "npm run build"
   },
   "optionalDependencies": {
-    "@btc-vision/op-vm-win32-x64-msvc": "0.1.8",
-    "@btc-vision/op-vm-darwin-x64": "0.1.8",
-    "@btc-vision/op-vm-linux-x64-gnu": "0.1.8",
-    "@btc-vision/op-vm-darwin-arm64": "0.1.8",
-    "@btc-vision/op-vm-android-arm64": "0.1.8",
-    "@btc-vision/op-vm-linux-arm64-gnu": "0.1.8",
-    "@btc-vision/op-vm-linux-arm64-musl": "0.1.8",
-    "@btc-vision/op-vm-win32-arm64-msvc": "0.1.8",
-    "@btc-vision/op-vm-linux-arm-gnueabihf": "0.1.8",
-    "@btc-vision/op-vm-linux-arm-musleabihf": "0.1.8",
-    "@btc-vision/op-vm-linux-x64-musl": "0.1.8",
-    "@btc-vision/op-vm-freebsd-x64": "0.1.8",
-    "@btc-vision/op-vm-win32-ia32-msvc": "0.1.8",
-    "@btc-vision/op-vm-android-arm-eabi": "0.1.8",
-    "@btc-vision/op-vm-darwin-universal": "0.1.8",
-    "@btc-vision/op-vm-linux-riscv64-gnu": "0.1.8"
+    "@btc-vision/op-vm-win32-x64-msvc": "0.1.9",
+    "@btc-vision/op-vm-darwin-x64": "0.1.9",
+    "@btc-vision/op-vm-linux-x64-gnu": "0.1.9",
+    "@btc-vision/op-vm-darwin-arm64": "0.1.9",
+    "@btc-vision/op-vm-android-arm64": "0.1.9",
+    "@btc-vision/op-vm-linux-arm64-gnu": "0.1.9",
+    "@btc-vision/op-vm-linux-arm64-musl": "0.1.9",
+    "@btc-vision/op-vm-win32-arm64-msvc": "0.1.9",
+    "@btc-vision/op-vm-linux-arm-gnueabihf": "0.1.9",
+    "@btc-vision/op-vm-linux-arm-musleabihf": "0.1.9",
+    "@btc-vision/op-vm-linux-x64-musl": "0.1.9",
+    "@btc-vision/op-vm-freebsd-x64": "0.1.9",
+    "@btc-vision/op-vm-win32-ia32-msvc": "0.1.9",
+    "@btc-vision/op-vm-android-arm-eabi": "0.1.9",
+    "@btc-vision/op-vm-darwin-universal": "0.1.9",
+    "@btc-vision/op-vm-linux-riscv64-gnu": "0.1.9"
   }
 }
