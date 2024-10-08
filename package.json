@@ -1,79 +1,61 @@
 {
-  "name": "@btc-vision/op-vm",
-  "description": "OP-VM executable for Bitcoin Smart Contracts",
-  "version": "0.1.9",
-  "license": "LICENSE.MD",
-  "main": "index.js",
-  "types": "index.d.ts",
-  "typings": "index.d.ts",
-  "homepage": "https://opnet.org/",
-  "keywords": [
-    "opnet",
-    "bsi",
-    "bsi-binary",
-    "bsi-bitcoin-rpc",
-    "bitcoin",
-    "btc",
-    "bitcoin smart contracts",
-    "smart inscriptions",
-    "ordinals"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/btc-vision/op-vm.git"
-  },
-  "napi": {
-    "name": "op-vm",
-    "triples": {
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-linux-android",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-unknown-linux-musl",
-        "aarch64-pc-windows-msvc",
-        "armv7-unknown-linux-gnueabihf",
-        "armv7-unknown-linux-musleabihf",
-        "x86_64-unknown-linux-musl",
-        "x86_64-unknown-freebsd",
-        "i686-pc-windows-msvc",
-        "armv7-linux-androideabi",
-        "universal-apple-darwin",
-        "riscv64gc-unknown-linux-gnu"
-      ]
+    "name": "@btc-vision/op-vm",
+    "description": "OP-VM executable for Bitcoin Smart Contracts",
+    "version": "0.1.9",
+    "license": "LICENSE.MD",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "typings": "index.d.ts",
+    "homepage": "https://opnet.org/",
+    "keywords": [
+        "opnet",
+        "bsi",
+        "bsi-binary",
+        "bsi-bitcoin-rpc",
+        "bitcoin",
+        "btc",
+        "bitcoin smart contracts",
+        "smart inscriptions",
+        "ordinals"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/btc-vision/op-vm.git"
+    },
+    "napi": {
+        "name": "op-vm",
+        "triples": {
+            "additional": [
+                "aarch64-apple-darwin",
+                "aarch64-linux-android",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-unknown-linux-musl",
+                "aarch64-pc-windows-msvc",
+                "armv7-unknown-linux-gnueabihf",
+                "armv7-unknown-linux-musleabihf",
+                "x86_64-unknown-linux-musl",
+                "x86_64-unknown-freebsd",
+                "i686-pc-windows-msvc",
+                "armv7-linux-androideabi",
+                "universal-apple-darwin",
+                "riscv64gc-unknown-linux-gnu"
+            ]
+        }
+    },
+    "engines": {
+        "node": ">= 18"
+    },
+    "dependencies": {
+        "@napi-rs/cli": "^2.18.3"
+    },
+    "scripts": {
+        "artifacts": "napi artifacts",
+        "build": "napi build --platform --release",
+        "build:debug": "napi build --platform",
+        "test": "echo ''",
+        "prepublishOnly": "napi prepublish -t npm",
+        "universal": "napi universal",
+        "version": "napi version",
+        "postinstall": "npm run build"
     }
-  },
-  "engines": {
-    "node": ">= 18"
-  },
-  "dependencies": {
-    "@napi-rs/cli": "^2.18.3"
-  },
-  "scripts": {
-    "artifacts": "napi artifacts",
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
-    "test": "echo ''",
-    "prepublishOnly": "napi prepublish -t npm",
-    "universal": "napi universal",
-    "version": "napi version",
-    "postinstall": "npm run build"
-  },
-  "optionalDependencies": {
-    "@btc-vision/op-vm-win32-x64-msvc": "0.1.9",
-    "@btc-vision/op-vm-darwin-x64": "0.1.9",
-    "@btc-vision/op-vm-linux-x64-gnu": "0.1.9",
-    "@btc-vision/op-vm-darwin-arm64": "0.1.9",
-    "@btc-vision/op-vm-android-arm64": "0.1.9",
-    "@btc-vision/op-vm-linux-arm64-gnu": "0.1.9",
-    "@btc-vision/op-vm-linux-arm64-musl": "0.1.9",
-    "@btc-vision/op-vm-win32-arm64-msvc": "0.1.9",
-    "@btc-vision/op-vm-linux-arm-gnueabihf": "0.1.9",
-    "@btc-vision/op-vm-linux-arm-musleabihf": "0.1.9",
-    "@btc-vision/op-vm-linux-x64-musl": "0.1.9",
-    "@btc-vision/op-vm-freebsd-x64": "0.1.9",
-    "@btc-vision/op-vm-win32-ia32-msvc": "0.1.9",
-    "@btc-vision/op-vm-android-arm-eabi": "0.1.9",
-    "@btc-vision/op-vm-darwin-universal": "0.1.9",
-    "@btc-vision/op-vm-linux-riscv64-gnu": "0.1.9"
-  }
 }
