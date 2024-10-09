@@ -5,7 +5,7 @@ pub const PAGE_MEMORY_SIZE: u64 = 64 * 1024;
 pub const MAX_MEMORY_SIZE: u64 = (MAX_PAGES as u64) * PAGE_MEMORY_SIZE;
 
 /** Gas cost for custom functions */
-pub const LOAD_COST: u64 = 20_000_000;
+pub const LOAD_COST: u64 = 40_000_000;
 pub const STORE_COST: u64 = 140_000_000;
 
 pub const CALL_COST: u64 = 343_000_000;
