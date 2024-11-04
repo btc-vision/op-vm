@@ -77,11 +77,11 @@ impl ContractManager {
         )]
         deploy_from_address_js_function: JsFunction,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => void"
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
         )]
         console_log_js_function: JsFunction,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => void"
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
         )]
         emit_js_function: JsFunction,
         #[napi(

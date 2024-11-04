@@ -1,12 +1,11 @@
-use napi::bindgen_prelude::BigInt;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+use crate::interfaces::{ExternalFunctionNoResponse, GenericExternalFunction};
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-
 pub struct EmitExternalFunction {
-    tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    id: u64,
+    external_function: GenericExternalFunction,
 }
 
 impl EmitExternalFunction {
@@ -14,19 +13,14 @@ impl EmitExternalFunction {
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
         id: u64,
     ) -> Self {
-        Self { tsfn, id }
+        Self { external_function: GenericExternalFunction::new(tsfn, id) }
     }
 }
 
 impl EmitExternalFunction {
-    pub(crate) fn execute(&self, data: &[u8]) -> Result<(), RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: Vec::from(data),
-            contract_id: BigInt::from(self.id),
-        };
+    pub(crate) fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<(), RuntimeError> {
+        let resp = self.external_function.execute_no_response(data, runtime);
 
-        self.tsfn.call(Ok(request), ThreadsafeFunctionCallMode::NonBlocking);
-
-        Ok(())
+        resp
     }
 }
