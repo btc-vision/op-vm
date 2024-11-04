@@ -8,3 +8,7 @@ pub trait ExternalFunction {
 pub trait ExternalFunctionNoData {
     fn execute_no_data(&self, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError>;
 }
+
+pub trait ExternalFunctionNoResponse {
+    fn execute_no_response(&self, data: &[u8], runtime: &Runtime) -> Result<(), RuntimeError>;
+}

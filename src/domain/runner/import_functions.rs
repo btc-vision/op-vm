@@ -258,10 +258,11 @@ pub fn console_log_import(
         .instance
         .clone()
         .ok_or(RuntimeError::new("Memory not found"))?;
+
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    env.console_log_external.execute(&data)
+    env.console_log_external.execute(&data, &env.runtime)
 }
 
 pub fn emit_import(
@@ -279,7 +280,7 @@ pub fn emit_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    env.emit_external.execute(&data)
+    env.emit_external.execute(&data, &env.runtime)
 }
 
 fn external_import_with_param_and_return(
