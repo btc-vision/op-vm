@@ -1,6 +1,6 @@
 {
   "name": "@btc-vision/op-vm-linux-x64-musl",
-  "version": "0.1.12",
+  "version": "0.2.0",
   "os": [
     "linux"
   ],
