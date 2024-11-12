@@ -148,6 +148,8 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
         => {
             u64::MAX
         }
-    };
+    _ => {
+        u64::MAX
+    }};
     gas_cost
 }
