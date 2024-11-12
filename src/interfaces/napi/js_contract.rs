@@ -17,7 +17,7 @@ use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
-use crate::interfaces::{AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction, ContractCallTask, DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction, ContractCallTask, DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, NextPointerValueGreaterThanExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
 
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
@@ -52,6 +52,7 @@ impl JsContract {
             let emit_tsfn = manager.emit_tsfn.clone();
             let inputs_tsfn = manager.inputs_tsfn.clone();
             let outputs_tsfn = manager.outputs_tsfn.clone();
+            let next_pointer_value_greater_than_tsfn = manager.next_pointer_value_greater_than_tsfn.clone();
 
             // Create ExternalFunction instances with contract_id
             let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
@@ -62,6 +63,7 @@ impl JsContract {
             let emit_external = EmitExternalFunction::new(emit_tsfn, id);
             let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
             let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
+            let next_pointer_value_greater_than_external = NextPointerValueGreaterThanExternalFunction::new(next_pointer_value_greater_than_tsfn, id);
 
             // Obtain a Runtime from the pool
             let runtime = manager
@@ -80,6 +82,7 @@ impl JsContract {
                 emit_external,
                 inputs_external,
                 outputs_external,
+                next_pointer_value_greater_than_external,
                 runtime.clone(),
             ).map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 

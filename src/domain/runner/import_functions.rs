@@ -5,7 +5,7 @@ use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, LOAD_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST};
+use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, NEXT_POINTER_GREATER_THAN_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST};
 use crate::interfaces::ExternalFunction;
 
 pub fn abort_import(
@@ -32,6 +32,14 @@ pub fn storage_load_import(
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
     external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, LOAD_COST, &env.runtime)
+}
+
+pub fn storage_next_pointer_greater_than_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, store) = context.data_and_store_mut();
+    external_import_with_param_and_return(env, store, &env.next_pointer_value_greater_than_external, ptr, NEXT_POINTER_GREATER_THAN_COST, &env.runtime)
 }
 
 pub fn storage_store_import(
@@ -228,13 +236,13 @@ pub fn is_valid_bitcoin_address_import(
 
     let string_data = vec8_to_string(data);
     let result = exported_import_functions::validate_bitcoin_address(&string_data, &env.network).map_err(|e| RuntimeError::new(e))?;
-    
+
     let result_vec_buffer = vec![result as u8];
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result_vec_buffer, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    instance.use_gas(&mut store, SHA256_COST);
+    instance.use_gas(&mut store, IS_VALID_BITCOIN_ADDRESS_COST);
 
     Ok(value as u32)
 }

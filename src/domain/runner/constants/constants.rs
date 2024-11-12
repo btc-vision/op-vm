@@ -7,6 +7,7 @@ pub const MAX_MEMORY_SIZE: u64 = (MAX_PAGES as u64) * PAGE_MEMORY_SIZE;
 /** Gas cost for custom functions */
 pub const LOAD_COST: u64 = 40_000_000;
 pub const STORE_COST: u64 = 140_000_000;
+pub const NEXT_POINTER_GREATER_THAN_COST: u64 = 400_000_000;
 
 pub const CALL_COST: u64 = 343_000_000;
 pub const DEPLOY_COST: u64 = 2_500_000_000;
@@ -19,3 +20,4 @@ pub const INPUTS_COST: u64 = 5_000_000;
 pub const OUTPUTS_COST: u64 = 5_000_000;
 
 pub const EMIT_COST: u64 = 1_000_000;
+pub const IS_VALID_BITCOIN_ADDRESS_COST: u64 = 1_000_000;
