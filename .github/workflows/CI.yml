@@ -99,10 +99,12 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
       - name: Install dependencies
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
         run: |
           sudo apt update
           sudo apt install -y llvm clang libclang-dev
       - name: Set LLVM_CONFIG_PATH
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
         run: echo "LLVM_CONFIG_PATH=/usr/bin/llvm-config" >> $GITHUB_ENV
       - name: Cache cargo
         uses: actions/cache@v4
