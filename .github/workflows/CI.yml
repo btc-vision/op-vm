@@ -40,13 +40,13 @@ jobs:
             target: x86_64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
             build: yarn build --target x86_64-unknown-linux-gnu
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: |-
-              apk add --no-cache clang llvm lld musl-dev
-              export LLVM_CONFIG_PATH=/usr/bin/llvm-config
-              yarn build --target x86_64-unknown-linux-musl
+          #- host: ubuntu-latest
+          #  target: x86_64-unknown-linux-musl
+          #  docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+          #  build: |-
+          #    apk add --no-cache clang llvm lld musl-dev
+          #    export LLVM_CONFIG_PATH=/usr/bin/llvm-config
+          #    yarn build --target x86_64-unknown-linux-musl
           - host: macos-latest
             target: aarch64-apple-darwin
             build: yarn build --target aarch64-apple-darwin
@@ -69,15 +69,15 @@ jobs:
           #          - host: ubuntu-latest
           #            target: armv7-linux-androideabi
           #            build: yarn build --target armv7-linux-androideabi
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: |-
-              apk add --no-cache clang llvm lld musl-dev
-              export LLVM_CONFIG_PATH=/usr/bin/llvm-config
-              set -e &&
-              rustup target add aarch64-unknown-linux-musl &&
-              yarn build --target aarch64-unknown-linux-musl
+    #      - host: ubuntu-latest
+    #        target: aarch64-unknown-linux-musl
+    #        docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+    #        build: |-
+    #          apk add --no-cache clang llvm lld musl-dev
+    #          export LLVM_CONFIG_PATH=/usr/bin/llvm-config
+    #          set -e &&
+    #          rustup target add aarch64-unknown-linux-musl &&
+    #          yarn build --target aarch64-unknown-linux-musl
     #          - host: windows-latest
     #            target: aarch64-pc-windows-msvc
     #            build: yarn build --target aarch64-pc-windows-msvc
@@ -103,14 +103,14 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
-      - name: Install LLVM Patch
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'x86_64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
-        run: |
-          sudo apt update
-          sudo apt install -y llvm clang libclang-dev
-      - name: Set LLVM_CONFIG_PATH
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'x86_64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
-        run: echo "LLVM_CONFIG_PATH=/usr/bin/llvm-config" >> $GITHUB_ENV
+      #- name: Install LLVM Patch
+      #  if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'x86_64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
+      #  run: |
+      #    sudo apt update
+      #    sudo apt install -y llvm clang libclang-dev
+      #- name: Set LLVM_CONFIG_PATH
+      #  if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'x86_64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
+      #  run: echo "LLVM_CONFIG_PATH=/usr/bin/llvm-config" >> $GITHUB_ENV
       - name: Cache cargo
         uses: actions/cache@v4
         with:
