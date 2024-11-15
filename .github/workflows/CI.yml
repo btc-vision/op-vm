@@ -44,7 +44,7 @@ jobs:
             target: x86_64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
             build: |-
-              apk add --no-cache clang llvm lld musl-dev compiler-rt compiler-rt-static
+              apk add --no-cache clang llvm lld musl-dev
               export LLVM_CONFIG_PATH=/usr/bin/llvm-config
               yarn build --target x86_64-unknown-linux-musl
           - host: macos-latest
@@ -73,7 +73,7 @@ jobs:
             target: aarch64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
             build: |-
-              apk add --no-cache clang llvm lld musl-dev compiler-rt compiler-rt-static
+              apk add --no-cache clang llvm lld musl-dev
               export LLVM_CONFIG_PATH=/usr/bin/llvm-config
               set -e &&
               rustup target add aarch64-unknown-linux-musl &&
