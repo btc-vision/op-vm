@@ -98,6 +98,12 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y llvm clang libclang-dev
+      - name: Set LLVM_CONFIG_PATH
+        run: echo "LLVM_CONFIG_PATH=/usr/bin/llvm-config" >> $GITHUB_ENV
       - name: Cache cargo
         uses: actions/cache@v4
         with:
