@@ -43,7 +43,11 @@ jobs:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: yarn build --target x86_64-unknown-linux-musl
+            build: |-
+              apt update
+              apt install -y llvm clang libclang-dev
+              export LLVM_CONFIG_PATH=/usr/bin/llvm-config
+              yarn build --target x86_64-unknown-linux-musl
           - host: macos-latest
             target: aarch64-apple-darwin
             build: yarn build --target aarch64-apple-darwin
@@ -70,6 +74,9 @@ jobs:
             target: aarch64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
             build: |-
+              apt update
+              apt install -y llvm clang libclang-dev
+              export LLVM_CONFIG_PATH=/usr/bin/llvm-config
               set -e &&
               rustup target add aarch64-unknown-linux-musl &&
               yarn build --target aarch64-unknown-linux-musl
