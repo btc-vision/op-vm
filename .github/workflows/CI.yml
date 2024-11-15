@@ -98,8 +98,8 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
-      - name: Install dependencies
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
+      - name: Install LLVM Patch
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'x86_64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-musl' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
         run: |
           sudo apt update
           sudo apt install -y llvm clang libclang-dev
