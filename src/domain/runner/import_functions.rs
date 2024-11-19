@@ -8,6 +8,10 @@ use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, NEXT_POINTER_GREATER_THAN_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST};
 use crate::interfaces::ExternalFunction;
 
+fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
+    vec.get(start..end)
+}
+
 pub fn abort_import(
     mut env: FunctionEnvMut<CustomEnv>,
     message: u32,
@@ -68,8 +72,8 @@ pub fn call_other_contract_import(
 
     let result = &env.call_other_contract_external.execute(&data, &env.runtime)?;
 
-    let call_execution_cost_bytes = &result[0..8];
-    let response = &result[8..];
+    let call_execution_cost_bytes = safe_slice(&result, 0, 8).ok_or(RuntimeError::new("Invalid buffer"))?;
+    let response = safe_slice(&result, 8, result.len()).ok_or(RuntimeError::new("Invalid buffer"))?;
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
@@ -93,15 +97,7 @@ pub fn inputs_import(
     instance.use_gas(&mut store, INPUTS_COST);
 
     let result = &env.inputs_external.execute(&env.runtime)?;
-
-    let call_execution_cost_bytes = &result[0..8];
-    let response = &result[8..];
-
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
-    let bytes = call_execution_cost_bytes.try_into().map_err(|_e| RuntimeError::new("Error converting bytes"))?;
-    let call_execution_cost = u64::from_le_bytes(bytes);
-    instance.use_gas(&mut store, call_execution_cost);
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     Ok(value as u32)
 }
@@ -119,15 +115,7 @@ pub fn outputs_import(
     instance.use_gas(&mut store, OUTPUTS_COST);
 
     let result = &env.outputs_external.execute(&env.runtime)?;
-
-    let call_execution_cost_bytes = &result[0..8];
-    let response = &result[8..];
-
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
-    let bytes = call_execution_cost_bytes.try_into().map_err(|_e| RuntimeError::new("Error converting bytes"))?;
-    let call_execution_cost = u64::from_le_bytes(bytes);
-    instance.use_gas(&mut store, call_execution_cost);
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0).map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     Ok(value as u32)
 }
@@ -163,14 +151,15 @@ pub fn encode_address_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    // skip 4 bytes for length
-    let data = data[4..].to_vec();
-    if data.len() != 32 {
+    if data.len() != 36 {
         return Err(RuntimeError::new(format!(
             "Invalid data length. Expected 32, got {}",
             data.len()
         )));
     }
+
+    // skip 4 bytes for length
+    let data = data[4..].to_vec();
 
     let mut ripemd = Ripemd160::new();
     ripemd.update(&data);
@@ -181,7 +170,6 @@ pub fn encode_address_import(
         .map_err(|e| RuntimeError::new(format!("Failed to encode address: {:?}", e)))?;
 
     let mut result = address.as_bytes().to_vec();
-
     result.push(0);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
