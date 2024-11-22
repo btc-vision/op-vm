@@ -83,6 +83,21 @@ impl InstanceWrapper {
         self.set_remaining_gas(store, gas_after);
     }
 
+    pub fn refund_gas(&self, store: &mut impl AsStoreMut, refund: u64) {
+        let gas_before = self.get_remaining_gas(store);
+
+        // check for overflow
+        if gas_before > u64::MAX - refund {
+            log::error!("Gas refund overflow detected. Setting remaining gas to u64::MAX");
+
+            self.set_remaining_gas(store, u64::MAX);
+            return;
+        }
+
+        let gas_after = gas_before + refund;
+        self.set_remaining_gas(store, gas_after);
+    }
+
     pub fn get_remaining_gas(&self, store: &mut impl AsStoreMut) -> u64 {
         let remaining_points = get_remaining_points(store, &self.instance);
         match remaining_points {
