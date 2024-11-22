@@ -1581,6 +1581,7 @@ dependencies = [
  "futures",
  "hex",
  "lazy_static",
+ "log",
  "loupe",
  "loupe-derive",
  "napi",

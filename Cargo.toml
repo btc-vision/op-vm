@@ -32,6 +32,7 @@ hex = "0.4.3"
 bytes = "1.7.2"
 wasmer-compiler = "5.0.1"
 bitcoin = "0.32.4"
+log = "0.4.22"
 
 [build-dependencies]
 napi-build = "2.1.3"

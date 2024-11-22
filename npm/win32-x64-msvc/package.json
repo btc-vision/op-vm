@@ -1,6 +1,6 @@
 {
   "name": "@btc-vision/op-vm-win32-x64-msvc",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "os": [
     "win32"
   ],

@@ -1,11 +1,13 @@
 use bech32::{segwit, Hrp};
 use ripemd::{Digest, Ripemd160};
 use sha2::Sha256;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, NEXT_POINTER_GREATER_THAN_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST};
+use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, InstanceWrapper, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, NEXT_POINTER_GREATER_THAN_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST, STORE_REFUND_ZERO};
 use crate::interfaces::ExternalFunction;
 
 fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
@@ -35,7 +37,7 @@ pub fn storage_load_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_load_external, ptr, LOAD_COST, &env.runtime)
+    load_pointer_external_import(env, store, &env.storage_load_external, ptr, LOAD_COST, &env.runtime, &env.refunded_pointers)
 }
 
 pub fn storage_next_pointer_greater_than_import(
@@ -43,7 +45,7 @@ pub fn storage_next_pointer_greater_than_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.next_pointer_value_greater_than_external, ptr, NEXT_POINTER_GREATER_THAN_COST, &env.runtime)
+    load_pointer_external_import(env, store, &env.next_pointer_value_greater_than_external, ptr, NEXT_POINTER_GREATER_THAN_COST, &env.runtime, &env.refunded_pointers)
 }
 
 pub fn storage_store_import(
@@ -51,7 +53,7 @@ pub fn storage_store_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(env, store, &env.storage_store_external, ptr, STORE_COST, &env.runtime)
+    store_pointer_external_import(env, store, &env.storage_store_external, ptr, STORE_COST, &env.runtime, STORE_REFUND_ZERO)
 }
 
 pub fn call_other_contract_import(
@@ -125,7 +127,7 @@ pub fn deploy_from_address_import(
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
     let (env, store) = context.data_and_store_mut();
-    external_import_with_param_and_return(
+    import_external_call(
         env,
         store,
         &env.deploy_from_address_external,
@@ -310,7 +312,71 @@ pub fn emit_import(
     env.emit_external.execute(&data, &env.runtime)
 }
 
-fn external_import_with_param_and_return(
+fn have_only_zero_bytes(data: &[u8]) -> bool {
+    data.iter().all(|&x| x == 0)
+}
+
+fn verify_gas_refund_eligibility(
+    refunded_pointers: &Mutex<HashMap<Vec<u8>, bool>>,
+    instance: &InstanceWrapper,
+    store: &mut StoreMut,
+    refund_if_zero_result: u64,
+    pointer: Vec<u8>,
+) -> Result<(), RuntimeError> {
+    let mut map = refunded_pointers.lock()
+        .map_err(|_e| RuntimeError::new("Failed to lock refunded pointers"))?;
+
+    if let Some(&is_refunded) = map.get(&pointer) {
+        if !is_refunded {
+            map.insert(pointer, true);
+
+            instance.refund_gas(store, refund_if_zero_result);
+        }
+    }
+
+    Ok(())
+}
+
+fn load_pointer_external_import(
+    env: &CustomEnv,
+    mut store: StoreMut,
+    external_function: &impl ExternalFunction,
+    ptr: u32,
+    gas_cost: u64,
+    runtime: &Runtime,
+    refunded_pointers: &Mutex<HashMap<Vec<u8>, bool>>,
+) -> Result<u32, RuntimeError> {
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    instance.use_gas(&mut store, gas_cost);
+
+    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    let result = external_function.execute(&data, runtime)?;
+
+    // Mutate the HashMap
+    let mut map = refunded_pointers.lock()
+        .map_err(|e| RuntimeError::new(format!("Error locking refunded pointers: {}", e)))?;
+
+    if !have_only_zero_bytes(&result) {
+        let pointer = safe_slice(&data, 0, 32).ok_or(RuntimeError::new("Invalid buffer"))?.to_vec();
+
+        if !map.contains_key(&pointer) {
+            map.insert(pointer, false);
+        }
+    }
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    Ok(value as u32)
+}
+
+fn import_external_call(
     env: &CustomEnv,
     mut store: StoreMut,
     external_function: &impl ExternalFunction,
@@ -329,6 +395,50 @@ fn external_import_with_param_and_return(
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     let result = external_function.execute(&data, runtime)?;
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    Ok(value as u32)
+}
+
+fn store_pointer_external_import(
+    env: &CustomEnv,
+    mut store: StoreMut,
+    external_function: &impl ExternalFunction,
+    ptr: u32,
+    gas_cost: u64,
+    runtime: &Runtime,
+    refund_if_zero_result: u64,
+) -> Result<u32, RuntimeError> {
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    instance.use_gas(&mut store, gas_cost);
+
+    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    if data.len() != 64 {
+        return Err(RuntimeError::new("Invalid data length. Expected 64 bytes"));
+    }
+
+    let pointer = safe_slice(&data, 0, 32).ok_or(RuntimeError::new("Invalid buffer"))?.to_vec();
+    let value = safe_slice(&data, 32, 64).ok_or(RuntimeError::new("Invalid buffer"))?.to_vec();
+
+    let result = external_function.execute(&data, runtime)?;
+
+    // Optionally verify refund eligibility
+    if refund_if_zero_result > 0 && have_only_zero_bytes(&value) {
+        verify_gas_refund_eligibility(
+            &env.refunded_pointers,
+            &instance,
+            &mut store,
+            refund_if_zero_result,
+            pointer.clone(),
+        )?;
+    }
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;

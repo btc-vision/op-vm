@@ -1,7 +1,8 @@
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::domain::runner::{AbortData, InstanceWrapper};
 use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, NextPointerValueGreaterThanExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
 pub struct CustomEnv {
@@ -18,6 +19,8 @@ pub struct CustomEnv {
     pub outputs_external: OutputsExternalFunction,
     pub next_pointer_value_greater_than_external: NextPointerValueGreaterThanExternalFunction,
     pub runtime: Arc<Runtime>,
+
+    pub refunded_pointers: Mutex<HashMap<Vec<u8>, bool>>,
 }
 
 impl CustomEnv {
@@ -48,6 +51,7 @@ impl CustomEnv {
             outputs_external,
             next_pointer_value_greater_than_external,
             runtime,
+            refunded_pointers: Mutex::new(HashMap::new()),
         })
     }
 }
