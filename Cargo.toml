@@ -2,35 +2,35 @@
 
 [package]
 name = "op-vm"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-wasmer = "5.0.1"
-wasmer-compiler-singlepass = "5.0.1"
-wasmer-middlewares = "5.0.1"
-anyhow = "1.0.89"
-bytemuck = "1.18.0"
+wasmer = "5.0.2"
+wasmer-compiler-singlepass = "5.0.2"
+wasmer-middlewares = "5.0.2"
+anyhow = "1.0.93"
+bytemuck = "1.20.0"
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
 napi = { version = "2.16.11", default-features = false, features = ["napi8", "tokio_rt"] }
 napi-derive = "2.16.12"
-wasmer-types = "5.0.1"
+wasmer-types = "5.0.2"
 lazy_static = "1.5.0"
 loupe = "0.1.3"
 loupe-derive = "0.1.3"
-tokio = "1.40.0"
-futures = "0.3.30"
+tokio = "1.41.0"
+futures = "0.3.31"
 chrono = "0.4.38"
 sha2 = "0.10.8"
-wasmer-cache = "5.0.1"
+wasmer-cache = "5.0.2"
 ripemd = "0.1.3"
 bech32 = "0.11.0"
 hex = "0.4.3"
-bytes = "1.7.2"
-wasmer-compiler = "5.0.1"
+bytes = "1.8.0"
+wasmer-compiler = "5.0.2"
 bitcoin = "0.32.4"
 log = "0.4.22"
 
