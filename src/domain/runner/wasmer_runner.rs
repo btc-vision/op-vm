@@ -10,7 +10,7 @@ use wasmer_middlewares::Metering;
 use wasmer_types::SerializeError;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, deploy_from_address_import, emit_import, encode_address_import, inputs_import, is_valid_bitcoin_address_import, outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_next_pointer_greater_than_import, storage_store_import, AbortData, ContractRunner, CustomEnv, InstanceWrapper};
+use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, deploy_from_address_import, emit_import, encode_address_import, inputs_import, is_valid_bitcoin_address_import, outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_next_pointer_greater_than_import, storage_store_import, verify_schnorr_import, AbortData, ContractRunner, CustomEnv, InstanceWrapper};
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
@@ -107,6 +107,7 @@ impl WasmerRunner {
                 "outputs" => import!(outputs_import),
                 "ripemd160" => import!(ripemd160_import),
                 "validateBitcoinAddress" => import!(is_valid_bitcoin_address_import),
+                "verifySchnorrSignature" => import!(verify_schnorr_import),
             }
         };
 
