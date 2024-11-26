@@ -242,11 +242,6 @@ pub fn verify_schnorr_import(
     let signature = schnorr::Signature::from_byte_array(signature_bytes);
     let valid = SECP.verify_schnorr(&signature, &message_bytes, &xonly_public_key);
 
-    println!("Signature: {:?}", signature);
-    println!("Message: {:?}", message_bytes);
-    println!("Public key: {:?}", xonly_public_key);
-    println!("Valid: {:?}", valid);
-
     let result = if valid.is_ok() {
         vec![1]
     } else {
