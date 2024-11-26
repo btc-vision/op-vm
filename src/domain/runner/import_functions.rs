@@ -1,5 +1,7 @@
 use bech32::{segwit, Hrp};
+use once_cell::sync::Lazy;
 use ripemd::{Digest, Ripemd160};
+use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -7,12 +9,14 @@ use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, InstanceWrapper, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, NEXT_POINTER_GREATER_THAN_COST, OUTPUTS_COST, RIMD160_COST, SHA256_COST, STORE_COST, STORE_REFUND_ZERO};
+use crate::domain::runner::{exported_import_functions, AbortData, CustomEnv, InstanceWrapper, CALL_COST, DEPLOY_COST, EMIT_COST, ENCODE_ADDRESS_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, NEXT_POINTER_GREATER_THAN_COST, OUTPUTS_COST, RIMD160_COST, SCHNORR_VERIFICATION_COST, SHA256_COST, STORE_COST, STORE_REFUND_ZERO};
 use crate::interfaces::ExternalFunction;
 
 fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
     vec.get(start..end)
 }
+
+static SECP: Lazy<Secp256k1<secp256k1::All>> = Lazy::new(|| Secp256k1::new());
 
 pub fn abort_import(
     mut env: FunctionEnvMut<CustomEnv>,
@@ -202,6 +206,52 @@ pub fn sha256_import(
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
     instance.use_gas(&mut store, SHA256_COST);
+
+    Ok(value as u32)
+}
+
+pub fn verify_schnorr_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    let public_key_bytes = safe_slice(&data, 0, 32).ok_or(RuntimeError::new("Invalid buffer"))?;
+    let signature_bytes = safe_slice(&data, 32, 96).ok_or(RuntimeError::new("Invalid signature"))?;
+    let message_bytes = safe_slice(&data, 96, 128).ok_or(RuntimeError::new("Invalid message"))?;
+
+    let pub_key_bytes: [u8; 32] = public_key_bytes
+        .try_into()
+        .map_err(|e| RuntimeError::new(format!("Error converting bytes: {}", e)))?;
+
+    let signature_bytes: [u8; 64] = signature_bytes
+        .try_into()
+        .map_err(|e| RuntimeError::new(format!("Error converting bytes: {}", e)))?;
+
+    let xonly_public_key = XOnlyPublicKey::from_byte_array(&pub_key_bytes)
+        .map_err(|e| RuntimeError::new(format!("Error converting public key: {}", e)))?;
+
+    let signature = schnorr::Signature::from_byte_array(signature_bytes);
+    let valid = SECP.verify_schnorr(&signature, &message_bytes, &xonly_public_key);
+
+    let result = if valid.is_ok() {
+        vec![1]
+    } else {
+        vec![0]
+    };
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    instance.use_gas(&mut store, SCHNORR_VERIFICATION_COST);
 
     Ok(value as u32)
 }
