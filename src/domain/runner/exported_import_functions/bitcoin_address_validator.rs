@@ -15,6 +15,8 @@ use std::str::FromStr;
 /// * `Ok(true)` if the address is valid for the specified network.
 /// * `Ok(false)` if the address is valid but for a different network.
 /// * `Err` if the address is invalid.
+
+// TODO: Add support for other blockchains.
 pub fn validate_bitcoin_address(address: &str, opnet_network: &BitcoinNetwork) -> Result<bool, String> {
     let network: Network = match opnet_network {
         BitcoinNetwork::Mainnet => Network::Bitcoin,

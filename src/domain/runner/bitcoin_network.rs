@@ -4,6 +4,7 @@ pub enum BitcoinNetwork {
     Regtest,
 }
 
+// TODO: Add chain_id so it can switch between chain too.
 impl BitcoinNetwork {
     pub fn contract_address_prefix(&self) -> String {
         let prefix = match self {

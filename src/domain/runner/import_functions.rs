@@ -141,6 +141,7 @@ pub fn deploy_from_address_import(
     )
 }
 
+// TODO: Disable this?
 pub fn encode_address_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
@@ -275,6 +276,7 @@ pub fn is_valid_bitcoin_address_import(
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     let string_data = vec8_to_string(data);
+    // TODO: Add support for other blockchains
     let result = exported_import_functions::validate_bitcoin_address(&string_data, &env.network).map_err(|e| RuntimeError::new(e))?;
 
     let result_vec_buffer = vec![result as u8];
