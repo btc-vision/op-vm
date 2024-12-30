@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use napi::Error;
-use wasmer::{AsStoreMut, AsStoreRef, MemoryAccessError, RuntimeError, Value};
+use wasmer::{AsStoreMut, AsStoreRef, RuntimeError, Value};
 
-use crate::domain::runner::InstanceWrapper;
+use crate::domain::runner::{ExtendedMemoryAccessError, InstanceWrapper, MAX_LENGTH_BUFFER_EXTERN};
 
 pub struct AssemblyScript;
 
@@ -116,7 +116,7 @@ impl AssemblyScript {
         instance: &InstanceWrapper,
         offset: i32,
         value: u32,
-    ) -> Result<(), MemoryAccessError> {
+    ) -> Result<(), ExtendedMemoryAccessError> {
         instance.write_memory(store, offset as u64, &value.to_le_bytes())
     }
 
@@ -140,7 +140,7 @@ impl AssemblyScript {
                 )));
             }
 
-            buffer[i as usize] = byte.unwrap();
+            buffer[i as usize] = byte.map_err(|e| RuntimeError::new(e.to_string()))?;
         }
 
         Ok(buffer)
@@ -156,6 +156,15 @@ impl AssemblyScript {
 
         let data_offset = Self::bytes_to_u32_le(pointer_buffer.clone(), 0);
         let length = Self::bytes_to_u32_le(pointer_buffer, 4);
+
+        // Make sure the length is less than x MB
+        if length > MAX_LENGTH_BUFFER_EXTERN {
+            return Err(Error::from_reason(format!(
+                "External buffer too large ({} > {})",
+                length,
+                MAX_LENGTH_BUFFER_EXTERN
+            )));
+        }
 
         let result = Self::read_pointer(store, instance, data_offset as u64, length as u64)
             .map_err(|e| Error::from_reason(e.to_string()))?;

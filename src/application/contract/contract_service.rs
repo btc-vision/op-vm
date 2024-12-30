@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use napi::Error;
-use wasmer::{MemoryAccessError, Value};
+use wasmer::Value;
 
-use crate::domain::runner::{AbortData, ContractRunner};
+use crate::domain::runner::{AbortData, ContractRunner, ExtendedMemoryAccessError};
 
 pub struct ContractService {
     max_gas: u64,
@@ -22,9 +22,9 @@ impl ContractService {
                 let gas_used = runner.get_remaining_gas();
                 if gas_used == 0 {
                     anyhow::anyhow!(
-                    "out of gas (consumed: {})",
-                    self.max_gas
-                )
+                        "out of gas (consumed: {})",
+                        self.max_gas
+                    )
                 } else {
                     let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
 
@@ -68,12 +68,12 @@ impl ContractService {
         runner.use_gas(gas);
     }
 
-    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, MemoryAccessError> {
+    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.read_memory(offset, length)
     }
 
-    pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), MemoryAccessError> {
+    pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), ExtendedMemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.write_memory(offset, data)
     }

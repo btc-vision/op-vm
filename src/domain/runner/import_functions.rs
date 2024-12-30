@@ -4,6 +4,7 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
 use std::collections::HashMap;
+use std::string::FromUtf8Error;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
@@ -257,10 +258,11 @@ pub fn verify_schnorr_import(
     Ok(value as u32)
 }
 
-fn vec8_to_string(vec: Vec<u8>) -> String {
-    String::from_utf8(vec).unwrap()
+fn vec8_to_string(vec: Vec<u8>) -> Result<String, FromUtf8Error> {
+    String::from_utf8(vec)
 }
 
+// TODO: Add support for other blockchains
 pub fn is_valid_bitcoin_address_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
@@ -275,8 +277,7 @@ pub fn is_valid_bitcoin_address_import(
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-    let string_data = vec8_to_string(data);
-    // TODO: Add support for other blockchains
+    let string_data = vec8_to_string(data).map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;
     let result = exported_import_functions::validate_bitcoin_address(&string_data, &env.network).map_err(|e| RuntimeError::new(e))?;
 
     let result_vec_buffer = vec![result as u8];
@@ -339,6 +340,11 @@ pub fn console_log_import(
         .instance
         .clone()
         .ok_or(RuntimeError::new("Memory not found"))?;
+
+    let network = &env.network;
+    if !&network.enable_debug() {
+        return Err(RuntimeError::new("Contracts may not log this network"));
+    }
 
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;

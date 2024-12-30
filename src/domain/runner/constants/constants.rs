@@ -24,3 +24,7 @@ pub const OUTPUTS_COST: u64 = 5_000_000;
 pub const EMIT_COST: u64 = 1_000_000;
 pub const IS_VALID_BITCOIN_ADDRESS_COST: u64 = 1_000_000;
 pub const SCHNORR_VERIFICATION_COST: u64 = 100_000_000;
+
+
+/** Constraints */
+pub const MAX_LENGTH_BUFFER_EXTERN: u32 = 2 * 1024 * 1024; // 4MB
