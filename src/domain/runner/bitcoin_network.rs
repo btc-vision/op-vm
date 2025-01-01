@@ -4,6 +4,7 @@ pub enum BitcoinNetwork {
     Regtest,
 }
 
+// TODO: Add chain_id so it can switch between chain too.
 impl BitcoinNetwork {
     pub fn contract_address_prefix(&self) -> String {
         let prefix = match self {
@@ -12,5 +13,21 @@ impl BitcoinNetwork {
             BitcoinNetwork::Regtest => "bcrt",
         };
         prefix.to_string()
+    }
+
+    pub fn enable_debug(&self) -> bool {
+        match self {
+            BitcoinNetwork::Mainnet => false,
+            BitcoinNetwork::Testnet => false,
+            BitcoinNetwork::Regtest => true,
+        }
+    }
+
+    pub fn is_test_network(&self) -> bool {
+        match self {
+            BitcoinNetwork::Mainnet => false,
+            BitcoinNetwork::Testnet => true,
+            BitcoinNetwork::Regtest => true,
+        }
     }
 }

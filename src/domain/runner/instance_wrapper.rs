@@ -1,4 +1,5 @@
 use crate::domain::runner::MAX_MEMORY_SIZE;
+use thiserror::Error;
 use wasmer::{
     AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError,
     Value,
@@ -8,6 +9,16 @@ use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, M
 #[derive(Clone)]
 pub struct InstanceWrapper {
     instance: Instance,
+}
+
+#[derive(Clone, Copy, Debug, Error)]
+#[non_exhaustive]
+pub enum ExtendedMemoryAccessError {
+    #[error("Memory access error: {0}")]
+    Base(MemoryAccessError),
+
+    #[error("Unable to get memory")]
+    UnableToGetMemory,
 }
 
 impl InstanceWrapper {
@@ -27,8 +38,8 @@ impl InstanceWrapper {
         Ok(result)
     }
 
-    pub fn is_out_of_memory(&self, store: &(impl AsStoreRef + ?Sized)) -> Result<bool, MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
+    pub fn is_out_of_memory(&self, store: &(impl AsStoreRef + ?Sized)) -> Result<bool, ExtendedMemoryAccessError> {
+        let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
         let size = view.data_size();
 
@@ -40,12 +51,12 @@ impl InstanceWrapper {
         store: &(impl AsStoreRef + ?Sized),
         offset: u64,
         length: u64,
-    ) -> Result<Vec<u8>, MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
+    ) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
+        let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
-        view.read(offset, &mut buffer)?;
+        view.read(offset, &mut buffer).map_err(|e| ExtendedMemoryAccessError::Base(e))?;
 
         Ok(buffer)
     }
@@ -54,10 +65,10 @@ impl InstanceWrapper {
         &self,
         store: &(impl AsStoreRef + ?Sized),
         offset: u64,
-    ) -> Result<u8, MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
+    ) -> Result<u8, ExtendedMemoryAccessError> {
+        let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
-        view.read_u8(offset)
+        view.read_u8(offset).map_err(|e| ExtendedMemoryAccessError::Base(e))
     }
 
     pub fn write_memory(
@@ -65,10 +76,10 @@ impl InstanceWrapper {
         store: &(impl AsStoreRef + ?Sized),
         offset: u64,
         data: &[u8],
-    ) -> Result<(), MemoryAccessError> {
-        let memory = Self::get_memory(&self.instance);
+    ) -> Result<(), ExtendedMemoryAccessError> {
+        let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
-        view.write(offset, data)
+        view.write(offset, data).map_err(|e| ExtendedMemoryAccessError::Base(e))
     }
 
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
@@ -110,8 +121,9 @@ impl InstanceWrapper {
         set_remaining_points(store, &self.instance, gas);
     }
 
-    fn get_memory(instance: &Instance) -> &Memory {
-        instance.exports.get_memory("memory").unwrap()
+    fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
+        // TODO: Restore error state?
+        instance.exports.get_memory("memory").map_err(|_| ExtendedMemoryAccessError::UnableToGetMemory)
     }
 
     fn get_function<'a>(

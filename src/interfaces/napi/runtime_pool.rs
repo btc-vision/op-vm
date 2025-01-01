@@ -32,7 +32,8 @@ impl RuntimePool {
     }*/
 
     pub fn increase(&self, size: usize) {
-        self.expected_size.lock().unwrap().fetch_add(size, Relaxed);
+        let l = self.expected_size.lock().map_err(|_| anyhow::anyhow!("Failed to lock expected_size")).unwrap();
+        l.fetch_add(size, Relaxed);
 
         let mut runtimes = self.runtimes.lock().unwrap();
         for _ in 0..size {
@@ -68,14 +69,14 @@ impl RuntimePool {
     }
 
     pub fn get_runtime(&self) -> Option<Arc<Runtime>> {
-        let idling = self.idling.lock().unwrap();
+        let idling = self.idling.lock().map_err(|_| anyhow::anyhow!("Failed to lock idling")).unwrap();
         if idling.load(Relaxed) == 0 {
             return Some(Self::create_runtime());
         }
 
         idling.fetch_sub(1, Relaxed);
 
-        let mut runtimes = self.runtimes.lock().unwrap();
+        let mut runtimes = self.runtimes.lock().map_err(|_| anyhow::anyhow!("Failed to lock runtimes")).unwrap();
         runtimes.pop_front()
     }
 
