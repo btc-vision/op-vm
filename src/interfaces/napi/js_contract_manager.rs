@@ -4,9 +4,10 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use bytes::Bytes;
 // For alpha.27, we'll do NapiResult alias or just use `napi::Result`
+use napi::bindgen_prelude::Buffer;
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi::{
-    bindgen_prelude::{AsyncTask, BigInt, Buffer, Function, Undefined, Unknown},
+    bindgen_prelude::{AsyncTask, BigInt, Function, Undefined, Unknown},
     Error, JsNumber, Result as NapiResult,
 };
 use napi_derive::napi;
@@ -18,23 +19,83 @@ use crate::interfaces::napi::{
 };
 use crate::interfaces::{AbortDataResponse, ContractCallTask};
 
-pub type TsfnVoid = ThreadsafeFunction<
-    ThreadSafeJsImportResponse,
-    Unknown,                       // Return
-    (ThreadSafeJsImportResponse,), // Our 1 argument for JS
+/// Type alias for a TSFN that sends a `ThreadSafeJsImportResponse`
+/// into JavaScript and receives a `JsUnknown` result back.
+///
+/// The JS side *can* resolve the Promise to a Buffer, but from Rust’s
+/// perspective we will see a `JsUnknown` that we can parse as Buffer.
+pub type TsfnBuffer = ThreadsafeFunction<
+    ThreadSafeJsImportResponse,    // T: the data we pass to JS
+    Buffer,                        // Return: the JS return type is `JsUnknown` in 3.0 alpha
+    (ThreadSafeJsImportResponse,), // The "CallJsBackArgs" we pass into JS. A single argument tuple
     true,                          // calleeHandled
     false,                         // Weak
     10,                            // max_queue_size
 >;
 
-pub type TsfnBuffer = ThreadsafeFunction<
+/// Type alias for a TSFN that sends a `ThreadSafeJsImportResponse`
+/// into JavaScript and expects "void" from JS.
+/// (In 3.0 alpha, that’s still `JsUnknown`, we just ignore it.)
+pub type TsfnVoid = ThreadsafeFunction<
     ThreadSafeJsImportResponse,
-    Buffer,                        // Return
-    (ThreadSafeJsImportResponse,), // Our 1 argument for JS
-    true,                          // calleeHandled
-    false,                         // Weak
-    10,                            // max_queue_size
+    Unknown,
+    (ThreadSafeJsImportResponse,),
+    true,
+    false,
+    10,
 >;
+
+/// Macro to create a TSFN that we *intend* to treat like
+/// "Promise<Buffer or Uint8Array>" in JavaScript. But in 3.0 alpha,
+/// the actual `Return` is `JsUnknown`. We call it "TsfnBufferLike".
+#[macro_export]
+macro_rules! create_tsfn_buffer {
+    ($js_func:expr) => {{
+        // 1) We pick the "T" type for build_threadsafe_function<T>()
+        //    In your old code, T was `ThreadSafeJsImportResponse`.
+        let builder = $js_func.build_threadsafe_function::<ThreadSafeJsImportResponse>();
+
+        // 2) calleeHandled + max_queue_size
+        let builder = builder.callee_handled::<true>();
+        let builder = builder.max_queue_size::<10>();
+
+        // 3) We next call `.build_callback<CallJsBackArgs, _>(...)`
+        //    so that we pass `(ThreadSafeJsImportResponse,)` to JS as the argument list.
+        //
+        //    The closure returns `Ok((ctx.value,))`, meaning we pass exactly one argument
+        //    (the data that was passed from Rust).
+        //    The final TSFN type is: ThreadsafeFunction<ThreadSafeJsImportResponse,
+        //       JsUnknown, (ThreadSafeJsImportResponse,), true, false, 10>
+        //
+        //    We'll call it "TsfnBufferLike" just for our own alias.
+        let tsfn = builder.build_callback::<(ThreadSafeJsImportResponse,), _>(|ctx| {
+            // pass one argument => (ctx.value,)
+            Ok((ctx.value,))
+        })?;
+
+        // Wrap in Arc if you want to store it
+        std::sync::Arc::new(tsfn)
+    }};
+}
+
+/// Macro to create a TSFN that we interpret as "Promise<void>",
+/// i.e. we only pass `ThreadSafeJsImportResponse` in, and ignore the result.
+#[macro_export]
+macro_rules! create_tsfn_void {
+    ($js_func:expr) => {{
+        // T is the data we pass to JS:
+        let builder = $js_func.build_threadsafe_function::<ThreadSafeJsImportResponse>();
+        let builder = builder.callee_handled::<true>();
+        let builder = builder.max_queue_size::<10>();
+
+        // The closure returns a single argument tuple
+        // and the final result is also `JsUnknown`.
+        let tsfn =
+            builder.build_callback::<(ThreadSafeJsImportResponse,), _>(|ctx| Ok((ctx.value,)))?;
+
+        std::sync::Arc::new(tsfn)
+    }};
+}
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
@@ -52,59 +113,6 @@ pub struct ContractManager {
     pub inputs_tsfn: Arc<TsfnBuffer>,
     pub outputs_tsfn: Arc<TsfnBuffer>,
     pub next_pointer_value_greater_than_tsfn: Arc<TsfnBuffer>,
-}
-
-/// Macro to create a `TsfnBuffer` from a `Function`.
-///
-/// Expects you have already done:
-///   use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-///   use crate::TsfnBuffer;
-///
-/// It returns `Arc<TsfnBuffer>`.
-#[macro_export]
-macro_rules! create_tsfn_buffer {
-    ($js_func:expr) => {{
-        let builder = $js_func.build_threadsafe_function::<ThreadSafeJsImportResponse,
-                Buffer,
-                (ThreadSafeJsImportResponse,)>();
-        // Turn on callee-handled error, set queue size
-        let builder = builder.callee_handled::<true>();
-        let builder = builder.max_queue_size::<10>();
-
-        // Build final TSFN with single argument `(ThreadSafeJsImportResponse,)`
-        // The closure must return Ok((ctx.value,)) so it matches the "call-js-back" type
-        let tsfn: TsfnBuffer = builder
-            .build_callback::<(ThreadSafeJsImportResponse,), Buffer, (ThreadSafeJsImportResponse,)>(
-                |ctx| {
-                    // pass one argument to JS callback => ( ctx.value, )
-                    Ok((ctx.value,))
-                },
-            )?;
-
-        // Wrap in Arc if you want to store or clone it
-        std::sync::Arc::new(tsfn) as Arc<TsfnBuffer>
-    }};
-}
-
-/// Macro to create a `TsfnVoid` from a `Function`.
-///
-/// This yields a TSFN that returns a `Promise<void>` to JS,
-/// i.e. no meaningful return value. We do `Return=Unknown`.
-/// Returns `Arc<TsfnVoid>`.
-#[macro_export]
-macro_rules! create_tsfn_void {
-    ($js_func:expr) => {{
-        let builder = $js_func.build_threadsafe_function();
-        let builder = builder.callee_handled::<true>();
-        let builder = builder.max_queue_size::<10>();
-
-        // For a TSFN that returns Promise<void>, we do Return=Unknown
-        // but still accept `(ThreadSafeJsImportResponse,)`.
-        let tsfn: TsfnVoid =
-            builder.build_callback::<(ThreadSafeJsImportResponse,), _>(|ctx| Ok((ctx.value,)))?;
-
-        std::sync::Arc::new(tsfn) as Arc<TsfnVoid>
-    }};
 }
 
 #[napi]

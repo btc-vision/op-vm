@@ -38,7 +38,7 @@ impl ToNapiValue for SkipField {
         } else {
             Err(Error::new(
                 Status::GenericFailure,
-                "Failed to get `undefined`".into(),
+                "Failed to get `undefined`",
             ))
         }
     }

@@ -23,6 +23,7 @@ impl GenericExternalFunction {
             buffer: data.to_vec(),
             contract_id: BigInt::from(self.contract_id),
         };
+
         let fut = async move {
             // call_async => yields a Promise<Buffer>
             let buf: Buffer = self
