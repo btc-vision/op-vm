@@ -8,23 +8,36 @@ use crate::domain::runner::{AbortData, ContractRunner, ExtendedMemoryAccessError
 pub struct ContractService {
     max_gas: u64,
     runner: Arc<Mutex<dyn ContractRunner>>,
+    is_executing: bool,
 }
 
 impl ContractService {
     pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
-        Self { max_gas, runner }
+        Self {
+            max_gas,
+            runner,
+            is_executing: false,
+        }
+    }
+
+    pub fn set_executing(&mut self, executing: bool) {
+        self.is_executing = executing;
+    }
+
+    pub fn is_executing(&self) -> bool {
+        self.is_executing
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        let mut runner = self.runner.lock().map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
+        let mut runner = self
+            .runner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
         let response = runner.call(function, params).map_err(|e| {
             if e.to_string().contains("unreachable") {
                 let gas_used = runner.get_remaining_gas();
                 if gas_used == 0 {
-                    anyhow::anyhow!(
-                        "out of gas (consumed: {})",
-                        self.max_gas
-                    )
+                    anyhow::anyhow!("out of gas (consumed: {})", self.max_gas)
                 } else {
                     let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
 
@@ -68,7 +81,11 @@ impl ContractService {
         runner.use_gas(gas);
     }
 
-    pub fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
+    pub fn read_memory(
+        &self,
+        offset: u64,
+        length: u64,
+    ) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.read_memory(offset, length)
     }
