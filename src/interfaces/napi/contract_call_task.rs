@@ -4,13 +4,11 @@ use std::sync::{Arc, Mutex};
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
-use crate::interfaces::napi::js_contract::JsContract; // for box_values_to_js_array
+use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::CallResponse;
 use napi::bindgen_prelude::BigInt;
 
-// Pseudo-patched ContractCallTask
 pub struct ContractCallTask {
-    // Previously: Arc<Mutex<ContractService>>
     contract: Arc<Mutex<ContractService>>,
     func_name: String,
     wasm_params: Vec<Value>,
