@@ -1,26 +1,24 @@
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::{ExternalFunctionNoResponse, GenericExternalFunction};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use crate::interfaces::napi::external_functions::GenericExternalFunctionVoid;
+use crate::interfaces::napi::js_contract_manager::TsfnVoid;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 pub struct ConsoleLogExternalFunction {
-    external_function: GenericExternalFunction,
+    // This uses the "void" variant => Promise<void>
+    external_function: GenericExternalFunctionVoid,
 }
 
 impl ConsoleLogExternalFunction {
-    pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        id: u64,
-    ) -> Self {
-        Self { external_function: GenericExternalFunction::new(tsfn, id) }
+    pub fn new(tsfn: Arc<TsfnVoid>, id: u64) -> Self {
+        Self {
+            external_function: GenericExternalFunctionVoid::new(tsfn, id),
+        }
     }
 }
 
 impl ConsoleLogExternalFunction {
     pub(crate) fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<(), RuntimeError> {
-        let resp = self.external_function.execute_no_response(data, runtime);
-
-        resp
+        self.external_function.execute_no_response(data, runtime)
     }
 }

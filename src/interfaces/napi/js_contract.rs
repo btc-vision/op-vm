@@ -1,13 +1,10 @@
+use std::panic::catch_unwind;
+use std::sync::{Arc, Mutex};
+
 use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
-use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
-use napi::Env;
-use napi::Error;
-use napi::JsNumber;
-use napi::JsUnknown;
-use std::panic::catch_unwind;
-use std::sync::{Arc, Mutex, TryLockError};
+use napi::{Error, JsNumber, Result as NapiResult};
 use tokio::runtime::Runtime;
 use wasmer::Value;
 
@@ -24,6 +21,9 @@ use crate::interfaces::{
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 
+/// A Rust struct that does not need the `#[napi]` macro because
+/// we do not automatically convert it to/from JS. Instead, we expose
+/// some methods on it or pass it around in other ways.
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
     contract: Arc<Mutex<ContractService>>,
@@ -32,7 +32,9 @@ pub struct JsContract {
 }
 
 impl JsContract {
-    pub fn validate_bytecode(bytecode: Buffer, max_gas: BigInt) -> Result<bool> {
+    /// Equivalent to `WasmerRunner::validate_bytecode`.
+    /// In NAPI-RS 3.0, this still works the same as in 2.0.
+    pub fn validate_bytecode(bytecode: Buffer, max_gas: BigInt) -> NapiResult<bool> {
         let time = Local::now();
         let bytecode_vec = bytecode.to_vec();
         let max_gas = max_gas.get_u64().1;
@@ -45,22 +47,34 @@ impl JsContract {
         Ok(true)
     }
 
-    pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
+    /// Replaces the old approach of "manager.storage_load_tsfn.clone()"
+    /// by using `Arc::clone(&manager.storage_load_tsfn)`.
+    /// You must ensure that `ContractManager` stores these TSFNs in an `Arc` as well.
+    pub fn from(
+        params: JsContractParameter,
+        manager: &ContractManager,
+        id: u64,
+    ) -> NapiResult<Self> {
+        // Use a catch_unwind to handle potential panics
         catch_unwind(|| unsafe {
             let time = Local::now();
 
-            let storage_load_tsfn = manager.storage_load_tsfn.clone();
-            let storage_store_tsfn = manager.storage_store_tsfn.clone();
-            let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
-            let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
-            let console_log_tsfn = manager.console_log_tsfn.clone();
-            let emit_tsfn = manager.emit_tsfn.clone();
-            let inputs_tsfn = manager.inputs_tsfn.clone();
-            let outputs_tsfn = manager.outputs_tsfn.clone();
+            // Instead of `manager.storage_load_tsfn.clone()`,
+            // do `Arc::clone(&manager.storage_load_tsfn)`.
+            // Each TSFN in manager should be declared as:
+            //   Arc<ThreadsafeFunction<..., ..., ..., true, ...>>
+            let storage_load_tsfn = Arc::clone(&manager.storage_load_tsfn);
+            let storage_store_tsfn = Arc::clone(&manager.storage_store_tsfn);
+            let call_other_contract_tsfn = Arc::clone(&manager.call_other_contract_tsfn);
+            let deploy_from_address_tsfn = Arc::clone(&manager.deploy_from_address_tsfn);
+            let console_log_tsfn = Arc::clone(&manager.console_log_tsfn);
+            let emit_tsfn = Arc::clone(&manager.emit_tsfn);
+            let inputs_tsfn = Arc::clone(&manager.inputs_tsfn);
+            let outputs_tsfn = Arc::clone(&manager.outputs_tsfn);
             let next_pointer_value_greater_than_tsfn =
-                manager.next_pointer_value_greater_than_tsfn.clone();
+                Arc::clone(&manager.next_pointer_value_greater_than_tsfn);
 
-            // Create ExternalFunction instances with contract_id
+            // Build your external functions
             let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
             let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
             let call_other_contract_external =
@@ -77,12 +91,11 @@ impl JsContract {
                     id,
                 );
 
-            // Obtain a Runtime from the pool
+            // Obtain a runtime from the manager's pool
             let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
                 Error::from_reason("No available runtimes in the pool".to_string())
             })?;
 
-            //let runtime = Arc::new(Runtime::new()?);
             let custom_env: CustomEnv = CustomEnv::new(
                 params.network.into(),
                 storage_load_external,
@@ -98,29 +111,26 @@ impl JsContract {
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
-            let runner: WasmerRunner;
-
-            if let Some(bytecode) = params.bytecode {
-                runner = WasmerRunner::from_bytecode(&bytecode, params.max_gas, custom_env)
-                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            // either from bytecode or from serialized
+            let runner = if let Some(bytecode) = params.bytecode {
+                WasmerRunner::from_bytecode(&bytecode, params.max_gas, custom_env)
             } else if let Some(serialized) = params.serialized {
-                runner = WasmerRunner::from_serialized(serialized, params.max_gas, custom_env)
-                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                WasmerRunner::from_serialized(serialized, params.max_gas, custom_env)
             } else {
                 return Err(Error::from_reason("No bytecode or serialized data"));
             }
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
             let contract = JsContract::from_runner(
                 runner,
                 params.max_gas,
                 runtime.clone(),
                 manager.runtime_pool.clone(),
-            )?; //, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn
+            )?;
             log_time_diff(&time, "JsContract::from");
-
             Ok(contract)
         })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        .unwrap_or_else(|e| Err(Error::from_reason(format!("Panic: {:?}", e))))
     }
 
     fn from_runner(
@@ -128,9 +138,8 @@ impl JsContract {
         max_gas: u64,
         runtime: Arc<Runtime>,
         runtime_pool: Arc<RuntimePool>,
-    ) -> Result<Self> {
+    ) -> NapiResult<Self> {
         let time = Local::now();
-
         let runner = Arc::new(Mutex::new(runner));
         let contract = ContractService::new(max_gas, runner.clone());
 
@@ -144,270 +153,230 @@ impl JsContract {
         })
     }
 
-    pub fn serialize(&self) -> Result<Bytes> {
+    pub fn serialize(&self) -> NapiResult<Bytes> {
         let runner = self.runner.clone();
         let runner = runner.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => Error::from_reason("Runner mutex is poisoned".to_string()),
-            TryLockError::WouldBlock => {
+            std::sync::TryLockError::Poisoned(_) => {
+                Error::from_reason("Runner mutex is poisoned".to_string())
+            }
+            std::sync::TryLockError::WouldBlock => {
                 Error::from_reason("Runner mutex is already locked".to_string())
             }
         })?;
         let serialized = runner
             .serialize()
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
         Ok(serialized)
     }
 
-    #[inline(never)]
+    /// Return an `AsyncTask<ContractCallTask>` so you can do `Promise<CallResponse>` in JS.
     pub fn call(
         &self,
         func_name: String,
         params: Vec<JsNumber>,
-    ) -> Result<AsyncTask<ContractCallTask>> {
-        println!("call");
+    ) -> NapiResult<AsyncTask<ContractCallTask>> {
         let time = Local::now();
         let mut wasm_params = Vec::new();
-
-        for param in params.iter() {
-            let param_value = param
+        for param in params {
+            let val = param
                 .get_int32()
                 .map_err(|e| Error::from_reason(format!("Failed to get param value: {:?}", e)))?;
-            wasm_params.push(Value::I32(param_value));
+            wasm_params.push(Value::I32(val));
         }
-
         let contract = self.contract.clone();
-        let result = AsyncTask::new(ContractCallTask::new(
-            contract,
-            &func_name,
-            &wasm_params,
-            time,
-        ));
-
-        println!("call 2");
-        Ok(result)
+        let task = ContractCallTask::new(contract, &func_name, &wasm_params, time);
+        Ok(AsyncTask::new(task))
     }
 
-    pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
+    pub fn read_memory(&self, offset: BigInt, length: BigInt) -> NapiResult<Buffer> {
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;
         let contract = self.contract.clone();
 
-        let result = {
+        let data = {
             let contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
+                std::sync::TryLockError::Poisoned(_) => {
                     Error::from_reason("Contract mutex is poisoned".to_string())
                 }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
+                std::sync::TryLockError::WouldBlock => {
+                    Error::from_reason("Contract mutex is locked".to_string())
                 }
             })?;
             contract.read_memory(offset, length)
-        };
+        }
+        .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
-        let resp = result.map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
-        Ok(Buffer::from(resp))
+        Ok(Buffer::from(data))
     }
 
-    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
-        let data: Vec<u8> = data.into();
+    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> NapiResult<Undefined> {
         let offset = offset.get_u64().1;
+        let bytes: Vec<u8> = data.to_vec();
         let contract = self.contract.clone();
-
-        let contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
-        contract
-            .write_memory(offset, &data)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
+        {
+            let contract = contract.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::Poisoned(_) => {
+                    Error::from_reason("Contract mutex is poisoned".to_string())
+                }
+                std::sync::TryLockError::WouldBlock => {
+                    Error::from_reason("Contract mutex is locked".to_string())
+                }
+            })?;
+            contract
+                .write_memory(offset, &bytes)
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+        }
         Ok(())
     }
 
-    pub fn get_used_gas(&self) -> Result<BigInt> {
+    pub fn get_used_gas(&self) -> NapiResult<BigInt> {
         let contract = self.contract.clone();
         let gas = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
+            let mut c = contract.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::Poisoned(_) => {
+                    Error::from_reason("poisoned contract mutex".to_string())
                 }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
+                std::sync::TryLockError::WouldBlock => {
+                    Error::from_reason("contract is locked".to_string())
                 }
             })?;
-            contract.get_used_gas()
+            c.get_used_gas()
         };
-
         Ok(BigInt::from(gas))
     }
 
-    pub fn set_used_gas(&self, gas: BigInt) -> Result<()> {
+    pub fn set_used_gas(&self, gas: BigInt) -> NapiResult<()> {
         let gas = gas.get_u64().1;
         let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
+        let mut c = contract.try_lock().map_err(|e| match e {
+            std::sync::TryLockError::Poisoned(_) => {
+                Error::from_reason("poisoned contract mutex".to_string())
             }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
+            std::sync::TryLockError::WouldBlock => {
+                Error::from_reason("contract is locked".to_string())
             }
         })?;
-        contract.set_used_gas(gas);
-
+        c.set_used_gas(gas);
         Ok(())
     }
 
-    pub fn get_remaining_gas(&self) -> Result<BigInt> {
+    pub fn get_remaining_gas(&self) -> NapiResult<BigInt> {
         let contract = self.contract.clone();
         let gas = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
+            let mut c = contract.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::Poisoned(_) => {
+                    Error::from_reason("poisoned contract".to_string())
                 }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
+                std::sync::TryLockError::WouldBlock => {
+                    Error::from_reason("already locked".to_string())
                 }
             })?;
-            contract.get_remaining_gas()
+            c.get_remaining_gas()
         };
-
         Ok(BigInt::from(gas))
     }
 
-    pub fn set_remaining_gas(&self, gas: BigInt) -> Result<()> {
+    pub fn set_remaining_gas(&self, gas: BigInt) -> NapiResult<()> {
         let gas = gas.get_u64().1;
         let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
+        let mut c = contract.try_lock().map_err(|e| match e {
+            std::sync::TryLockError::Poisoned(_) => Error::from_reason("poisoned".to_string()),
+            std::sync::TryLockError::WouldBlock => Error::from_reason("locked".to_string()),
         })?;
-        contract.set_remaining_gas(gas);
-
+        c.set_remaining_gas(gas);
         Ok(())
     }
 
-    pub fn use_gas(&self, gas: BigInt) -> Result<()> {
+    pub fn use_gas(&self, gas: BigInt) -> NapiResult<()> {
         let gas = gas.get_u64().1;
         let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
+        let mut c = contract.try_lock().map_err(|e| match e {
+            std::sync::TryLockError::Poisoned(_) => Error::from_reason("poisoned".to_string()),
+            std::sync::TryLockError::WouldBlock => Error::from_reason("locked".to_string()),
         })?;
-        contract.use_gas(gas);
-
+        c.use_gas(gas);
         Ok(())
     }
 
-    pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
-        let value = value.to_vec();
+    pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> NapiResult<i64> {
+        let data = value.to_vec();
         let contract = self.contract.clone();
 
         let result = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
+            let mut c = contract.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::Poisoned(_) => Error::from_reason("poisoned".to_string()),
+                std::sync::TryLockError::WouldBlock => Error::from_reason("locked".to_string()),
             })?;
-            contract.write_buffer(&value, id, align)?
+            c.write_buffer(&data, id, align)?
         };
-
         Ok(result)
     }
 
-    pub fn get_abort_data(&self) -> Result<AbortDataResponse> {
-        let contract = self.contract.clone();
-        let result: Option<AbortDataResponse> = {
-            let contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
+    pub fn get_abort_data(&self) -> NapiResult<AbortDataResponse> {
+        let c = self.contract.clone();
+        let maybe = {
+            let c = c.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::Poisoned(_) => Error::from_reason("poisoned".to_string()),
+                std::sync::TryLockError::WouldBlock => Error::from_reason("locked".to_string()),
             })?;
-            contract.get_abort_data().map(|data| data.into())
+            c.get_abort_data().map(|data| data.into())
         };
-
-        result.ok_or(Error::from_reason("No abort data"))
+        maybe.ok_or_else(|| Error::from_reason("No abort data".to_string()))
     }
 }
 
+/// Drop the contract, returning the runtime to the pool
 impl Drop for JsContract {
     fn drop(&mut self) {
-        // Return the runtime to the pool
         if let Err(e) = self.runtime_pool.return_runtime(self.runtime.clone()) {
-            eprintln!("Failed to return runtime to pool: {:?}", e);
+            eprintln!("Failed to return runtime: {:?}", e);
         }
     }
 }
 
 impl JsContract {
-    fn value_to_js(env: &Env, value: &Value) -> Result<JsUnknown> {
+    fn value_to_js(env: &Env, value: &Value) -> NapiResult<Unknown> {
         match value {
             Value::I32(v) => {
-                let js_value = env.create_int32(*v)?;
-                let unknown = js_value.into_unknown();
-
-                Ok(unknown)
+                let js = env.create_int32(*v)?;
+                Ok(js.into_unknown())
             }
             Value::I64(v) => {
-                let js_value = env.create_int64(*v)?;
-                let unknown = js_value.into_unknown();
-
-                Ok(unknown)
+                let js = env.create_int64(*v)?;
+                Ok(js.into_unknown())
             }
-
             Value::F32(v) => {
-                let js_value = env.create_double(*v as f64)?;
-                let unknown = js_value.into_unknown();
-
-                Ok(unknown)
+                let js = env.create_double(*v as f64)?;
+                Ok(js.into_unknown())
             }
-
             Value::F64(v) => {
-                let js_value = env.create_double(*v)?;
-                let unknown = js_value.into_unknown();
-
-                Ok(unknown)
+                let js = env.create_double(*v)?;
+                Ok(js.into_unknown())
             }
-
             Value::V128(v) => {
-                let js_value = env.create_bigint_from_u128(*v)?;
-                let unknown = js_value.into_unknown()?;
-
+                // NAPI-RS 3.0 usage for big ints is unchanged from 2.0
+                let js_big = env.create_bigint_from_u128(*v)?;
+                // create_bigint_from_u128 returns `JsBigInt`
+                // so if needed, do `Ok(js_big.into_unknown()?)`, but
+                // that method signature might differ.
+                // So we do:
+                let unknown = js_big.into_unknown()?;
                 Ok(unknown)
             }
-
-            _ => Err(Error::from_reason("Unsupported value type")),
+            _ => Err(Error::from_reason("Unsupported value type".to_string())),
         }
     }
 
-    pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
-        let vals: Vec<Value> = values.clone().into_vec();
-        let mut js_array = env.create_array(vals.len() as u32)?;
+    /// Helper for converting a `Box<[Value]>` to a JS array
+    pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> NapiResult<Array> {
+        let slice: Vec<Value> = values.into_vec();
+        let mut js_array = env.create_array(slice.len() as u32)?;
 
-        for value in values.iter() {
-            let js_value = JsContract::value_to_js(env, value)?;
-            let _ = js_array.insert(js_value);
+        for val in slice.into_iter() {
+            let js_val = Self::value_to_js(env, &val)?;
+            // insert the next element
+            js_array.insert(js_val)?;
         }
-
         Ok(js_array)
     }
 }

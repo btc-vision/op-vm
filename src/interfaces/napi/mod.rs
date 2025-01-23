@@ -12,3 +12,4 @@ mod bitcoin_network_request;
 mod js_contract_manager;
 mod contract;
 mod runtime_pool;
+mod skip_field;

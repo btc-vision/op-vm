@@ -1,60 +1,110 @@
-use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
-use crate::interfaces::napi::contract::JsContractParameter;
-use crate::interfaces::napi::js_contract::JsContract;
-use crate::interfaces::napi::runtime_pool::RuntimePool;
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::{AbortDataResponse, ContractCallTask};
-use anyhow::anyhow;
-use bytes::Bytes;
-use napi::bindgen_prelude::{AsyncTask, BigInt, Buffer, Undefined};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
-use napi::Env;
-use napi::{Error, JsFunction, JsNumber};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-macro_rules! create_tsfn {
-    ($id:ident) => {
-        $id.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?
-    };
-}
+use anyhow::anyhow;
+use bytes::Bytes;
+// For alpha.27, we'll do NapiResult alias or just use `napi::Result`
+use napi::threadsafe_function::ThreadsafeFunction;
+use napi::{
+    bindgen_prelude::{AsyncTask, BigInt, Buffer, Function, Undefined, Unknown},
+    Error, JsNumber, Result as NapiResult,
+};
+use napi_derive::napi;
 
-macro_rules! abort_tsfn {
-    ($id:expr, $env:expr) => {
-        if !$id.aborted() {
-            $id.clone().abort()?;
-        }
+use crate::interfaces::napi::{
+    bitcoin_network_request::BitcoinNetworkRequest, contract::JsContractParameter,
+    js_contract::JsContract, runtime_pool::RuntimePool,
+    thread_safe_js_import_response::ThreadSafeJsImportResponse,
+};
+use crate::interfaces::{AbortDataResponse, ContractCallTask};
 
-        $id.unref(&$env)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-    };
-}
+pub type TsfnVoid = ThreadsafeFunction<
+    ThreadSafeJsImportResponse,
+    Unknown,                       // Return
+    (ThreadSafeJsImportResponse,), // Our 1 argument for JS
+    true,                          // calleeHandled
+    false,                         // Weak
+    10,                            // max_queue_size
+>;
+
+pub type TsfnBuffer = ThreadsafeFunction<
+    ThreadSafeJsImportResponse,
+    Buffer,                        // Return
+    (ThreadSafeJsImportResponse,), // Our 1 argument for JS
+    true,                          // calleeHandled
+    false,                         // Weak
+    10,                            // max_queue_size
+>;
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
     contracts: HashMap<u64, JsContract>,
     contract_cache: HashMap<String, Bytes>,
     next_id: u64,
-    #[napi(skip)]
+
     pub runtime_pool: Arc<RuntimePool>,
-    #[napi(skip)]
-    pub storage_load_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub storage_store_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub call_other_contract_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub deploy_from_address_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub console_log_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub emit_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub inputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub next_pointer_value_greater_than_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_load_tsfn: Arc<TsfnBuffer>,
+    pub storage_store_tsfn: Arc<TsfnBuffer>,
+    pub call_other_contract_tsfn: Arc<TsfnBuffer>,
+    pub deploy_from_address_tsfn: Arc<TsfnBuffer>,
+    pub console_log_tsfn: Arc<TsfnVoid>,
+    pub emit_tsfn: Arc<TsfnVoid>,
+    pub inputs_tsfn: Arc<TsfnBuffer>,
+    pub outputs_tsfn: Arc<TsfnBuffer>,
+    pub next_pointer_value_greater_than_tsfn: Arc<TsfnBuffer>,
+}
+
+/// Macro to create a `TsfnBuffer` from a `Function`.
+///
+/// Expects you have already done:
+///   use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+///   use crate::TsfnBuffer;
+///
+/// It returns `Arc<TsfnBuffer>`.
+#[macro_export]
+macro_rules! create_tsfn_buffer {
+    ($js_func:expr) => {{
+        let builder = $js_func.build_threadsafe_function::<ThreadSafeJsImportResponse,
+                Buffer,
+                (ThreadSafeJsImportResponse,)>();
+        // Turn on callee-handled error, set queue size
+        let builder = builder.callee_handled::<true>();
+        let builder = builder.max_queue_size::<10>();
+
+        // Build final TSFN with single argument `(ThreadSafeJsImportResponse,)`
+        // The closure must return Ok((ctx.value,)) so it matches the "call-js-back" type
+        let tsfn: TsfnBuffer = builder
+            .build_callback::<(ThreadSafeJsImportResponse,), Buffer, (ThreadSafeJsImportResponse,)>(
+                |ctx| {
+                    // pass one argument to JS callback => ( ctx.value, )
+                    Ok((ctx.value,))
+                },
+            )?;
+
+        // Wrap in Arc if you want to store or clone it
+        std::sync::Arc::new(tsfn) as Arc<TsfnBuffer>
+    }};
+}
+
+/// Macro to create a `TsfnVoid` from a `Function`.
+///
+/// This yields a TSFN that returns a `Promise<void>` to JS,
+/// i.e. no meaningful return value. We do `Return=Unknown`.
+/// Returns `Arc<TsfnVoid>`.
+#[macro_export]
+macro_rules! create_tsfn_void {
+    ($js_func:expr) => {{
+        let builder = $js_func.build_threadsafe_function();
+        let builder = builder.callee_handled::<true>();
+        let builder = builder.max_queue_size::<10>();
+
+        // For a TSFN that returns Promise<void>, we do Return=Unknown
+        // but still accept `(ThreadSafeJsImportResponse,)`.
+        let tsfn: TsfnVoid =
+            builder.build_callback::<(ThreadSafeJsImportResponse,), _>(|ctx| Ok((ctx.value,)))?;
+
+        std::sync::Arc::new(tsfn) as Arc<TsfnVoid>
+    }};
 }
 
 #[napi]
@@ -62,67 +112,40 @@ impl ContractManager {
     #[napi(constructor)]
     pub fn new(
         max_idling_runtimes: u32,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        storage_load_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        storage_store_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        call_other_contract_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        deploy_from_address_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
-        )]
-        console_log_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>"
-        )]
-        emit_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        inputs_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        outputs_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        next_pointer_value_greater_than: JsFunction,
+        storage_load_js_function: Function,
+        storage_store_js_function: Function,
+        call_other_contract_js_function: Function,
+        deploy_from_address_js_function: Function,
+        console_log_js_function: Function,
+        emit_js_function: Function,
+        inputs_js_function: Function,
+        outputs_js_function: Function,
+        next_pointer_value_greater_than_js_function: Function,
     ) -> Result<Self, Error> {
-        let storage_load_tsfn = create_tsfn!(storage_load_js_function);
-        let storage_store_tsfn = create_tsfn!(storage_store_js_function);
-        let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
-        let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
-        let console_log_tsfn = create_tsfn!(console_log_js_function);
-        let emit_tsfn = create_tsfn!(emit_js_function);
-        let inputs_tsfn = create_tsfn!(inputs_js_function);
-        let outputs_tsfn = create_tsfn!(outputs_js_function);
-        let next_pointer_value_greater_than_tsfn = create_tsfn!(next_pointer_value_greater_than);
+        let storage_load_tsfn = create_tsfn_buffer!(storage_load_js_function);
+        let storage_store_tsfn = create_tsfn_buffer!(storage_store_js_function);
+        let call_other_contract_tsfn = create_tsfn_buffer!(call_other_contract_js_function);
+        let deploy_from_address_tsfn = create_tsfn_buffer!(deploy_from_address_js_function);
+        let console_log_tsfn = create_tsfn_void!(console_log_js_function);
+        let emit_tsfn = create_tsfn_void!(emit_js_function);
+        let inputs_tsfn = create_tsfn_buffer!(inputs_js_function);
+        let outputs_tsfn = create_tsfn_buffer!(outputs_js_function);
+        let next_pointer_value_greater_than_tsfn =
+            create_tsfn_buffer!(next_pointer_value_greater_than_js_function);
 
         let max_idling_runtimes = max_idling_runtimes as usize;
+        let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
 
-        let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes)); // 100 runtimes
-
-        Ok(ContractManager {
+        Ok(Self {
             contracts: HashMap::new(),
             contract_cache: HashMap::new(),
-            next_id: 1, // Start the ID counter at 1 (or 0, if preferred)
+            next_id: 1,
+            runtime_pool,
             storage_load_tsfn,
             storage_store_tsfn,
             call_other_contract_tsfn,
             deploy_from_address_tsfn,
             console_log_tsfn,
-            runtime_pool,
             emit_tsfn,
             inputs_tsfn,
             outputs_tsfn,
@@ -131,34 +154,64 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn reserve_id(&mut self) -> BigInt {
-        let id = self.increment_next_id();
-
-        BigInt::from(id)
+    pub fn destroy(&mut self) -> NapiResult<()> {
+        Ok(())
     }
 
     #[napi]
-    pub fn instantiate(&mut self, reserved_id: BigInt, address: String, bytecode: Option<Buffer>,
-                       max_gas: BigInt, network: BitcoinNetworkRequest) -> Result<(), Error> {
+    pub fn destroy_cache(&mut self) {
+        self.contract_cache.clear();
+    }
+
+    #[napi]
+    pub fn destroy_all(&mut self) {
+        self.contracts.clear();
+        self.contract_cache.clear();
+    }
+
+    #[napi]
+    pub fn reserve_id(&mut self) -> BigInt {
+        let id = self.increment_next_id();
+        BigInt::from(id)
+    }
+
+    fn increment_next_id(&mut self) -> u64 {
+        if self.next_id >= u64::MAX {
+            self.next_id = 1;
+        }
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    #[napi]
+    pub fn instantiate(
+        &mut self,
+        reserved_id: BigInt,
+        address: String,
+        bytecode: Option<Buffer>,
+        max_gas: BigInt,
+        network: BitcoinNetworkRequest,
+    ) -> NapiResult<()> {
         let max_gas = max_gas.get_u64().1;
         let id = reserved_id.get_u64().1;
 
-        let mut params: JsContractParameter = JsContractParameter {
+        let mut params = JsContractParameter {
             bytecode: None,
             serialized: None,
             max_gas,
             network,
         };
 
-        let mut should_cache: bool = false;
-        if self.contract_cache.contains_key(&address) {
-            let serialized = self.contract_cache.get(&address).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let mut should_cache = false;
+        if let Some(serialized) = self.contract_cache.get(&address) {
             params.serialized = Some(serialized.clone());
         } else {
-            let bytecode = bytecode.ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?.to_vec();
-
+            let bc = bytecode
+                .ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?
+                .to_vec();
             should_cache = true;
-            params.bytecode = Some(bytecode);
+            params.bytecode = Some(bc);
         }
 
         let js_contract: JsContract = JsContract::from(params, self, id)?;
@@ -176,61 +229,8 @@ impl ContractManager {
         JsContract::validate_bytecode(bytecode, max_gas)
     }
 
-    #[napi]
-    pub fn destroy_contract(&mut self, id: BigInt) -> Result<bool, Error> {
-        let id = id.get_u64().1;
-
-        match self.contracts.remove(&id) {
-            Some(_) => Ok(true),
-            None => Ok(false),
-        }
-    }
-
-    #[napi]
-    pub fn destroy(&mut self, env: Env) -> Result<(), Error> {
-        abort_tsfn!(self.storage_load_tsfn, &env);
-        abort_tsfn!(self.storage_store_tsfn, &env);
-        abort_tsfn!(self.call_other_contract_tsfn, &env);
-        abort_tsfn!(self.deploy_from_address_tsfn, &env);
-        abort_tsfn!(self.console_log_tsfn, &env);
-        abort_tsfn!(self.emit_tsfn, &env);
-        abort_tsfn!(self.inputs_tsfn, &env);
-        abort_tsfn!(self.outputs_tsfn, &env);
-        abort_tsfn!(self.next_pointer_value_greater_than_tsfn, &env);
-
-        Ok(())
-    }
-
-    #[napi]
-    pub fn destroy_cache(&mut self) -> () {
-        self.contract_cache.clear();
-
-        ()
-    }
-
-    #[napi]
-    pub fn destroy_all(&mut self) -> () {
-        self.contracts.clear();
-        self.contract_cache.clear();
-
-        ()
-    }
-
-    fn increment_next_id(&mut self) -> u64 {
-        if self.next_id > u64::MAX - 1 {
-            self.next_id = 1;
-        }
-
-        let id = self.next_id;
-        self.next_id += 1;
-
-        id
-    }
-
-    // Add a JsContract to the map and return its ID
-    fn add_contract(&mut self, id: u64, contract: JsContract) -> Result<u64, Error> {
+    fn add_contract(&mut self, id: u64, contract: JsContract) -> NapiResult<u64> {
         self.contracts.insert(id, contract);
-
         Ok(id)
     }
 
@@ -238,15 +238,27 @@ impl ContractManager {
     pub fn use_gas(&self, contract_id: BigInt, gas: BigInt) -> Result<(), Error> {
         let id = contract_id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.use_gas(gas)
     }
 
     #[napi]
-    pub fn write_buffer(&self, contract_id: BigInt, value: Buffer, id: i32, align: u32) -> Result<i64, Error> {
+    pub fn write_buffer(
+        &self,
+        contract_id: BigInt,
+        value: Buffer,
+        id: i32,
+        align: u32,
+    ) -> Result<i64, Error> {
         let contract_id = contract_id.get_u64().1;
 
-        let contract = self.contracts.get(&contract_id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&contract_id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.write_buffer(value, id, align)
     }
 
@@ -254,16 +266,21 @@ impl ContractManager {
     pub fn get_abort_data(&self, contract_id: BigInt) -> Result<AbortDataResponse, Error> {
         let id = contract_id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_abort_data()
     }
-
 
     #[napi]
     pub fn set_remaining_gas(&self, id: BigInt, gas: BigInt) -> Result<(), Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.set_remaining_gas(gas)
     }
 
@@ -271,7 +288,10 @@ impl ContractManager {
     pub fn get_remaining_gas(&self, id: BigInt) -> Result<BigInt, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_remaining_gas()
     }
 
@@ -279,7 +299,10 @@ impl ContractManager {
     pub fn set_used_gas(&self, id: BigInt, gas: BigInt) -> Result<(), Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.set_used_gas(gas)
     }
 
@@ -287,15 +310,26 @@ impl ContractManager {
     pub fn get_used_gas(&self, id: BigInt) -> Result<BigInt, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_used_gas()
     }
 
     #[napi]
-    pub fn write_memory(&self, id: BigInt, offset: BigInt, data: Buffer) -> Result<Undefined, Error> {
+    pub fn write_memory(
+        &self,
+        id: BigInt,
+        offset: BigInt,
+        data: Buffer,
+    ) -> Result<Undefined, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.write_memory(offset, data)
     }
 
@@ -303,7 +337,10 @@ impl ContractManager {
     pub fn read_memory(&self, id: BigInt, offset: BigInt, length: BigInt) -> Result<Buffer, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.read_memory(offset, length)
     }
 
@@ -316,7 +353,10 @@ impl ContractManager {
     ) -> Result<AsyncTask<ContractCallTask>, Error> {
         let id = id.get_u64().1;
 
-        let contract = self.contracts.get(&id).ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         let result = contract.call(func_name, params)?;
 
         Ok(result)

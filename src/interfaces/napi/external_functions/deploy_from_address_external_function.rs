@@ -1,20 +1,16 @@
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use crate::interfaces::napi::external_functions::GenericExternalFunction;
+use crate::interfaces::napi::js_contract_manager::TsfnBuffer;
+use crate::interfaces::ExternalFunction;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
-
-use crate::interfaces::napi::external_functions::GenericExternalFunction;
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::ExternalFunction;
 
 pub struct DeployFromAddressExternalFunction {
     external_function: GenericExternalFunction,
 }
 
 impl DeployFromAddressExternalFunction {
-    pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-        id: u64,
-    ) -> Self {
+    pub fn new(tsfn: Arc<TsfnBuffer>, id: u64) -> Self {
         Self {
             external_function: GenericExternalFunction::new(tsfn, id),
         }
@@ -23,11 +19,6 @@ impl DeployFromAddressExternalFunction {
 
 impl ExternalFunction for DeployFromAddressExternalFunction {
     fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
-        //let time = chrono::offset::Local::now();
-        let resp = self.external_function.execute(data, runtime);
-
-        //log_time_diff(&time, "GenericExternalFunction::deploy");
-
-        resp
+        self.external_function.execute(data, runtime)
     }
 }
