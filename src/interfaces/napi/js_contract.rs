@@ -165,6 +165,7 @@ impl JsContract {
         func_name: String,
         params: Vec<JsNumber>,
     ) -> Result<AsyncTask<ContractCallTask>> {
+        println!("call");
         let time = Local::now();
         let mut wasm_params = Vec::new();
 
@@ -183,6 +184,7 @@ impl JsContract {
             time,
         ));
 
+        println!("call 2");
         Ok(result)
     }
 
