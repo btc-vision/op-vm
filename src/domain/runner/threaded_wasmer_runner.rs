@@ -2,7 +2,6 @@ use anyhow::Result as AnyResult;
 use bytes::Bytes;
 use std::sync::{mpsc, Arc};
 use std::thread;
-use std::time::Duration;
 use wasmer::Value;
 use wasmer_types::SerializeError;
 
@@ -92,19 +91,19 @@ impl ThreadedWasmerRunner {
     }
 
     // Helper for receiving with a 5-second timeout. Logs on timeout.
-    fn recv_with_timeout<T>(rx: mpsc::Receiver<T>, action_label: &str) -> Option<T> {
-        match rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(msg) => Some(msg),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
+    fn safe_recv<T>(rx: mpsc::Receiver<T>, action_label: &str) -> Option<T> {
+        match rx.recv() {
+            Ok(msg) => Some(msg), //Duration::from_secs(5)
+            /*Err(mpsc::RecvTimeoutError::Timeout) => {
                 eprintln!(
                     "[ThreadedWasmerRunner] Timed out (5s) waiting for response in {}",
                     action_label
                 );
                 None
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
+            }*/
+            Err(mpsc::RecvError) => {
                 eprintln!(
-                    "[ThreadedWasmerRunner] Runner thread disconnected during {}",
+                    "[ThreadedWasmerRunner] Disconnected while waiting for response in {}",
                     action_label
                 );
                 None
@@ -121,7 +120,7 @@ impl ThreadedWasmerRunner {
             .expect("failed to send Serialize command");
 
         // Wait for up to 5 seconds:
-        match Self::recv_with_timeout(rx, "serialize") {
+        match Self::safe_recv(rx, "serialize") {
             Some(RunnerResponse::SerializeResult(r)) => r,
             Some(_) => unreachable!("received unexpected response variant"),
             None => {
@@ -144,7 +143,7 @@ impl ThreadedWasmerRunner {
         };
         self.cmd_tx.send(cmd).expect("failed to send Call command");
 
-        match Self::recv_with_timeout(rx, "call") {
+        match Self::safe_recv(rx, "call") {
             Some(RunnerResponse::CallResult(r)) => r,
             Some(_) => unreachable!("received unexpected response variant"),
             None => {
@@ -173,7 +172,7 @@ impl ThreadedWasmerRunner {
             .send(cmd)
             .expect("failed to send ReadMemory command");
 
-        match Self::recv_with_timeout(rx, "read_memory") {
+        match Self::safe_recv(rx, "read_memory") {
             Some(RunnerResponse::ReadMemoryResult(r)) => r,
             Some(_) => unreachable!(),
             None => {
@@ -196,7 +195,7 @@ impl ThreadedWasmerRunner {
             .send(cmd)
             .expect("failed to send WriteMemory command");
 
-        match Self::recv_with_timeout(rx, "write_memory") {
+        match Self::safe_recv(rx, "write_memory") {
             Some(RunnerResponse::WriteMemoryResult(r)) => r,
             Some(_) => unreachable!(),
             None => {
@@ -218,7 +217,7 @@ impl ThreadedWasmerRunner {
             .send(cmd)
             .expect("failed to send WriteBuffer command");
 
-        match Self::recv_with_timeout(rx, "write_buffer") {
+        match Self::safe_recv(rx, "write_buffer") {
             Some(RunnerResponse::WriteBufferResult(r)) => r,
             Some(_) => unreachable!(),
             None => {
@@ -238,7 +237,7 @@ impl ThreadedWasmerRunner {
             .send(cmd)
             .expect("failed to send GetRemainingGas");
 
-        match Self::recv_with_timeout(rx, "get_remaining_gas") {
+        match Self::safe_recv(rx, "get_remaining_gas") {
             Some(RunnerResponse::RemainingGas(g)) => g,
             Some(_) => unreachable!(),
             None => {
@@ -254,7 +253,7 @@ impl ThreadedWasmerRunner {
         let cmd = RunnerCommand::IsOutOfMemory { reply_to: tx };
         self.cmd_tx.send(cmd).expect("failed to send IsOutOfMemory");
 
-        match Self::recv_with_timeout(rx, "is_out_of_memory") {
+        match Self::safe_recv(rx, "is_out_of_memory") {
             Some(RunnerResponse::OutOfMemory(r)) => r,
             Some(_) => unreachable!(),
             None => {
@@ -289,7 +288,7 @@ impl ThreadedWasmerRunner {
         let cmd = RunnerCommand::GetAbortData { reply_to: tx };
         self.cmd_tx.send(cmd).expect("failed to send GetAbortData");
 
-        match Self::recv_with_timeout(rx, "get_abort_data") {
+        match Self::safe_recv(rx, "get_abort_data") {
             Some(RunnerResponse::AbortData(d)) => d,
             Some(_) => unreachable!(),
             None => {
