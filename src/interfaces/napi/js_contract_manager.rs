@@ -358,7 +358,7 @@ impl ContractManager {
     #[napi(ts_return_type = "Promise<number[]>")]
     pub fn call(
         &self,
-        env: Env, // or pass Env if you're on older versions
+        env: Env,
         id: BigInt,
         func_name: String,
         params: Vec<JsNumber>,
