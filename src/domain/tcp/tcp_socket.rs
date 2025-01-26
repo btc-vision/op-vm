@@ -2,7 +2,6 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use wasmer::RuntimeError;
 
 #[derive(Debug)]
@@ -21,6 +20,9 @@ enum Opcode {
     InputsExternal = 5,
     OutputsExternal = 6,
     ConsoleLogExternal = 7,
+
+    // Disconnect
+    Disconnect = 255,
 }
 
 impl SocketConnection {
@@ -107,7 +109,7 @@ impl SocketConnection {
     }
 
     /// Write data to the stream with auto-reconnect on certain errors.
-    fn safe_write_all(&self, data: &[u8]) -> Result<(), RuntimeError> {
+    pub fn safe_write_all(&self, data: &[u8]) -> Result<(), RuntimeError> {
         let Some(stream_arc) = &self.stream else {
             return Err(RuntimeError::new("No TCP stream available for writing"));
         };
@@ -286,7 +288,7 @@ impl SocketConnection {
         Ok(())
     }
 
-    fn get_header(&self, opcode: Opcode, length: u32) -> [u8; 13] {
+    pub fn get_header(&self, opcode: Opcode, length: u32) -> [u8; 13] {
         let mut header_buffer = [0u8; 13];
         header_buffer[0] = opcode as u8;
         header_buffer[1..5].copy_from_slice(&length.to_be_bytes());
@@ -299,7 +301,9 @@ impl Drop for SocketConnection {
     fn drop(&mut self) {
         // Guard against panics in `drop`.
         let _ = catch_unwind(AssertUnwindSafe(|| {
-            //println!("Dropping connection");
+            let msg = self.get_header(Opcode::Disconnect, 0);
+            let _ = self.safe_write_all(&msg);
+
             let _ = self.close();
         }));
     }
