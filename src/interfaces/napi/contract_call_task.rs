@@ -31,6 +31,7 @@ impl ContractCallTask {
     }
 }
 
+#[napi]
 impl Task for ContractCallTask {
     type Output = Box<[Value]>;
     type JsValue = CallResponse;
@@ -76,6 +77,7 @@ impl Task for ContractCallTask {
                 .map_err(|_| Error::from_reason("Lock ContractService (poisoned)".to_string()))?;
             svc.get_used_gas()
         };
+
         Ok(CallResponse {
             result: js_array,
             gas_used: BigInt::from(gas_used),

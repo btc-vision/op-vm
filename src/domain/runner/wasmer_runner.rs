@@ -2,7 +2,9 @@ use bytes::Bytes;
 use chrono::Local;
 use std::sync::Arc;
 use wasmer::sys::{BaseTunables, EngineBuilder};
-use wasmer::{imports, CompilerConfig, Function, FunctionEnv, Imports, Instance, Module, Store, Value};
+use wasmer::{
+    imports, CompilerConfig, Function, FunctionEnv, Imports, Instance, Module, Store, Value,
+};
 use wasmer_compiler::types::target::Target;
 use wasmer_compiler::Engine;
 use wasmer_compiler_singlepass::Singlepass;
@@ -10,7 +12,14 @@ use wasmer_middlewares::Metering;
 use wasmer_types::SerializeError;
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{abort_import, call_other_contract_import, console_log_import, deploy_from_address_import, emit_import, encode_address_import, inputs_import, is_valid_bitcoin_address_import, outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_next_pointer_greater_than_import, storage_store_import, verify_schnorr_import, AbortData, ContractRunner, CustomEnv, ExtendedMemoryAccessError, InstanceWrapper};
+use crate::domain::runner::{
+    abort_import, call_other_contract_import, console_log_import, deploy_from_address_import,
+    emit_import, encode_address_import, inputs_import, is_valid_bitcoin_address_import,
+    outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_store_import,
+    verify_schnorr_import, AbortData, ContractRunner, CustomEnv, ExtendedMemoryAccessError,
+    InstanceWrapper,
+};
+
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
@@ -64,7 +73,11 @@ impl WasmerRunner {
         Ok(serialized)
     }
 
-    pub unsafe fn from_serialized(serialized: Bytes, max_gas: u64, custom_env: CustomEnv) -> anyhow::Result<Self> {
+    pub unsafe fn from_serialized(
+        serialized: Bytes,
+        max_gas: u64,
+        custom_env: CustomEnv,
+    ) -> anyhow::Result<Self> {
         let time = Local::now();
 
         let engine = EngineBuilder::headless().set_features(None).engine();
@@ -95,7 +108,6 @@ impl WasmerRunner {
             "env" => {
                 "abort" => import!(abort_import),
                 "load" => import!(storage_load_import),
-                "nextPointerGreaterThan" => import!(storage_next_pointer_greater_than_import),
                 "store" => import!(storage_store_import),
                 "call" => import!(call_other_contract_import),
                 "deployFromAddress" => import!(deploy_from_address_import),
@@ -167,9 +179,7 @@ impl WasmerRunner {
 
         let engine = EngineBuilder::new(compiler).set_features(None).engine();
         let store = Store::new(Self::create_tunable(engine));
-        Ok(
-            store
-        )
+        Ok(store)
     }
 }
 

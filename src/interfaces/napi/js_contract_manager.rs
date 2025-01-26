@@ -1,101 +1,23 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use anyhow::anyhow;
-use bytes::Bytes;
 // For alpha.27, we'll do NapiResult alias or just use `napi::Result`
-use napi::bindgen_prelude::Buffer;
-use napi::threadsafe_function::ThreadsafeFunction;
-use napi::{
-    bindgen_prelude::{AsyncTask, BigInt, Function, Undefined, Unknown},
-    Error, JsNumber, Result as NapiResult,
-};
-use napi_derive::napi;
-
+use crate::domain::tcp::{SocketConnection, SocketPool};
 use crate::interfaces::napi::{
     bitcoin_network_request::BitcoinNetworkRequest, contract::JsContractParameter,
     js_contract::JsContract, runtime_pool::RuntimePool,
-    thread_safe_js_import_response::ThreadSafeJsImportResponse,
 };
 use crate::interfaces::{AbortDataResponse, ContractCallTask};
-
-/// Type alias for a TSFN that sends a `ThreadSafeJsImportResponse`
-/// into JavaScript and receives a `JsUnknown` result back.
-///
-/// The JS side *can* resolve the Promise to a Buffer, but from Rust’s
-/// perspective we will see a `JsUnknown` that we can parse as Buffer.
-pub type TsfnBuffer = ThreadsafeFunction<
-    ThreadSafeJsImportResponse,    // T: the data we pass to JS
-    Buffer,                        // Return: the JS return type is `JsUnknown` in 3.0 alpha
-    (ThreadSafeJsImportResponse,), // The "CallJsBackArgs" we pass into JS. A single argument tuple
-    true,                          // calleeHandled
-    false,                         // Weak
-    10,                            // max_queue_size
->;
-
-/// Type alias for a TSFN that sends a `ThreadSafeJsImportResponse`
-/// into JavaScript and expects "void" from JS.
-/// (In 3.0 alpha, that’s still `JsUnknown`, we just ignore it.)
-pub type TsfnVoid = ThreadsafeFunction<
-    ThreadSafeJsImportResponse,
-    Unknown,
-    (ThreadSafeJsImportResponse,),
-    true,
-    false,
-    10,
->;
-
-/// Macro to create a TSFN that we *intend* to treat like
-/// "Promise<Buffer or Uint8Array>" in JavaScript. But in 3.0 alpha,
-/// the actual `Return` is `JsUnknown`. We call it "TsfnBufferLike".
-#[macro_export]
-macro_rules! create_tsfn_buffer {
-    ($js_func:expr) => {{
-        // 1) We pick the "T" type for build_threadsafe_function<T>()
-        //    In your old code, T was `ThreadSafeJsImportResponse`.
-        let builder = $js_func.build_threadsafe_function::<ThreadSafeJsImportResponse>();
-
-        // 2) calleeHandled + max_queue_size
-        let builder = builder.callee_handled::<true>();
-        let builder = builder.max_queue_size::<10>();
-
-        // 3) We next call `.build_callback<CallJsBackArgs, _>(...)`
-        //    so that we pass `(ThreadSafeJsImportResponse,)` to JS as the argument list.
-        //
-        //    The closure returns `Ok((ctx.value,))`, meaning we pass exactly one argument
-        //    (the data that was passed from Rust).
-        //    The final TSFN type is: ThreadsafeFunction<ThreadSafeJsImportResponse,
-        //       JsUnknown, (ThreadSafeJsImportResponse,), true, false, 10>
-        //
-        //    We'll call it "TsfnBufferLike" just for our own alias.
-        let tsfn = builder.build_callback::<(ThreadSafeJsImportResponse,), _>(|ctx| {
-            // pass one argument => (ctx.value,)
-            Ok((ctx.value,))
-        })?;
-
-        // Wrap in Arc if you want to store it
-        std::sync::Arc::new(tsfn)
-    }};
-}
-
-/// Macro to create a TSFN that we interpret as "Promise<void>",
-/// i.e. we only pass `ThreadSafeJsImportResponse` in, and ignore the result.
-#[macro_export]
-macro_rules! create_tsfn_void {
-    ($js_func:expr) => {{
-        // T is the data we pass to JS:
-        let builder = $js_func.build_threadsafe_function::<ThreadSafeJsImportResponse>();
-        let builder = builder.callee_handled::<true>();
-        let builder = builder.max_queue_size::<10>();
-
-        // The closure returns a single argument tuple
-        // and the final result is also `JsUnknown`.
-        let tsfn =
-            builder.build_callback::<(ThreadSafeJsImportResponse,), _>(|ctx| Ok((ctx.value,)))?;
-
-        std::sync::Arc::new(tsfn)
-    }};
-}
+use anyhow::anyhow;
+use bytes::Bytes;
+use napi::bindgen_prelude::Buffer;
+use napi::{
+    bindgen_prelude::{AsyncTask, BigInt, Undefined},
+    Error, JsNumber, Result as NapiResult,
+};
+use napi_derive::napi;
+use tokio::runtime::Runtime;
+use wasmer::RuntimeError;
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
@@ -103,16 +25,8 @@ pub struct ContractManager {
     contract_cache: HashMap<String, Bytes>,
     next_id: u64,
 
-    pub runtime_pool: Arc<RuntimePool>,
-    pub storage_load_tsfn: Arc<TsfnBuffer>,
-    pub storage_store_tsfn: Arc<TsfnBuffer>,
-    pub call_other_contract_tsfn: Arc<TsfnBuffer>,
-    pub deploy_from_address_tsfn: Arc<TsfnBuffer>,
-    pub console_log_tsfn: Arc<TsfnVoid>,
-    pub emit_tsfn: Arc<TsfnVoid>,
-    pub inputs_tsfn: Arc<TsfnBuffer>,
-    pub outputs_tsfn: Arc<TsfnBuffer>,
-    pub next_pointer_value_greater_than_tsfn: Arc<TsfnBuffer>,
+    runtime_pool: Arc<RuntimePool>,
+    socket_pool: Arc<SocketPool>,
 }
 
 #[napi]
@@ -120,45 +34,48 @@ impl ContractManager {
     #[napi(constructor)]
     pub fn new(
         max_idling_runtimes: u32,
-        storage_load_js_function: Function,
-        storage_store_js_function: Function,
-        call_other_contract_js_function: Function,
-        deploy_from_address_js_function: Function,
-        console_log_js_function: Function,
-        emit_js_function: Function,
-        inputs_js_function: Function,
-        outputs_js_function: Function,
-        next_pointer_value_greater_than_js_function: Function,
+        socket_port: u16,
+        max_sockets: u32,
     ) -> Result<Self, Error> {
-        let storage_load_tsfn = create_tsfn_buffer!(storage_load_js_function);
-        let storage_store_tsfn = create_tsfn_buffer!(storage_store_js_function);
-        let call_other_contract_tsfn = create_tsfn_buffer!(call_other_contract_js_function);
-        let deploy_from_address_tsfn = create_tsfn_buffer!(deploy_from_address_js_function);
-        let console_log_tsfn = create_tsfn_void!(console_log_js_function);
-        let emit_tsfn = create_tsfn_void!(emit_js_function);
-        let inputs_tsfn = create_tsfn_buffer!(inputs_js_function);
-        let outputs_tsfn = create_tsfn_buffer!(outputs_js_function);
-        let next_pointer_value_greater_than_tsfn =
-            create_tsfn_buffer!(next_pointer_value_greater_than_js_function);
-
         let max_idling_runtimes = max_idling_runtimes as usize;
+        let max_sockets = max_sockets as usize;
         let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
+        let socket_pool = Arc::new(SocketPool::new(socket_port, max_sockets)?);
 
         Ok(Self {
             contracts: HashMap::new(),
             contract_cache: HashMap::new(),
             next_id: 1,
             runtime_pool,
-            storage_load_tsfn,
-            storage_store_tsfn,
-            call_other_contract_tsfn,
-            deploy_from_address_tsfn,
-            console_log_tsfn,
-            emit_tsfn,
-            inputs_tsfn,
-            outputs_tsfn,
-            next_pointer_value_greater_than_tsfn,
+            socket_pool,
         })
+    }
+
+    pub fn return_runtime(&self, runtime: Arc<Runtime>) -> anyhow::Result<()> {
+        self.runtime_pool.return_runtime(runtime)
+    }
+
+    pub fn return_connection(
+        &self,
+        connection: Arc<Mutex<SocketConnection>>,
+    ) -> Result<(), RuntimeError> {
+        self.socket_pool.return_connection(connection)
+    }
+
+    pub fn get_connection(&self) -> Result<Arc<Mutex<SocketConnection>>, RuntimeError> {
+        self.socket_pool.get_connection()
+    }
+
+    pub fn get_runtime(&self) -> Option<Arc<Runtime>> {
+        self.runtime_pool.get_runtime()
+    }
+
+    pub fn get_runtime_pool(&self) -> Arc<RuntimePool> {
+        self.runtime_pool.clone()
+    }
+
+    pub fn get_socket_pool(&self) -> Arc<SocketPool> {
+        self.socket_pool.clone()
     }
 
     #[napi]
@@ -364,7 +281,8 @@ impl ContractManager {
         let contract = self
             .contracts
             .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (call)").to_string()))?;
+
         let result = contract.call(func_name, params)?;
 
         Ok(result)

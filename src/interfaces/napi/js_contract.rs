@@ -5,35 +5,26 @@ use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
 use napi::{Error, JsNumber, Result as NapiResult};
-use tokio::runtime::Runtime;
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
 use crate::domain::runner::{CustomEnv, WasmerRunner};
+use crate::domain::tcp::SocketConnection;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
-use crate::interfaces::napi::runtime_pool::RuntimePool;
-use crate::interfaces::{
-    AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    ContractCallTask, DeployFromAddressExternalFunction, EmitExternalFunction,
-    InputsExternalFunction, NextPointerValueGreaterThanExternalFunction, OutputsExternalFunction,
-    StorageLoadExternalFunction, StorageStoreExternalFunction,
-};
+use crate::interfaces::{AbortDataResponse, ContractCallTask};
 
-/// A Rust struct that does not need the `#[napi]` macro because
-/// we do not automatically convert it to/from JS. Instead, we expose
-/// some methods on it or pass it around in other ways.
+/// A struct representing one "contract instance" in JS
+/// with a WASM runner, contract service, a runtime, etc.
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
     contract: Arc<Mutex<ContractService>>,
-    runtime: Arc<Runtime>,
-    runtime_pool: Arc<RuntimePool>,
+    //runtime: Arc<Runtime>,
+    socket: Arc<Mutex<SocketConnection>>,
 }
 
 impl JsContract {
-    /// Equivalent to `WasmerRunner::validate_bytecode`.
-    /// In NAPI-RS 3.0, this still works the same as in 2.0.
     pub fn validate_bytecode(bytecode: Buffer, max_gas: BigInt) -> NapiResult<bool> {
         let time = Local::now();
         let bytecode_vec = bytecode.to_vec();
@@ -47,71 +38,38 @@ impl JsContract {
         Ok(true)
     }
 
-    /// Replaces the old approach of "manager.storage_load_tsfn.clone()"
-    /// by using `Arc::clone(&manager.storage_load_tsfn)`.
-    /// You must ensure that `ContractManager` stores these TSFNs in an `Arc` as well.
     pub fn from(
         params: JsContractParameter,
         manager: &ContractManager,
         id: u64,
     ) -> NapiResult<Self> {
-        // Use a catch_unwind to handle potential panics
-        catch_unwind(|| unsafe {
+        // We catch_unwind for safety around any potential panic
+        //catch_unwind(|| unsafe {
+        unsafe {
             let time = Local::now();
 
-            // Instead of `manager.storage_load_tsfn.clone()`,
-            // do `Arc::clone(&manager.storage_load_tsfn)`.
-            // Each TSFN in manager should be declared as:
-            //   Arc<ThreadsafeFunction<..., ..., ..., true, ...>>
-            let storage_load_tsfn = Arc::clone(&manager.storage_load_tsfn);
-            let storage_store_tsfn = Arc::clone(&manager.storage_store_tsfn);
-            let call_other_contract_tsfn = Arc::clone(&manager.call_other_contract_tsfn);
-            let deploy_from_address_tsfn = Arc::clone(&manager.deploy_from_address_tsfn);
-            let console_log_tsfn = Arc::clone(&manager.console_log_tsfn);
-            let emit_tsfn = Arc::clone(&manager.emit_tsfn);
-            let inputs_tsfn = Arc::clone(&manager.inputs_tsfn);
-            let outputs_tsfn = Arc::clone(&manager.outputs_tsfn);
-            let next_pointer_value_greater_than_tsfn =
-                Arc::clone(&manager.next_pointer_value_greater_than_tsfn);
-
-            // Build your external functions
-            let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
-            let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
-            let call_other_contract_external =
-                CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
-            let deploy_from_address_external =
-                DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
-            let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
-            let emit_external = EmitExternalFunction::new(emit_tsfn, id);
-            let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
-            let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
-            let next_pointer_value_greater_than_external =
-                NextPointerValueGreaterThanExternalFunction::new(
-                    next_pointer_value_greater_than_tsfn,
-                    id,
-                );
-
             // Obtain a runtime from the manager's pool
-            let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
-                Error::from_reason("No available runtimes in the pool".to_string())
+            //let runtime = manager.get_runtime().ok_or_else(|| {
+            //    Error::from_reason("No available runtimes in the pool".to_string())
+            //})?;
+
+            // Grab a socket connection (Arc<Mutex<SocketConnection>>)
+            let socket_arc = manager.get_connection().map_err(|e| {
+                Error::from_reason(format!("Failed to get socket connection: {:?}", e))
             })?;
 
-            let custom_env: CustomEnv = CustomEnv::new(
-                params.network.into(),
-                storage_load_external,
-                storage_store_external,
-                call_other_contract_external,
-                deploy_from_address_external,
-                console_log_external,
-                emit_external,
-                inputs_external,
-                outputs_external,
-                next_pointer_value_greater_than_external,
-                runtime.clone(),
-            )
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+            // Lock the socket to call `set_id`
+            {
+                let mut sock = socket_arc.lock().map_err(|_e| {
+                    Error::from_reason("Failed to lock socket connection (poisoned)")
+                })?;
+                sock.set_id(id);
+            }
 
-            // either from bytecode or from serialized
+            let custom_env: CustomEnv = CustomEnv::new(params.network.into(), socket_arc.clone())
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+            // Either from bytecode or from serialized
             let runner = if let Some(bytecode) = params.bytecode {
                 WasmerRunner::from_bytecode(&bytecode, params.max_gas, custom_env)
             } else if let Some(serialized) = params.serialized {
@@ -121,23 +79,26 @@ impl JsContract {
             }
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
+
             let contract = JsContract::from_runner(
                 runner,
                 params.max_gas,
-                runtime.clone(),
-                manager.runtime_pool.clone(),
+                //runtime.clone(),
+                socket_arc.clone(),
             )?;
+
             log_time_diff(&time, "JsContract::from");
             Ok(contract)
-        })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("Panic: {:?}", e))))
+        }
+        //})
+        //.unwrap_or_else(|e| Err(Error::from_reason(format!("Panic: {:?}", e))))
     }
 
     fn from_runner(
         runner: WasmerRunner,
         max_gas: u64,
-        runtime: Arc<Runtime>,
-        runtime_pool: Arc<RuntimePool>,
+        //runtime: Arc<Runtime>,
+        socket: Arc<Mutex<SocketConnection>>,
     ) -> NapiResult<Self> {
         let time = Local::now();
         let runner = Arc::new(Mutex::new(runner));
@@ -148,8 +109,8 @@ impl JsContract {
         Ok(Self {
             runner,
             contract: Arc::new(Mutex::new(contract)),
-            runtime,
-            runtime_pool,
+            //runtime,
+            socket,
         })
     }
 
@@ -163,6 +124,7 @@ impl JsContract {
                 Error::from_reason("Runner mutex is already locked".to_string())
             }
         })?;
+
         let serialized = runner
             .serialize()
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
@@ -213,6 +175,7 @@ impl JsContract {
         let offset = offset.get_u64().1;
         let bytes: Vec<u8> = data.to_vec();
         let contract = self.contract.clone();
+
         {
             let contract = contract.try_lock().map_err(|e| match e {
                 std::sync::TryLockError::Poisoned(_) => {
@@ -325,12 +288,30 @@ impl JsContract {
     }
 }
 
-/// Drop the contract, returning the runtime to the pool
 impl Drop for JsContract {
     fn drop(&mut self) {
-        if let Err(e) = self.runtime_pool.return_runtime(self.runtime.clone()) {
-            eprintln!("Failed to return runtime: {:?}", e);
-        }
+        // Return the runtime to the pool
+        //if let Err(e) = self.manager.return_runtime(self.runtime.clone()) {
+        //    eprintln!("Failed to return runtime: {:?}", e);
+        //}
+
+        let _ = catch_unwind(|| {
+            self.socket
+                .lock()
+                .unwrap_or_else(|e| {
+                    eprintln!("Failed to lock socket connection: {:?}", e);
+                    panic!("Failed to lock socket connection");
+                })
+                .close()
+                .unwrap();
+        });
+
+        ()
+
+        // Return the socket to the pool
+        //if let Err(e) = self.manager.return_connection(self.socket.clone()) {
+        //    eprintln!("Failed to return socket connection: {:?}", e);
+        //}
     }
 }
 
@@ -354,12 +335,7 @@ impl JsContract {
                 Ok(js.into_unknown())
             }
             Value::V128(v) => {
-                // NAPI-RS 3.0 usage for big ints is unchanged from 2.0
                 let js_big = env.create_bigint_from_u128(*v)?;
-                // create_bigint_from_u128 returns `JsBigInt`
-                // so if needed, do `Ok(js_big.into_unknown()?)`, but
-                // that method signature might differ.
-                // So we do:
                 let unknown = js_big.into_unknown()?;
                 Ok(unknown)
             }
@@ -374,7 +350,6 @@ impl JsContract {
 
         for val in slice.into_iter() {
             let js_val = Self::value_to_js(env, &val)?;
-            // insert the next element
             js_array.insert(js_val)?;
         }
         Ok(js_array)
