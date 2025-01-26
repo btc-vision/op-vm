@@ -146,6 +146,8 @@ impl ContractManager {
         }
 
         self.add_contract(id, js_contract)?;
+
+        println!("ContractManager::instantiate() done");
         Ok(())
     }
 

@@ -76,13 +76,13 @@ impl JsContract {
             let runner_arc = Arc::new(threaded_runner);
             let contract_service = ContractService::new(params.max_gas, runner_arc.clone());
 
-            log_time_diff(&time, "JsContract::from");
-
             let js_contract = JsContract {
                 runner: runner_arc,
                 contract: Arc::new(Mutex::new(contract_service)),
                 socket: socket_arc,
             };
+
+            log_time_diff(&time, "JsContract::from");
 
             Ok(js_contract)
         }
