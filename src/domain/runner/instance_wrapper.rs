@@ -19,6 +19,9 @@ pub enum ExtendedMemoryAccessError {
 
     #[error("Unable to get memory")]
     UnableToGetMemory,
+
+    #[error("Out of memory")]
+    Unknown
 }
 
 impl InstanceWrapper {

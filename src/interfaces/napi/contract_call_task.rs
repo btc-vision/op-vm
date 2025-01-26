@@ -37,6 +37,7 @@ impl Task for ContractCallTask {
     type JsValue = CallResponse;
 
     fn compute(&mut self) -> NapiResult<Self::Output> {
+        println!("ContractCallTask::compute()");
         {
             let mut svc = self
                 .contract
@@ -49,6 +50,7 @@ impl Task for ContractCallTask {
             svc.set_executing(true);
         }
 
+        println!("ContractCallTask::compute() calling contract");
         let result = {
             let mut svc = self
                 .contract
@@ -57,6 +59,7 @@ impl Task for ContractCallTask {
             svc.call(&self.func_name, &self.wasm_params)
         };
 
+        println!("ContractCallTask::compute() done calling contract");
         {
             let mut svc = self
                 .contract
@@ -69,6 +72,7 @@ impl Task for ContractCallTask {
     }
 
     fn resolve(&mut self, env: Env, output: Self::Output) -> NapiResult<Self::JsValue> {
+        println!("ContractCallTask::resolve()");
         let js_array = JsContract::box_values_to_js_array(&env, output)?;
         let gas_used = {
             let mut svc = self

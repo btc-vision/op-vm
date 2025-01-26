@@ -2,13 +2,14 @@ use anyhow::Result as AnyResult;
 use bytes::Bytes;
 use std::sync::{mpsc, Arc};
 use std::thread;
+use std::time::Duration;
 use wasmer::Value;
 use wasmer_types::SerializeError;
 
 use crate::domain::runner::runner_response::{RunnerCommand, RunnerResponse};
 use crate::domain::runner::{AbortData, ContractRunner, ExtendedMemoryAccessError, WasmerRunner};
 
-// A cloneable handle that sends commands to the background thread.
+/// A cloneable handle that sends commands to the background thread.
 #[derive(Clone)]
 pub struct ThreadedWasmerRunner {
     cmd_tx: Arc<mpsc::Sender<RunnerCommand>>,
@@ -25,7 +26,7 @@ impl ThreadedWasmerRunner {
 
             while let Ok(cmd) = receiver.recv() {
                 println!("[!!!] Received command: {:?}", cmd);
-                let resp = match cmd {
+                match cmd {
                     RunnerCommand::Serialize { reply_to } => {
                         let result = wasmer.serialize();
                         let _ = reply_to.send(RunnerResponse::SerializeResult(result));
@@ -73,42 +74,67 @@ impl ThreadedWasmerRunner {
                     }
                     RunnerCommand::SetRemainingGas { gas } => {
                         wasmer.set_remaining_gas(gas);
-                        // no explicit reply needed
                     }
                     RunnerCommand::UseGas { gas } => {
                         wasmer.use_gas(gas);
-                        // no explicit reply
                     }
                     RunnerCommand::GetAbortData { reply_to } => {
                         let data = wasmer.get_abort_data();
                         let _ = reply_to.send(RunnerResponse::AbortData(data));
                     }
-                };
-
-                println!("[!!!] Result -> {:?}", resp);
+                }
             }
         });
 
-        // Return a handle that can send commands to the above thread
         ThreadedWasmerRunner {
             cmd_tx: Arc::new(sender),
         }
     }
 
-    /// Serialize the module, blocking until the worker responds.
+    // Helper for receiving with a 5-second timeout. Logs on timeout.
+    fn recv_with_timeout<T>(rx: mpsc::Receiver<T>, action_label: &str) -> Option<T> {
+        match rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(msg) => Some(msg),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                eprintln!(
+                    "[ThreadedWasmerRunner] Timed out (5s) waiting for response in {}",
+                    action_label
+                );
+                None
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                eprintln!(
+                    "[ThreadedWasmerRunner] Runner thread disconnected during {}",
+                    action_label
+                );
+                None
+            }
+        }
+    }
+
+    /// Serialize the module, blocking until the worker responds (or 5s).
     pub fn serialize(&self) -> Result<Bytes, SerializeError> {
         let (tx, rx) = mpsc::channel();
         let cmd = RunnerCommand::Serialize { reply_to: tx };
         self.cmd_tx
             .send(cmd)
             .expect("failed to send Serialize command");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::SerializeResult(r) => r,
-            _ => unreachable!("received unexpected response variant"),
+
+        // Wait for up to 5 seconds:
+        match Self::recv_with_timeout(rx, "serialize") {
+            Some(RunnerResponse::SerializeResult(r)) => r,
+            Some(_) => unreachable!("received unexpected response variant"),
+            None => {
+                // If we time out or disconnect, we can return a custom error or panic.
+                // For demonstration, we'll just create a dummy SerializeError:
+                eprintln!("[ThreadedWasmerRunner] No response -> returning SerializeError");
+                // You may need a real variant here that suits your code:
+                Err(SerializeError::Generic("timeout after 5s".into()))
+            }
         }
     }
 
-    /// Call an exported function.
+    /// Call an exported function (up to 5s).
     pub fn call(&self, function: &str, params: &[Value]) -> AnyResult<Box<[Value]>> {
         let (tx, rx) = mpsc::channel();
         let cmd = RunnerCommand::Call {
@@ -117,9 +143,18 @@ impl ThreadedWasmerRunner {
             reply_to: tx,
         };
         self.cmd_tx.send(cmd).expect("failed to send Call command");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::CallResult(r) => r,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "call") {
+            Some(RunnerResponse::CallResult(r)) => r,
+            Some(_) => unreachable!("received unexpected response variant"),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in call()");
+                // Return an anyhow error indicating timeout
+                Err(anyhow::anyhow!(
+                    "Runner thread timed out (5s) in call({})",
+                    function
+                ))
+            }
         }
     }
 
@@ -137,9 +172,16 @@ impl ThreadedWasmerRunner {
         self.cmd_tx
             .send(cmd)
             .expect("failed to send ReadMemory command");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::ReadMemoryResult(r) => r,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "read_memory") {
+            Some(RunnerResponse::ReadMemoryResult(r)) => r,
+            Some(_) => unreachable!(),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in read_memory()");
+                // Return an error. If your `ExtendedMemoryAccessError` has no "generic" variant,
+                // you may need to add one. For demonstration:
+                Err(ExtendedMemoryAccessError::Unknown)
+            }
         }
     }
 
@@ -153,9 +195,14 @@ impl ThreadedWasmerRunner {
         self.cmd_tx
             .send(cmd)
             .expect("failed to send WriteMemory command");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::WriteMemoryResult(r) => r,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "write_memory") {
+            Some(RunnerResponse::WriteMemoryResult(r)) => r,
+            Some(_) => unreachable!(),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in write_memory()");
+                Err(ExtendedMemoryAccessError::Unknown)
+            }
         }
     }
 
@@ -170,9 +217,17 @@ impl ThreadedWasmerRunner {
         self.cmd_tx
             .send(cmd)
             .expect("failed to send WriteBuffer command");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::WriteBufferResult(r) => r,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "write_buffer") {
+            Some(RunnerResponse::WriteBufferResult(r)) => r,
+            Some(_) => unreachable!(),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in write_buffer()");
+                // Return an N-API error or any other relevant error
+                Err(napi::Error::from_reason(
+                    "Timeout after 5 seconds in write_buffer".to_string(),
+                ))
+            }
         }
     }
 
@@ -182,9 +237,15 @@ impl ThreadedWasmerRunner {
         self.cmd_tx
             .send(cmd)
             .expect("failed to send GetRemainingGas");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::RemainingGas(g) => g,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "get_remaining_gas") {
+            Some(RunnerResponse::RemainingGas(g)) => g,
+            Some(_) => unreachable!(),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in get_remaining_gas()");
+                // We cannot return an error for a u64 return, so fallback to 0 or any default
+                0
+            }
         }
     }
 
@@ -192,31 +253,49 @@ impl ThreadedWasmerRunner {
         let (tx, rx) = mpsc::channel();
         let cmd = RunnerCommand::IsOutOfMemory { reply_to: tx };
         self.cmd_tx.send(cmd).expect("failed to send IsOutOfMemory");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::OutOfMemory(r) => r,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "is_out_of_memory") {
+            Some(RunnerResponse::OutOfMemory(r)) => r,
+            Some(_) => unreachable!(),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in is_out_of_memory()");
+                Err(ExtendedMemoryAccessError::Unknown)
+            }
         }
     }
 
     pub fn set_remaining_gas(&self, gas: u64) {
         let cmd = RunnerCommand::SetRemainingGas { gas };
-        self.cmd_tx
-            .send(cmd)
-            .expect("failed to send SetRemainingGas");
+        if let Err(e) = self.cmd_tx.send(cmd) {
+            eprintln!(
+                "[ThreadedWasmerRunner] Failed to send SetRemainingGas command: {:?}",
+                e
+            );
+        }
     }
 
     pub fn use_gas(&self, gas: u64) {
         let cmd = RunnerCommand::UseGas { gas };
-        self.cmd_tx.send(cmd).expect("failed to send UseGas");
+        if let Err(e) = self.cmd_tx.send(cmd) {
+            eprintln!(
+                "[ThreadedWasmerRunner] Failed to send UseGas command: {:?}",
+                e
+            );
+        }
     }
 
     pub fn get_abort_data(&self) -> Option<AbortData> {
         let (tx, rx) = mpsc::channel();
         let cmd = RunnerCommand::GetAbortData { reply_to: tx };
         self.cmd_tx.send(cmd).expect("failed to send GetAbortData");
-        match rx.recv().expect("worker thread hung up") {
-            RunnerResponse::AbortData(d) => d,
-            _ => unreachable!(),
+
+        match Self::recv_with_timeout(rx, "get_abort_data") {
+            Some(RunnerResponse::AbortData(d)) => d,
+            Some(_) => unreachable!(),
+            None => {
+                eprintln!("[ThreadedWasmerRunner] Timed out in get_abort_data()");
+                None
+            }
         }
     }
 }
