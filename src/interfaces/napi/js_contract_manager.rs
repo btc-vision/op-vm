@@ -279,6 +279,7 @@ impl ContractManager {
         func_name: String,
         params: Vec<JsNumber>,
     ) -> Result<JsObject, Error> {
+        println!("--  ContractManager::call()");
         let id = id.get_u64().1;
 
         let contract = self
@@ -287,7 +288,7 @@ impl ContractManager {
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (call)").to_string()))?;
 
         println!(
-            "ContractManager::call() calling contract function: {}, id: {}",
+            "--  ContractManager::call() calling contract function: {}, id: {}",
             func_name, id
         );
         let result = contract.call(env, func_name, params)?;

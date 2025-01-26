@@ -105,6 +105,7 @@ impl JsContract {
     // }
     // ---------------------------------------------------------------------
     pub fn call(&self, env: Env, func_name: String, params: Vec<JsNumber>) -> NapiResult<JsObject> {
+        println!("-- JsContract::call()");
         // Convert to WASM values
         let mut wasm_params = Vec::with_capacity(params.len());
         for p in params {
@@ -121,7 +122,7 @@ impl JsContract {
         let func_name_ref = func_name.clone();
         let wasm_params_ref = wasm_params.clone();
 
-        println!("JsContract::call() creating contract call task");
+        println!("-- JsContract::call() creating contract call task");
 
         // The async block that performs the call in a background tokio task
         let fut = async move {
