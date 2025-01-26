@@ -121,6 +121,8 @@ impl JsContract {
         let func_name_ref = func_name.clone();
         let wasm_params_ref = wasm_params.clone();
 
+        println!("JsContract::call() creating contract call task");
+
         // The async block that performs the call in a background tokio task
         let fut = async move {
             // 1. Re-entrancy check:
@@ -156,6 +158,11 @@ impl JsContract {
                 Err(e) => Err(Error::from_reason(format!("{:?}", e))),
             }
         };
+
+        println!(
+            "JsContract::call() calling contract function: {}",
+            func_name
+        );
 
         // The final callback that runs once the future is resolved
         env.execute_tokio_future(fut, move |&mut env, wasm_values| {
