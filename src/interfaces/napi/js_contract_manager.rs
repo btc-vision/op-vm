@@ -7,21 +7,21 @@ use crate::interfaces::napi::{
     bitcoin_network_request::BitcoinNetworkRequest, contract::JsContractParameter,
     js_contract::JsContract, runtime_pool::RuntimePool,
 };
-use crate::interfaces::{AbortDataResponse, ContractCallTask};
+use crate::interfaces::{AbortDataResponse, CallResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::{Array, Buffer, Object, Promise, PromiseRaw};
 use napi::{
-    bindgen_prelude::{AsyncTask, BigInt, Undefined},
+    bindgen_prelude::{BigInt, Undefined},
     Env, Error, JsError, JsNumber, JsObject, Result as NapiResult,
 };
 use napi_derive::napi;
 use tokio::runtime::Runtime;
-use wasmer::{RuntimeError, Value};
+use wasmer::{NativeWasmTypeInto, RuntimeError};
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
-    contracts: HashMap<u64, JsContract>,
+    contracts: HashMap<u64, Arc<JsContract>>,
     contract_cache: HashMap<String, Bytes>,
     next_id: u64,
 
@@ -139,13 +139,15 @@ impl ContractManager {
             params.bytecode = Some(bc);
         }
 
-        let js_contract: JsContract = JsContract::from(params, self, id)?;
+        let js_contract = JsContract::from(params, self, id)?;
         if should_cache {
             let serialized = js_contract.serialize()?;
             self.contract_cache.insert(address, serialized);
         }
 
-        self.add_contract(id, js_contract)?;
+        // wrap in Arc
+        let contract_arc = Arc::new(js_contract);
+        self.add_contract(id, contract_arc)?;
 
         println!("ContractManager::instantiate() done");
         Ok(())
@@ -156,7 +158,7 @@ impl ContractManager {
         JsContract::validate_bytecode(bytecode, max_gas)
     }
 
-    fn add_contract(&mut self, id: u64, contract: JsContract) -> NapiResult<u64> {
+    fn add_contract(&mut self, id: u64, contract: Arc<JsContract>) -> NapiResult<u64> {
         self.contracts.insert(id, contract);
         Ok(id)
     }
@@ -272,13 +274,7 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn log(
-        &self,
-        env: Env,
-        id: BigInt,
-        func_name: String,
-        params: Vec<JsNumber>,
-    ) -> Result<(), Error> {
+    pub fn log(&self, id: BigInt, func_name: String, params: Vec<JsNumber>) -> Result<(), Error> {
         let id = id.get_u64().1;
 
         println!(
@@ -286,7 +282,7 @@ impl ContractManager {
             func_name, id
         );
 
-        let contract = self
+        let _contract = self
             .contracts
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (log)").to_string()))?;
@@ -301,33 +297,60 @@ impl ContractManager {
         Ok(())
     }
 
-    #[napi(ts_return_type = "Promise<CallResponse>")]
+    #[napi(ts_return_type = "Promise<number[]>")]
     pub fn call(
         &self,
-        env: Env,
+        env: Env, // or pass Env if you're on older versions
         id: BigInt,
         func_name: String,
         params: Vec<JsNumber>,
-    ) -> Result<JsObject, JsError> {
-        println!("--  ContractManager::call()");
-        let id = id.get_u64().1;
+    ) -> napi::Result<napi::JsObject> {
+        let id_u64 = id.get_u64().1;
+        let contract_arc = self
+            .contracts
+            .get(&id_u64)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?
+            .clone();
 
-        let contract = self.contracts.get(&id).ok_or_else(|| {
-            JsError::from(Error::from_reason(
-                anyhow!("Contract not found").to_string(),
-            ))
-        })?;
+        // Convert JS numbers to i32
+        let int_params: Vec<i32> = params
+            .into_iter()
+            .map(|num| num.get_int32())
+            .collect::<napi::Result<Vec<i32>>>()?;
 
-        println!(
-            "--  ContractManager::call() calling contract function: {}, id: {}",
-            func_name, id
-        );
+        // We must clone the Arc for background usage and for final JS creation:
+        let arc_for_bg = contract_arc.clone();
+        let arc_for_js = contract_arc.clone();
 
-        let result = contract
-            .call(env, func_name, params)
-            .map_err(|e| JsError::from(Error::from_reason(format!("{:?}", e))))?;
+        let func_name_for_bg = func_name.clone();
 
-        Ok(result)
+        // The future to run in the background:
+        let future = async move {
+            // Inside spawn_blocking to avoid blocking async runtime
+            let values_boxed = tokio::task::spawn_blocking(move || {
+                // The heavy-lifting synchronous call
+                arc_for_bg.call_sync(&func_name_for_bg, &int_params)
+            })
+            .await
+            .map_err(|join_err| {
+                Error::from_reason(format!("Tokio join error: {:?}", join_err))
+            })??;
+
+            // Return the raw values to the next closure
+            Ok(values_boxed)
+        };
+
+        // Now convert that `future` into a JS Promise using `execute_tokio_future`.
+        let promise = env.execute_tokio_future(
+            future,
+            // This closure is run on the main thread to convert Rust data to JS objects
+            move |&mut env, values_boxed| {
+                // use the second Arc to build a JS array
+                arc_for_js.convert_values_to_js_array(&env, values_boxed)
+            },
+        )?;
+
+        Ok(promise)
     }
 
     #[napi]

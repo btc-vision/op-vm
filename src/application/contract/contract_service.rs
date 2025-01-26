@@ -41,6 +41,7 @@ impl ContractService {
     /// Call a function exported by the contract.
     /// Automatically checks for out-of-gas or out-of-memory.
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+        println!("!!! [call] Calling function: {:?} !!!", function);
         let response = self.runner.call(function, params).map_err(|e| {
             // Handle typical WASM "unreachable" traps, often caused by out-of-gas or out-of-memory.
             if e.to_string().contains("unreachable") {
@@ -63,6 +64,8 @@ impl ContractService {
                 anyhow!(e)
             }
         });
+
+        println!("!!! Function call result: {:?} !!!", response);
 
         response
     }

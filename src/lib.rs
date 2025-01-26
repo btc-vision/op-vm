@@ -1,14 +1,13 @@
 #![deny(clippy::all)]
-#![cfg_attr(
-    all(feature = "napi", not(target_arch = "wasm32")),
-    napi::bindgen_prelude::napi
-)]
 
 #[macro_use]
 extern crate napi_derive;
 
+#[macro_use]
 mod application;
+#[macro_use]
 mod domain;
+#[macro_use]
 mod interfaces;
 
 #[napi]

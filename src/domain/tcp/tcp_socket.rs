@@ -186,6 +186,8 @@ impl SocketConnection {
         // Connect if not already
         self.connect_if_not_connected()?;
 
+        println!("--  SocketConnection::load() data: {:?}", data);
+
         let header_buffer = self.get_header(Opcode::StorageLoad, data.len() as u32);
         let final_buffer = [header_buffer.to_vec(), data.to_vec()].concat();
 

@@ -88,8 +88,6 @@ impl WasmerRunner {
         mut store: Store,
         module: Module,
     ) -> anyhow::Result<Self> {
-        println!("Creating instance with max gas: {}", max_gas);
-
         let env = FunctionEnv::new(&mut store, custom_env);
 
         macro_rules! import {
@@ -139,11 +137,6 @@ impl WasmerRunner {
         let constructor_used_gas = MAX_GAS_CONSTRUCTOR - remaining_gas;
         let true_max_gas = max_gas - constructor_used_gas;
         imp.set_remaining_gas(true_max_gas);
-
-        println!(
-            "Remaining gas after constructor: {}",
-            imp.get_remaining_gas()
-        );
 
         Ok(imp)
     }

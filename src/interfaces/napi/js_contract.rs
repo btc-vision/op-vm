@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex};
 use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
-use napi::{Error, JsNumber, JsObject, Result as NapiResult};
+// For Buffer, BigInt, etc.
+use napi::{Error, Result as NapiResult};
+// We'll keep JsNumber here just to read the params
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
@@ -96,107 +98,55 @@ impl JsContract {
         Ok(serialized)
     }
 
-    // ---------------------------------------------------------------------
-    // Replaces `AsyncTask<ContractCallTask>`.
-    // We'll return a real JS Promise that resolves to an object like:
-    // {
-    //   result: any[],    // from WASM call
-    //   gasUsed: bigint, // how much gas was consumed
-    // }
-    // ---------------------------------------------------------------------
-    pub fn call(&self, env: Env, func_name: String, params: Vec<JsNumber>) -> NapiResult<JsObject> {
-        println!("-- JsContract::call()");
-        // Convert to WASM values
-        let mut wasm_params = Vec::with_capacity(params.len());
-        for p in params {
-            let val = p
-                .get_int32()
-                .map_err(|e| Error::from_reason(format!("Invalid param: {:?}", e)))?;
-            wasm_params.push(Value::I32(val));
+    pub fn call_sync(&self, func_name: &str, int_params: &[i32]) -> Result<Box<[Value]>> {
+        // Convert the i32s to Wasmer `Value`
+        let wasm_params: Vec<Value> = int_params.iter().map(|i| Value::I32(*i)).collect();
+
+        // Lock the contract and call
+        let mut svc = self
+            .contract
+            .lock()
+            .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+
+        let call_result = svc.call(func_name, &wasm_params);
+
+        // Return the raw Values for later JS conversion
+        match call_result {
+            Ok(values) => Ok(values),
+            Err(e) => Err(Error::from_reason(format!("{:?}", e))),
         }
+    }
 
-        // Clone the Arc references we need in both the future AND the final callback
+    /// Convert raw Wasmer `Value`s into a JS Array in the current Env
+    pub fn convert_values_to_js_array(&self, env: &Env, values: Box<[Value]>) -> Result<Array> {
+        Self::box_values_to_js_array(env, values)
+    }
+
+    pub fn call(&self, env: Env, func_name: String, params: Vec<i32>) -> Result<Array> {
+        let wasm_params: Vec<Value> = params
+            .into_iter()
+            .map(|jsnum| Ok(Value::I32(jsnum)))
+            .collect::<NapiResult<Vec<Value>>>()?;
+
         let contract_ref_in_future = self.contract.clone();
-        let contract_ref_in_callback = self.contract.clone();
-
         let func_name_ref = func_name.clone();
-        let wasm_params_ref = wasm_params.clone();
 
-        println!("-- JsContract::call() creating contract call task");
-
-        // The async block that performs the call in a background tokio task
-        let fut = async move {
-            // 1. Re-entrancy check:
-            {
-                let mut svc = contract_ref_in_future
-                    .lock()
-                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
-                if svc.is_executing() {
-                    return Err(Error::from_reason("Re-entrancy error"));
-                }
-                svc.set_executing(true);
-            }
-
-            // 2. Actually call the WASM:
-            let call_result = {
-                let mut svc = contract_ref_in_future
-                    .lock()
-                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
-                svc.call(&func_name_ref, &wasm_params_ref)
-            };
-
-            // 3. Unlock & clear re-entrancy:
-            {
-                let mut svc = contract_ref_in_future
-                    .lock()
-                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
-                svc.set_executing(false);
-            }
-
-            // 4. Convert `anyhow::Result<Box<[Value]>>` -> `NapiResult<Box<[Value]>>`
-            match call_result {
-                Ok(values) => Ok(values),
-                Err(e) => Err(Error::from_reason(format!("{:?}", e))),
-            }
+        let call_result = {
+            let mut svc = contract_ref_in_future
+                .lock()
+                .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+            svc.call(&func_name_ref, &wasm_params)
         };
 
-        println!(
-            "-- JsContract::call() calling contract function: {}",
-            func_name
-        );
+        let result = match call_result {
+            Ok(values) => {
+                let js_values = Self::box_values_to_js_array(&env, values)?;
+                Ok(js_values)
+            }
+            Err(e) => Err(Error::from_reason(format!("{:?}", e))),
+        };
 
-        // The final callback that runs once the future is resolved
-        env.execute_tokio_future(fut, move |&mut env, wasm_values| {
-            println!("-- [in promise] JsContract::call() attempting",);
-
-            // This callback runs in Node's main thread after the future completes.
-            // Convert the `Box<[Value]>` into a JS array
-            let js_array = Self::box_values_to_js_array(&env, wasm_values)?;
-
-            println!(
-                "-- [in promise] JsContract::call() done calling contract function: {}",
-                func_name
-            );
-
-            // Retrieve gas used:
-            let gas_used = {
-                let mut svc = contract_ref_in_callback
-                    .lock()
-                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
-                svc.get_used_gas()
-            };
-
-            println!("-- [in promise] JsContract::call() gas used: {}", gas_used);
-
-            // Build a JS object { result: Value[], gasUsed: bigint }
-            let mut result_obj = env.create_object()?;
-            result_obj.set("result", js_array)?;
-            result_obj.set("gasUsed", BigInt::from(gas_used))?;
-
-            println!("-- [in promise] JsContract::call() returning result object");
-
-            Ok(result_obj)
-        })
+        result
     }
 
     // ---------------------------------------------------------------------

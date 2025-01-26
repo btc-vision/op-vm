@@ -94,6 +94,7 @@ impl InstanceWrapper {
     }
 
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
+        println!("!!! Using gas: {:?} !!!", gas_cost);
         let gas_before = self.get_remaining_gas(store);
 
         let gas_after = if gas_before <= gas_cost {
@@ -131,11 +132,11 @@ impl InstanceWrapper {
     }
 
     pub fn set_remaining_gas(&self, store: &mut impl AsStoreMut, gas: u64) {
+        println!("!!! Setting remaining gas: {:?} !!!", gas);
         set_remaining_points(store, &self.instance, gas);
     }
 
     fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
-        // TODO: Restore error state?
         instance
             .exports
             .get_memory("memory")

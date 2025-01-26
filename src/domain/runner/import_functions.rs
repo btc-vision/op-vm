@@ -175,6 +175,11 @@ pub fn call_other_contract_import(
     let call_execution_cost = u64::from_le_bytes(bytes);
     instance.use_gas(&mut store, call_execution_cost);
 
+    println!(
+        "call_other_contract_import call_execution_cost: {:?}",
+        call_execution_cost
+    );
+
     Ok(value as u32)
 }
 
