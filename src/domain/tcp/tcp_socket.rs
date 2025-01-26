@@ -224,10 +224,10 @@ impl SocketConnection {
 
         let resp = &buf[..n];
         // Avoid panicking if stdout fails
-        let _ = std::io::Write::write_all(
+        /*let _ = std::io::Write::write_all(
             &mut std::io::stdout(),
             format!("Response: {:?}\n", resp).as_bytes(),
-        );
+        );*/
         Ok(resp.to_vec())
     }
 
