@@ -149,7 +149,6 @@ impl ContractManager {
         let contract_arc = Arc::new(js_contract);
         self.add_contract(id, contract_arc)?;
 
-        println!("ContractManager::instantiate() done");
         Ok(())
     }
 
