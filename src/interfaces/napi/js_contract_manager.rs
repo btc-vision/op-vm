@@ -17,7 +17,7 @@ use napi::{
 };
 use napi_derive::napi;
 use tokio::runtime::Runtime;
-use wasmer::RuntimeError;
+use wasmer::{RuntimeError, Value};
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
@@ -272,8 +272,33 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn log(&self, message: String) -> () {
-        println!("--  ContractManager::log() {}", message);
+    pub fn log(
+        &self,
+        env: Env,
+        id: BigInt,
+        func_name: String,
+        params: Vec<JsNumber>,
+    ) -> Result<(), Error> {
+        let id = id.get_u64().1;
+
+        println!(
+            "--  ContractManager::call() calling contract function: {}, id: {}",
+            func_name, id
+        );
+
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (call)").to_string()))?;
+
+        for p in params {
+            let val = p
+                .get_int32()
+                .map_err(|e| Error::from_reason(format!("Invalid param: {:?}", e)))?;
+            println!("--  ContractManager::call() param: {}", val);
+        }
+
+        Ok(())
     }
 
     #[napi(ts_return_type = "Promise<CallResponse>")]
@@ -296,8 +321,8 @@ impl ContractManager {
             "--  ContractManager::call() calling contract function: {}, id: {}",
             func_name, id
         );
-        let result = contract.call(env, func_name, params)?;
 
+        let result = contract.call(env, func_name, params)?;
         Ok(result)
     }
 
