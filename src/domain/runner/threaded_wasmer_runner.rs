@@ -24,6 +24,7 @@ impl ThreadedWasmerRunner {
             let mut wasmer = runner; // Own the runner here
 
             while let Ok(cmd) = receiver.recv() {
+                println!("Received command: {:?}", cmd);
                 match cmd {
                     RunnerCommand::Serialize { reply_to } => {
                         let result = wasmer.serialize();

@@ -18,6 +18,7 @@ pub enum RunnerResponse {
 }
 
 // `RunnerCommand` enumerates all possible actions we can ask our WasmerRunner worker to do.
+#[derive(Debug)]
 pub enum RunnerCommand {
     Serialize {
         reply_to: mpsc::Sender<RunnerResponse>,
