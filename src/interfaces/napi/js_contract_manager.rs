@@ -271,6 +271,11 @@ impl ContractManager {
         contract.read_memory(offset, length)
     }
 
+    #[napi]
+    pub fn log(&self, message: String) -> () {
+        println!("--  ContractManager::log() {}", message);
+    }
+
     #[napi(ts_return_type = "Promise<CallResponse>")]
     pub fn call(
         &self,
