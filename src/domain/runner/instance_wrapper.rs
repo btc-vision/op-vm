@@ -1,8 +1,7 @@
 use crate::domain::runner::MAX_MEMORY_SIZE;
 use thiserror::Error;
 use wasmer::{
-    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError,
-    Value,
+    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError, Value,
 };
 use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, MeteringPoints};
 
@@ -21,7 +20,7 @@ pub enum ExtendedMemoryAccessError {
     UnableToGetMemory,
 
     #[error("Out of memory")]
-    Unknown
+    Unknown,
 }
 
 impl InstanceWrapper {
@@ -41,7 +40,10 @@ impl InstanceWrapper {
         Ok(result)
     }
 
-    pub fn is_out_of_memory(&self, store: &(impl AsStoreRef + ?Sized)) -> Result<bool, ExtendedMemoryAccessError> {
+    pub fn is_out_of_memory(
+        &self,
+        store: &(impl AsStoreRef + ?Sized),
+    ) -> Result<bool, ExtendedMemoryAccessError> {
         let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
         let size = view.data_size();
@@ -59,7 +61,8 @@ impl InstanceWrapper {
         let view = memory.view(store);
 
         let mut buffer: Vec<u8> = vec![0; length as usize];
-        view.read(offset, &mut buffer).map_err(|e| ExtendedMemoryAccessError::Base(e))?;
+        view.read(offset, &mut buffer)
+            .map_err(|e| ExtendedMemoryAccessError::Base(e))?;
 
         Ok(buffer)
     }
@@ -71,7 +74,8 @@ impl InstanceWrapper {
     ) -> Result<u8, ExtendedMemoryAccessError> {
         let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
-        view.read_u8(offset).map_err(|e| ExtendedMemoryAccessError::Base(e))
+        view.read_u8(offset)
+            .map_err(|e| ExtendedMemoryAccessError::Base(e))
     }
 
     pub fn write_memory(
@@ -82,7 +86,8 @@ impl InstanceWrapper {
     ) -> Result<(), ExtendedMemoryAccessError> {
         let memory = Self::get_memory(&self.instance)?;
         let view = memory.view(store);
-        view.write(offset, data).map_err(|e| ExtendedMemoryAccessError::Base(e))
+        view.write(offset, data)
+            .map_err(|e| ExtendedMemoryAccessError::Base(e))
     }
 
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
@@ -113,7 +118,9 @@ impl InstanceWrapper {
     }
 
     pub fn get_remaining_gas(&self, store: &mut impl AsStoreMut) -> u64 {
+        println!("!!! Getting remaining gas !!!");
         let remaining_points = get_remaining_points(store, &self.instance);
+        println!("!!! Remaining points: {:?} !!!", remaining_points);
         match remaining_points {
             MeteringPoints::Remaining(remaining) => remaining,
             MeteringPoints::Exhausted => 0,
@@ -126,7 +133,10 @@ impl InstanceWrapper {
 
     fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
         // TODO: Restore error state?
-        instance.exports.get_memory("memory").map_err(|_| ExtendedMemoryAccessError::UnableToGetMemory)
+        instance
+            .exports
+            .get_memory("memory")
+            .map_err(|_| ExtendedMemoryAccessError::UnableToGetMemory)
     }
 
     fn get_function<'a>(
