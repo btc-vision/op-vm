@@ -174,6 +174,7 @@ impl WasmerRunner {
 use crate::domain::runner::ContractRunner;
 impl ContractRunner for WasmerRunner {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+        println!("[ContractRunner] !!! Calling function: {:?} !!!", function);
         self.instance.call(&mut self.store, function, params)
     }
 

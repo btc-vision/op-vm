@@ -36,6 +36,10 @@ impl ThreadedWasmerRunner {
                         params,
                         reply_to,
                     } => {
+                        println!(
+                            "[ThreadedWasmerRunner] !!! Calling function: {:?} !!!",
+                            function
+                        );
                         let result = wasmer.call(&function, &params);
                         let _ = reply_to.send(RunnerResponse::CallResult(result));
                     }

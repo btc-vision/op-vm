@@ -34,8 +34,9 @@ impl InstanceWrapper {
         function: &str,
         params: &[Value],
     ) -> anyhow::Result<Box<[Value]>> {
-        let export = Self::get_function(&self.instance, function)?;
         println!("!!! Calling function: {:?} !!!", function);
+        let export = Self::get_function(&self.instance, function)?;
+        println!("!!! [exported] Calling function: {:?} !!!", function);
         let result = export.call(store, params)?;
         println!("!!! Function call result: {:?} !!!", result);
 
