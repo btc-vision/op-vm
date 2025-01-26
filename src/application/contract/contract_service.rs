@@ -65,8 +65,6 @@ impl ContractService {
             }
         });
 
-        println!("!!! Function call result: {:?} !!!", response);
-
         response
     }
 
