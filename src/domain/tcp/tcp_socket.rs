@@ -2,6 +2,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use wasmer::RuntimeError;
 
 #[derive(Debug)]
@@ -48,8 +49,8 @@ impl SocketConnection {
 
     /// Configure stream settings as desired.
     fn configure_stream(stream: &TcpStream) -> std::io::Result<()> {
-        stream.set_read_timeout(None)?;
-        stream.set_write_timeout(None)?;
+        stream.set_read_timeout(Option::from(Duration::from_secs(10)))?; // None
+        stream.set_write_timeout(Option::from(Duration::from_secs(10)))?; // None
         stream.set_nodelay(true)?;
         Ok(())
     }
