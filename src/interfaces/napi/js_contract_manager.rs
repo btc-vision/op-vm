@@ -273,30 +273,6 @@ impl ContractManager {
         contract.read_memory(offset, length)
     }
 
-    #[napi]
-    pub fn log(&self, id: BigInt, func_name: String, params: Vec<JsNumber>) -> Result<(), Error> {
-        let id = id.get_u64().1;
-
-        println!(
-            "--  ContractManager::log() calling contract function: {}, id: {}",
-            func_name, id
-        );
-
-        let _contract = self
-            .contracts
-            .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (log)").to_string()))?;
-
-        for p in params {
-            let val = p
-                .get_int32()
-                .map_err(|e| Error::from_reason(format!("Invalid param: {:?}", e)))?;
-            println!("--  ContractManager::log() param: {}", val);
-        }
-
-        Ok(())
-    }
-
     #[napi(ts_return_type = "Promise<number[]>")]
     pub fn call(
         &self,
