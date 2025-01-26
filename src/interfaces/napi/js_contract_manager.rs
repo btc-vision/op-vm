@@ -13,7 +13,7 @@ use bytes::Bytes;
 use napi::bindgen_prelude::Buffer;
 use napi::{
     bindgen_prelude::{AsyncTask, BigInt, Undefined},
-    Env, Error, JsNumber, JsObject, Result as NapiResult,
+    Env, Error, JsError, JsNumber, JsObject, Result as NapiResult,
 };
 use napi_derive::napi;
 use tokio::runtime::Runtime;
@@ -282,20 +282,20 @@ impl ContractManager {
         let id = id.get_u64().1;
 
         println!(
-            "--  ContractManager::call() calling contract function: {}, id: {}",
+            "--  ContractManager::log() calling contract function: {}, id: {}",
             func_name, id
         );
 
         let contract = self
             .contracts
             .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (call)").to_string()))?;
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (log)").to_string()))?;
 
         for p in params {
             let val = p
                 .get_int32()
                 .map_err(|e| Error::from_reason(format!("Invalid param: {:?}", e)))?;
-            println!("--  ContractManager::call() param: {}", val);
+            println!("--  ContractManager::log() param: {}", val);
         }
 
         Ok(())
@@ -308,21 +308,25 @@ impl ContractManager {
         id: BigInt,
         func_name: String,
         params: Vec<JsNumber>,
-    ) -> Result<JsObject, Error> {
+    ) -> Result<JsObject, JsError> {
         println!("--  ContractManager::call()");
         let id = id.get_u64().1;
 
-        let contract = self
-            .contracts
-            .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (call)").to_string()))?;
+        let contract = self.contracts.get(&id).ok_or_else(|| {
+            JsError::from(Error::from_reason(
+                anyhow!("Contract not found").to_string(),
+            ))
+        })?;
 
         println!(
             "--  ContractManager::call() calling contract function: {}, id: {}",
             func_name, id
         );
 
-        let result = contract.call(env, func_name, params)?;
+        let result = contract
+            .call(env, func_name, params)
+            .map_err(|e| JsError::from(Error::from_reason(format!("{:?}", e))))?;
+
         Ok(result)
     }
 
