@@ -14,9 +14,9 @@ wasmer-types = "5.0.4"
 wasmer-compiler = "5.0.4"
 anyhow = "1.0.95"
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
-napi = { version = "3.0.0-alpha.27", default-features = false, features = ["tokio_rt", "napi9"] }
+napi = { version = "3.0.0-alpha.27", default-features = false, features = ["tokio_rt", "napi9", "async", "tokio-stream", "deferred_trace"] }
 napi-derive = "3.0.0-alpha.25"
-tokio = "1.42.0"
+tokio = { version = "1.43.0", features = ["default", "rt-multi-thread", "macros"] }
 chrono = "0.4.39"
 sha2 = "0.10.8"
 ripemd = "0.1.3"

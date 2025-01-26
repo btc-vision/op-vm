@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
-use napi::{Error, JsNumber, Result as NapiResult};
+use napi::{Error, JsNumber, JsObject, Result as NapiResult};
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
@@ -13,11 +13,8 @@ use crate::domain::tcp::SocketConnection;
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
-use crate::interfaces::{AbortDataResponse, ContractCallTask};
+use crate::interfaces::AbortDataResponse;
 
-/// A struct representing one "contract instance" in JS
-/// with a WASM runner, contract service, a runtime, etc.
-/// In this updated version, we store a ThreadedWasmerRunner instead of Arc<Mutex<WasmerRunner>>.
 pub struct JsContract {
     runner: Arc<ThreadedWasmerRunner>,
     contract: Arc<Mutex<ContractService>>,
@@ -49,6 +46,7 @@ impl JsContract {
             let socket_arc = manager.get_connection().map_err(|e| {
                 Error::from_reason(format!("Failed to get socket connection: {:?}", e))
             })?;
+
             {
                 // Lock the socket to set an ID
                 let mut sock = socket_arc.lock().map_err(|_e| {
@@ -71,41 +69,26 @@ impl JsContract {
             }
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
-            // Wrap our real_runner into a dedicated thread:
+            // Wrap our real_runner into a dedicated thread
             let threaded_runner = ThreadedWasmerRunner::new(real_runner);
 
             // Build the contract
-            let contract = JsContract::from_runner(threaded_runner, params.max_gas, socket_arc)?;
+            let runner_arc = Arc::new(threaded_runner);
+            let contract_service = ContractService::new(params.max_gas, runner_arc.clone());
 
             log_time_diff(&time, "JsContract::from");
-            Ok(contract)
+
+            let js_contract = JsContract {
+                runner: runner_arc,
+                contract: Arc::new(Mutex::new(contract_service)),
+                socket: socket_arc,
+            };
+
+            Ok(js_contract)
         }
     }
 
-    fn from_runner(
-        runner: ThreadedWasmerRunner,
-        max_gas: u64,
-        socket: Arc<Mutex<SocketConnection>>,
-    ) -> NapiResult<Self> {
-        let time = Local::now();
-
-        // Build a ContractService.
-        // NOTE: Your existing ContractService may expect an Arc<Mutex<WasmerRunner>>.
-        // You might adapt it to accept Arc<ThreadedWasmerRunner> or similar. Example:
-        let runner_arc = Arc::new(runner);
-        let contract_service = ContractService::new(max_gas, runner_arc.clone());
-
-        log_time_diff(&time, "JsContract::from_runner");
-
-        Ok(Self {
-            runner: runner_arc,
-            contract: Arc::new(Mutex::new(contract_service)),
-            socket,
-        })
-    }
-
     pub fn serialize(&self) -> NapiResult<Bytes> {
-        // Now we just ask the concurrency wrapper to serialize:
         let serialized = self
             .runner
             .serialize()
@@ -113,35 +96,96 @@ impl JsContract {
         Ok(serialized)
     }
 
-    /// Return an `AsyncTask<ContractCallTask>` so you can do `Promise<CallResponse>` in JS.
-    pub fn call(
-        &self,
-        func_name: String,
-        params: Vec<JsNumber>,
-    ) -> NapiResult<AsyncTask<ContractCallTask>> {
-        let time = Local::now();
-        let mut wasm_params = Vec::new();
-        for param in params {
-            let val = param
+    // ---------------------------------------------------------------------
+    // Replaces `AsyncTask<ContractCallTask>`.
+    // We'll return a real JS Promise that resolves to an object like:
+    // {
+    //   result: any[],    // from WASM call
+    //   gasUsed: bigint, // how much gas was consumed
+    // }
+    // ---------------------------------------------------------------------
+    pub fn call(&self, env: Env, func_name: String, params: Vec<JsNumber>) -> NapiResult<JsObject> {
+        // Convert to WASM values
+        let mut wasm_params = Vec::with_capacity(params.len());
+        for p in params {
+            let val = p
                 .get_int32()
-                .map_err(|e| Error::from_reason(format!("Failed to get param: {:?}", e)))?;
+                .map_err(|e| Error::from_reason(format!("Invalid param: {:?}", e)))?;
             wasm_params.push(Value::I32(val));
         }
 
-        // We delegate actual calling to a `ContractCallTask`, which presumably
-        // calls the runner under the hood. That still works if `ContractService`
-        // calls `ThreadedWasmerRunner`.
-        let contract = self.contract.clone();
-        let task = ContractCallTask::new(contract, &func_name, &wasm_params, time);
-        Ok(AsyncTask::new(task))
+        // Clone the Arc references we need in both the future AND the final callback
+        let contract_ref_in_future = self.contract.clone();
+        let contract_ref_in_callback = self.contract.clone();
+
+        let func_name_ref = func_name.clone();
+        let wasm_params_ref = wasm_params.clone();
+
+        // The async block that performs the call in a background tokio task
+        let fut = async move {
+            // 1. Re-entrancy check:
+            {
+                let mut svc = contract_ref_in_future
+                    .lock()
+                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+                if svc.is_executing() {
+                    return Err(Error::from_reason("Re-entrancy error"));
+                }
+                svc.set_executing(true);
+            }
+
+            // 2. Actually call the WASM:
+            let call_result = {
+                let mut svc = contract_ref_in_future
+                    .lock()
+                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+                svc.call(&func_name_ref, &wasm_params_ref)
+            };
+
+            // 3. Unlock & clear re-entrancy:
+            {
+                let mut svc = contract_ref_in_future
+                    .lock()
+                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+                svc.set_executing(false);
+            }
+
+            // 4. Convert `anyhow::Result<Box<[Value]>>` -> `NapiResult<Box<[Value]>>`
+            match call_result {
+                Ok(values) => Ok(values),
+                Err(e) => Err(Error::from_reason(format!("{:?}", e))),
+            }
+        };
+
+        // The final callback that runs once the future is resolved
+        env.execute_tokio_future(fut, move |&mut env, wasm_values| {
+            // This callback runs in Node's main thread after the future completes.
+            // Convert the `Box<[Value]>` into a JS array
+            let js_array = Self::box_values_to_js_array(&env, wasm_values)?;
+
+            // Retrieve gas used:
+            let gas_used = {
+                let mut svc = contract_ref_in_callback
+                    .lock()
+                    .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+                svc.get_used_gas()
+            };
+
+            // Build a JS object { result: Value[], gasUsed: bigint }
+            let mut result_obj = env.create_object()?;
+            result_obj.set("result", js_array)?;
+            result_obj.set("gasUsed", BigInt::from(gas_used))?;
+
+            Ok(result_obj)
+        })
     }
 
+    // ---------------------------------------------------------------------
+    // Other synchronous helpers:
+    // ---------------------------------------------------------------------
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> NapiResult<Buffer> {
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;
-
-        // If your `ContractService` calls into the runner, that’s fine. Otherwise,
-        // we can call the runner directly here:
         let data = self
             .runner
             .read_memory(offset, length)
@@ -149,7 +193,7 @@ impl JsContract {
         Ok(Buffer::from(data))
     }
 
-    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> NapiResult<Undefined> {
+    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> NapiResult<()> {
         let offset = offset.get_u64().1;
         let bytes = data.to_vec();
 
@@ -160,8 +204,6 @@ impl JsContract {
     }
 
     pub fn get_used_gas(&self) -> NapiResult<BigInt> {
-        // This example calls into `ContractService`, which presumably tracks used gas
-        // or delegates to the runner. Adjust as needed:
         let gas = {
             let mut c = self.contract.lock().map_err(|_e| {
                 Error::from_reason("Failed to lock ContractService (poisoned)".to_string())
@@ -215,14 +257,13 @@ impl JsContract {
 impl Drop for JsContract {
     fn drop(&mut self) {
         let _ = catch_unwind(|| {
-            let mut guard = self.socket.lock().unwrap();
-            guard.close().unwrap();
+            if let Ok(guard) = self.socket.lock() {
+                let _ = guard.close();
+            }
         });
-        // Additional cleanup if desired
     }
 }
 
-// Helper for converting Wasmer Values to JS. (Unchanged from your snippet.)
 impl JsContract {
     fn value_to_js(env: &Env, value: &Value) -> NapiResult<Unknown> {
         match value {
@@ -250,15 +291,13 @@ impl JsContract {
         }
     }
 
-    /// Helper for converting a `Box<[Value]>` to a JS array
     pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> NapiResult<Array> {
         let slice: Vec<Value> = values.into();
-        let mut js_array = env.create_array(slice.len() as u32)?;
-
+        let mut arr = env.create_array(slice.len() as u32)?;
         for val in slice {
             let js_val = Self::value_to_js(env, &val)?;
-            js_array.insert(js_val)?;
+            arr.insert(js_val)?;
         }
-        Ok(js_array)
+        Ok(arr)
     }
 }

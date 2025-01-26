@@ -13,7 +13,7 @@ use bytes::Bytes;
 use napi::bindgen_prelude::Buffer;
 use napi::{
     bindgen_prelude::{AsyncTask, BigInt, Undefined},
-    Error, JsNumber, Result as NapiResult,
+    Env, Error, JsNumber, JsObject, Result as NapiResult,
 };
 use napi_derive::napi;
 use tokio::runtime::Runtime;
@@ -272,10 +272,11 @@ impl ContractManager {
     #[napi(ts_return_type = "Promise<CallResponse>")]
     pub fn call(
         &self,
+        env: Env,
         id: BigInt,
         func_name: String,
         params: Vec<JsNumber>,
-    ) -> Result<AsyncTask<ContractCallTask>, Error> {
+    ) -> Result<JsObject, Error> {
         let id = id.get_u64().1;
 
         let contract = self
@@ -283,7 +284,7 @@ impl ContractManager {
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found (call)").to_string()))?;
 
-        let result = contract.call(func_name, params)?;
+        let result = contract.call(env, func_name, params)?;
 
         Ok(result)
     }

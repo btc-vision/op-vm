@@ -1,7 +1,7 @@
 pub use self::{
     abort_data::*, bitcoin_network::*, constants::*, contract_runner::*, custom_env::*,
-    exported_import_functions::*, import_functions::*, instance_wrapper::*, runner_response::*,
-    threaded_wasmer_runner::*, wasmer_runner::*,
+    import_functions::*, instance_wrapper::*, runner_response::*, threaded_wasmer_runner::*,
+    wasmer_runner::*,
 };
 
 mod runner_response;
