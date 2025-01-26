@@ -161,15 +161,22 @@ impl JsContract {
         };
 
         println!(
-            "JsContract::call() calling contract function: {}",
+            "-- JsContract::call() calling contract function: {}",
             func_name
         );
 
         // The final callback that runs once the future is resolved
         env.execute_tokio_future(fut, move |&mut env, wasm_values| {
+            println!("-- [in promise] JsContract::call() attempting",);
+
             // This callback runs in Node's main thread after the future completes.
             // Convert the `Box<[Value]>` into a JS array
             let js_array = Self::box_values_to_js_array(&env, wasm_values)?;
+
+            println!(
+                "-- [in promise] JsContract::call() done calling contract function: {}",
+                func_name
+            );
 
             // Retrieve gas used:
             let gas_used = {
@@ -179,10 +186,14 @@ impl JsContract {
                 svc.get_used_gas()
             };
 
+            println!("-- [in promise] JsContract::call() gas used: {}", gas_used);
+
             // Build a JS object { result: Value[], gasUsed: bigint }
             let mut result_obj = env.create_object()?;
             result_obj.set("result", js_array)?;
             result_obj.set("gasUsed", BigInt::from(gas_used))?;
+
+            println!("-- [in promise] JsContract::call() returning result object");
 
             Ok(result_obj)
         })
