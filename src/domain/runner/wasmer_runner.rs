@@ -16,10 +16,8 @@ use crate::domain::runner::{
     abort_import, call_other_contract_import, console_log_import, deploy_from_address_import,
     emit_import, encode_address_import, inputs_import, is_valid_bitcoin_address_import,
     outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_store_import,
-    verify_schnorr_import, AbortData, ContractRunner, CustomEnv, ExtendedMemoryAccessError,
-    InstanceWrapper,
+    verify_schnorr_import, AbortData, CustomEnv, ExtendedMemoryAccessError, InstanceWrapper,
 };
-
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
@@ -45,7 +43,6 @@ impl WasmerRunner {
         let store = Store::new(engine);
 
         Module::validate(&store, &bytecode)?;
-
         log_time_diff(&time, "WasmerRunner::validate_bytecode");
 
         Ok(true)
@@ -57,19 +54,16 @@ impl WasmerRunner {
         custom_env: CustomEnv,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
-
         let store = Self::create_engine()?;
         let module = Module::from_binary(&store, &bytecode)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module)?;
 
         log_time_diff(&time, "WasmerInstance::from_bytecode");
-
         Ok(instance)
     }
 
     pub fn serialize(&self) -> anyhow::Result<Bytes, SerializeError> {
         let serialized = self.module.serialize()?;
-
         Ok(serialized)
     }
 
@@ -79,14 +73,12 @@ impl WasmerRunner {
         custom_env: CustomEnv,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
-
         let engine = EngineBuilder::headless().set_features(None).engine();
         let store = Store::new(Self::create_tunable(engine));
         let module = Module::deserialize(&store, serialized)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module)?;
 
         log_time_diff(&time, "WasmerInstance::from_serialized");
-
         Ok(instance)
     }
 
@@ -143,28 +135,16 @@ impl WasmerRunner {
 
         let remaining_gas = imp.get_remaining_gas();
         let constructor_used_gas = MAX_GAS_CONSTRUCTOR - remaining_gas;
-
         let true_max_gas = max_gas - constructor_used_gas;
         imp.set_remaining_gas(true_max_gas);
 
         Ok(imp)
     }
 
-    /*fn reset(&mut self) {
-        let engine = EngineBuilder::headless().set_features(None).engine();
-        self.store = Store::new(Self::create_tunable(engine));
-
-        self.set_remaining_gas(MAX_GAS_CONSTRUCTOR);
-
-        let instance = Instance::new(&mut self.store, &self.module, &imports! {}).unwrap();
-    }*/
-
     fn create_tunable(mut engine: Engine) -> Engine {
         let base = BaseTunables::for_target(&Target::default());
         let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
-
         engine.set_tunables(tunables);
-
         engine
     }
 
@@ -183,6 +163,8 @@ impl WasmerRunner {
     }
 }
 
+// WasmerRunner implements the ContractRunner trait:
+use crate::domain::runner::ContractRunner;
 impl ContractRunner for WasmerRunner {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         self.instance.call(&mut self.store, function, params)
