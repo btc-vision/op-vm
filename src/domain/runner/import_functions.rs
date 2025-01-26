@@ -82,7 +82,7 @@ pub fn storage_load_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    println!("storage_load_import took {:?}", start.elapsed());
+    //println!("storage_load_import took {:?}", start.elapsed());
 
     Ok(value as u32)
 }
@@ -175,10 +175,10 @@ pub fn call_other_contract_import(
     let call_execution_cost = u64::from_le_bytes(bytes);
     instance.use_gas(&mut store, call_execution_cost);
 
-    println!(
-        "call_other_contract_import call_execution_cost: {:?}",
-        call_execution_cost
-    );
+    //println!(
+    //"call_other_contract_import call_execution_cost: {:?}",
+    //call_execution_cost
+    //);
 
     Ok(value as u32)
 }

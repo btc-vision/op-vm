@@ -34,11 +34,11 @@ impl InstanceWrapper {
         function: &str,
         params: &[Value],
     ) -> anyhow::Result<Box<[Value]>> {
-        println!("!!! Calling function: {:?} !!!", function);
+        //println!("!!! Calling function: {:?} !!!", function);
         let export = Self::get_function(&self.instance, function)?;
-        println!("!!! [exported] Calling function: {:?} !!!", function);
+        //println!("!!! [exported] Calling function: {:?} !!!", function);
         let result = export.call(store, params)?;
-        println!("!!! Function call result: {:?} !!!", result);
+        //println!("!!! Function call result: {:?} !!!", result);
 
         Ok(result)
     }
@@ -94,7 +94,7 @@ impl InstanceWrapper {
     }
 
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
-        println!("!!! Using gas: {:?} !!!", gas_cost);
+        //println!("!!! Using gas: {:?} !!!", gas_cost);
         let gas_before = self.get_remaining_gas(store);
 
         let gas_after = if gas_before <= gas_cost {
@@ -122,9 +122,9 @@ impl InstanceWrapper {
     }
 
     pub fn get_remaining_gas(&self, store: &mut impl AsStoreMut) -> u64 {
-        println!("!!! Getting remaining gas !!!");
+        //println!("!!! Getting remaining gas !!!");
         let remaining_points = get_remaining_points(store, &self.instance);
-        println!("!!! Remaining points: {:?} !!!", remaining_points);
+        //println!("!!! Remaining points: {:?} !!!", remaining_points);
         match remaining_points {
             MeteringPoints::Remaining(remaining) => remaining,
             MeteringPoints::Exhausted => 0,
@@ -132,7 +132,7 @@ impl InstanceWrapper {
     }
 
     pub fn set_remaining_gas(&self, store: &mut impl AsStoreMut, gas: u64) {
-        println!("!!! Setting remaining gas: {:?} !!!", gas);
+        //println!("!!! Setting remaining gas: {:?} !!!", gas);
         set_remaining_points(store, &self.instance, gas);
     }
 

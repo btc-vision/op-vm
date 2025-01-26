@@ -11,5 +11,5 @@ pub fn log_time_diff(_time: &DateTime<Local>, _object: &str) {
         .expect("Failed to get time");
     let ms = ns as f64 / 1_000_000.0;
 
-    println!("{} took {}ms", _object, ms);
+    //println!("{} took {}ms", _object, ms);
 }
