@@ -44,6 +44,7 @@ pub fn storage_load_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
+    let start = std::time::Instant::now();
     let (env, mut store) = context.data_and_store_mut();
 
     let instance = env
@@ -80,6 +81,8 @@ pub fn storage_load_import(
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    println!("storage_load_import took {:?}", start.elapsed());
 
     Ok(value as u32)
 }
