@@ -3,6 +3,8 @@
 #[macro_use]
 extern crate napi_derive;
 
+use std::panic;
+
 #[macro_use]
 mod application;
 #[macro_use]
