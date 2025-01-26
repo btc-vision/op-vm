@@ -3,6 +3,8 @@ use wasmer::wasmparser::Operator;
 pub fn get_gas_cost(operator: &Operator) -> u64 {
     use Operator::*;
 
+    println!("operator: {:?}", operator);
+
     #[rustfmt::skip]
     let gas_cost = match operator {
         Unreachable | Return | Nop | I32Const { .. } | I64Const { .. } => 1,
