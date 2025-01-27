@@ -1,6 +1,10 @@
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
 use crate::domain::runner::{AbortData, InstanceWrapper};
-use crate::interfaces::{CallOtherContractExternalFunction, ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, NextPointerValueGreaterThanExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction};
+use crate::interfaces::{
+    CallOtherContractExternalFunction, ConsoleLogExternalFunction,
+    DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
+    OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
@@ -17,7 +21,6 @@ pub struct CustomEnv {
     pub emit_external: EmitExternalFunction,
     pub inputs_external: InputsExternalFunction,
     pub outputs_external: OutputsExternalFunction,
-    pub next_pointer_value_greater_than_external: NextPointerValueGreaterThanExternalFunction,
     pub runtime: Arc<Runtime>,
 
     pub refunded_pointers: Mutex<HashMap<Vec<u8>, bool>>,
@@ -34,7 +37,6 @@ impl CustomEnv {
         emit_external: EmitExternalFunction,
         inputs_external: InputsExternalFunction,
         outputs_external: OutputsExternalFunction,
-        next_pointer_value_greater_than_external: NextPointerValueGreaterThanExternalFunction,
         runtime: Arc<Runtime>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -49,7 +51,6 @@ impl CustomEnv {
             emit_external,
             inputs_external,
             outputs_external,
-            next_pointer_value_greater_than_external,
             runtime,
             refunded_pointers: Mutex::new(HashMap::new()),
         })

@@ -58,9 +58,6 @@ pub struct ContractManager {
     pub inputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
     pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
-    #[napi(skip)]
-    pub next_pointer_value_greater_than_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi]
@@ -96,10 +93,6 @@ impl ContractManager {
             ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
         )]
         outputs_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        next_pointer_value_greater_than: JsFunction,
     ) -> Result<Self, Error> {
         let storage_load_tsfn = create_tsfn!(storage_load_js_function);
         let storage_store_tsfn = create_tsfn!(storage_store_js_function);
@@ -109,16 +102,14 @@ impl ContractManager {
         let emit_tsfn = create_tsfn!(emit_js_function);
         let inputs_tsfn = create_tsfn!(inputs_js_function);
         let outputs_tsfn = create_tsfn!(outputs_js_function);
-        let next_pointer_value_greater_than_tsfn = create_tsfn!(next_pointer_value_greater_than);
 
         let max_idling_runtimes = max_idling_runtimes as usize;
-
-        let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes)); // 100 runtimes
+        let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
 
         Ok(ContractManager {
             contracts: HashMap::new(),
             contract_cache: HashMap::new(),
-            next_id: 1, // Start the ID counter at 1 (or 0, if preferred)
+            next_id: 1,
             storage_load_tsfn,
             storage_store_tsfn,
             call_other_contract_tsfn,
@@ -128,7 +119,6 @@ impl ContractManager {
             emit_tsfn,
             inputs_tsfn,
             outputs_tsfn,
-            next_pointer_value_greater_than_tsfn,
         })
     }
 
@@ -207,7 +197,6 @@ impl ContractManager {
         abort_tsfn!(self.emit_tsfn, &env);
         abort_tsfn!(self.inputs_tsfn, &env);
         abort_tsfn!(self.outputs_tsfn, &env);
-        abort_tsfn!(self.next_pointer_value_greater_than_tsfn, &env);
 
         Ok(())
     }
