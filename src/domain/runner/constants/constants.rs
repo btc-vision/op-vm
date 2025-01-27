@@ -9,11 +9,8 @@ pub const LOAD_COST: u64 = 40_000_000;
 pub const STORE_COST: u64 = 80_000_000;
 pub const STORE_REFUND_ZERO: u64 = 30_000_000;
 
-pub const NEXT_POINTER_GREATER_THAN_COST: u64 = 60_000_000;
-
 pub const CALL_COST: u64 = 343_000_000;
 pub const DEPLOY_COST: u64 = 2_500_000_000;
-pub const ENCODE_ADDRESS_COST: u64 = 1_000_000;
 
 pub const SHA256_COST: u64 = 50_000;
 pub const RIMD160_COST: u64 = 50_000;

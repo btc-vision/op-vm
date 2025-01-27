@@ -4,7 +4,6 @@ use napi::bindgen_prelude::*;
 use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
 use napi::Env;
 use napi::Error;
-use napi::JsNumber;
 use napi::JsUnknown;
 use std::panic::catch_unwind;
 use std::sync::{Arc, Mutex, TryLockError};
@@ -19,10 +18,17 @@ use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
     AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    ContractCallTask, DeployFromAddressExternalFunction, EmitExternalFunction,
-    InputsExternalFunction, NextPointerValueGreaterThanExternalFunction, OutputsExternalFunction,
+    DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
+    NextPointerValueGreaterThanExternalFunction, OutputsExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
+
+#[napi(object)]
+pub struct CallResponse {
+    #[napi(ts_type = "number[]")]
+    pub result: Array,
+    pub gas_used: BigInt,
+}
 
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
@@ -176,32 +182,6 @@ impl JsContract {
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
         Ok(serialized)
-    }
-
-    pub fn call(
-        &self,
-        func_name: String,
-        params: Vec<JsNumber>,
-    ) -> Result<AsyncTask<ContractCallTask>> {
-        let time = Local::now();
-        let mut wasm_params = Vec::new();
-
-        for param in params.iter() {
-            let param_value = param
-                .get_int32()
-                .map_err(|e| Error::from_reason(format!("Failed to get param value: {:?}", e)))?;
-            wasm_params.push(Value::I32(param_value));
-        }
-
-        let contract = self.contract.clone();
-        let result = AsyncTask::new(ContractCallTask::new(
-            contract,
-            &func_name,
-            &wasm_params,
-            time,
-        ));
-
-        Ok(result)
     }
 
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
