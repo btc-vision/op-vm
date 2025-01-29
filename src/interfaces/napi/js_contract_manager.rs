@@ -137,6 +137,7 @@ impl ContractManager {
         bytecode: Option<Buffer>,
         max_gas: BigInt,
         network: BitcoinNetworkRequest,
+        is_debug_mode: bool,
     ) -> Result<(), Error> {
         let max_gas = max_gas.get_u64().1;
         let id = reserved_id.get_u64().1;
@@ -146,6 +147,7 @@ impl ContractManager {
             serialized: None,
             max_gas,
             network,
+            is_debug_mode,
         };
 
         let mut should_cache = false;
