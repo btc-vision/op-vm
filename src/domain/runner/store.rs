@@ -1,7 +1,4 @@
-use super::constants::{
-    LOAD_COLD, LOAD_WARM, STORE_BASE, STORE_COST, STORE_NEW, STORE_REFUND, STORE_UPDATE,
-};
-use tokio::runtime::Runtime;
+use super::constants::{LOAD_COLD, LOAD_WARM, STORE_BASE, STORE_NEW, STORE_REFUND, STORE_UPDATE};
 use wasmer::RuntimeError;
 
 pub const STORAGE_POINTER_SIZE: usize = 32;
@@ -29,18 +26,6 @@ impl CacheValue {
             original: value,
             current: value,
         }
-    }
-
-    // New value created in same transaction
-    pub fn new_created(value: StorageValue) -> Self {
-        Self {
-            original: STORAGE_VALUE_ZERO,
-            current: value,
-        }
-    }
-
-    pub fn is_changed(&self) -> bool {
-        self.original == self.current
     }
 }
 
@@ -154,7 +139,7 @@ impl Cache {
                         if value != cache_value.original {
                             gas_refund -= STORE_REFUND as i64;
                         } else {
-                            gas_refund -= (2_100_000 as i64) - (LOAD_WARM as i64);
+                            gas_refund -= (LOAD_COLD as i64) - (LOAD_WARM as i64);
                         }
                     } else if value == STORAGE_VALUE_ZERO {
                         gas_refund = STORE_REFUND as i64;
@@ -256,7 +241,7 @@ mod tests {
 
         let result = cache.set(POINTER, value, get_fn, set_fn).unwrap();
 
-        assert_eq!(result.gas_cost, 100_000);
+        assert_eq!(result.gas_cost, 1_000_000);
     }
 
     #[test]
@@ -275,12 +260,12 @@ mod tests {
 
         // Cold value
         let result = cache.get(&POINTER, get_fn).unwrap();
-        assert_eq!(result.gas_cost, 2_100_000);
+        assert_eq!(result.gas_cost, 21_000_000);
         assert_eq!(result.value, value);
 
         // Warm value
         let result = cache.get(&POINTER, get_fn).unwrap();
-        assert_eq!(result.gas_cost, 100_000);
+        assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.value, value);
     }
 
@@ -309,24 +294,24 @@ mod tests {
         let result = cache.set(key, [1; 32], get_fn, set_fn).unwrap();
         assert_eq!(store.lock().unwrap().get(&key).unwrap(), &[1; 32]);
 
-        assert_eq!(result.gas_cost, 22_100_000);
+        assert_eq!(result.gas_cost, 221_000_000);
         assert_eq!(result.gas_refund, 0);
 
         // Warm - not changed
         let result = cache.set(key, [1; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 100_000);
+        assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
 
         cache.reset();
 
         // cold - changed
         let result = cache.set(key, [2; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 5_000_000);
+        assert_eq!(result.gas_cost, 50_000_000);
         assert_eq!(result.gas_refund, 0);
 
         // warm changed - after change
         let result = cache.set(key, [3; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 100_000);
+        assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
 
         // Warm change
@@ -335,14 +320,14 @@ mod tests {
         assert_eq!(result.value, [3; 32]);
 
         let result = cache.set(key, [4; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 2_900_000);
+        assert_eq!(result.gas_cost, 29_000_000);
         assert_eq!(result.gas_refund, 0);
 
         // Cold reset
         cache.reset();
         let result = cache.set(key, [0; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 5_000_000);
-        assert_eq!(result.gas_refund, 4_800_000);
+        assert_eq!(result.gas_cost, 50_000_000);
+        assert_eq!(result.gas_refund, 48_000_000);
 
         // warm reset
         cache.set(key, [1; 32], get_fn, set_fn).unwrap();
@@ -352,16 +337,16 @@ mod tests {
         assert_eq!(result.value, [1; 32]);
 
         let result = cache.set(key, [0; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 2_900_000);
-        assert_eq!(result.gas_refund, 4_800_000);
+        assert_eq!(result.gas_cost, 29_000_000);
+        assert_eq!(result.gas_refund, 48_000_000);
 
         // Zero to default, change, default
         cache.reset();
         cache.set(key, [1; 32], get_fn, set_fn).unwrap();
         let result = cache.set(key, [0; 32], get_fn, set_fn).unwrap();
 
-        assert_eq!(result.gas_cost, 100_000);
-        assert_eq!(result.gas_refund, 19_900_000);
+        assert_eq!(result.gas_cost, 1_000_000);
+        assert_eq!(result.gas_refund, 199_000_000);
 
         // Value zero same value
         cache.set(key, [1; 32], get_fn, set_fn).unwrap();
@@ -369,11 +354,11 @@ mod tests {
         cache.set(key, [0; 32], get_fn, set_fn).unwrap();
 
         let result = cache.set(key, [1; 32], get_fn, set_fn).unwrap();
-        assert_eq!(result.gas_cost, 100_000);
+        assert_eq!(result.gas_cost, 1_000_000);
 
         // TODO: This values is not in formula: https://www.evm.codes/?fork=cancun#55
         // but dialog calculation give this result
-        assert_eq!(result.gas_refund, -2_000_000);
+        assert_eq!(result.gas_refund, -20_000_000);
 
         // Value zero different value
         cache.set(key, [1; 32], get_fn, set_fn).unwrap();
@@ -381,7 +366,7 @@ mod tests {
         cache.set(key, [0; 32], get_fn, set_fn).unwrap();
         let result = cache.set(key, [2; 32], get_fn, set_fn).unwrap();
 
-        assert_eq!(result.gas_cost, 100_000);
-        assert_eq!(result.gas_refund, -4_800_000);
+        assert_eq!(result.gas_cost, 1_000_000);
+        assert_eq!(result.gas_refund, -48_000_000);
     }
 }

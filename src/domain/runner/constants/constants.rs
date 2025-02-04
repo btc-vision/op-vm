@@ -5,15 +5,12 @@ pub const PAGE_MEMORY_SIZE: u64 = 64 * 1024;
 pub const MAX_MEMORY_SIZE: u64 = (MAX_PAGES as u64) * PAGE_MEMORY_SIZE;
 
 /** Gas cost for custom functions */
-pub const LOAD_COLD: u64 = 2_100_000;
-pub const LOAD_WARM: u64 = 100_000;
-pub const STORE_BASE: u64 = 100_000;
-pub const STORE_NEW: u64 = 20_000_000;
-pub const STORE_UPDATE: u64 = 2_900_000;
-pub const STORE_REFUND: u64 = 4_800_000;
-
-pub const STORE_COST: u64 = 80_000_000;
-pub const STORE_REFUND_ZERO: u64 = 30_000_000;
+pub const LOAD_COLD: u64 = 21_000_000;
+pub const LOAD_WARM: u64 = 1_000_000;
+pub const STORE_BASE: u64 = 1_000_000;
+pub const STORE_NEW: u64 = 200_000_000;
+pub const STORE_UPDATE: u64 = 29_000_000;
+pub const STORE_REFUND: u64 = 48_000_000;
 
 pub const CALL_COST: u64 = 343_000_000;
 pub const DEPLOY_COST: u64 = 2_500_000_000;

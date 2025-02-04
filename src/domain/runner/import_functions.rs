@@ -2,16 +2,14 @@ use once_cell::sync::Lazy;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
-use std::collections::HashMap;
 use std::string::FromUtf8Error;
-use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::{
-    exported_import_functions, AbortData, CustomEnv, InstanceWrapper, CALL_COST, DEPLOY_COST,
-    EMIT_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, OUTPUTS_COST, RIMD160_COST,
+    exported_import_functions, AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST,
+    INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, OUTPUTS_COST, RIMD160_COST,
     SCHNORR_VERIFICATION_COST, SHA256_COST,
 };
 use crate::interfaces::ExternalFunction;
@@ -318,32 +316,6 @@ pub fn emit_import(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<(
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
     env.emit_external.execute(&data, &env.runtime)
-}
-
-fn have_only_zero_bytes(data: &[u8]) -> bool {
-    data.iter().all(|&x| x == 0)
-}
-
-fn verify_gas_refund_eligibility(
-    refunded_pointers: &Mutex<HashMap<Vec<u8>, bool>>,
-    instance: &InstanceWrapper,
-    store: &mut StoreMut,
-    refund_if_zero_result: u64,
-    pointer: Vec<u8>,
-) -> Result<(), RuntimeError> {
-    let mut map = refunded_pointers
-        .lock()
-        .map_err(|_e| RuntimeError::new("Failed to lock refunded pointers"))?;
-
-    if let Some(&is_refunded) = map.get(&pointer) {
-        if !is_refunded {
-            map.insert(pointer, true);
-
-            instance.refund_gas(store, refund_if_zero_result as i64);
-        }
-    }
-
-    Ok(())
 }
 
 fn load_pointer_external_import(
