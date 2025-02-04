@@ -3,7 +3,7 @@ use chrono::Local;
 use std::sync::Arc;
 use wasmer::sys::{BaseTunables, EngineBuilder};
 use wasmer::{
-    imports, CompilerConfig, Function, FunctionEnv, Imports, Instance, Module, Store, Value,
+    imports, CompilerConfig, Function, FunctionEnv, Instance, Module, Store, Value,
 };
 use wasmer_compiler::types::target::Target;
 use wasmer_compiler::Engine;
@@ -53,12 +53,13 @@ impl WasmerRunner {
         bytecode: &[u8],
         max_gas: u64,
         custom_env: CustomEnv,
+        is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
         let store = Self::create_engine()?;
         let module = Module::from_binary(&store, &bytecode)?;
-        let instance = Self::create_instance(max_gas, custom_env, store, module)?;
+        let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
 
         log_time_diff(&time, "WasmerInstance::from_bytecode");
 
@@ -75,13 +76,14 @@ impl WasmerRunner {
         serialized: Bytes,
         max_gas: u64,
         custom_env: CustomEnv,
+        is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
         let engine = EngineBuilder::headless().set_features(None).engine();
         let store = Store::new(Self::create_tunable(engine));
         let module = Module::deserialize(&store, serialized)?;
-        let instance = Self::create_instance(max_gas, custom_env, store, module)?;
+        let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
 
         log_time_diff(&time, "WasmerInstance::from_serialized");
 
@@ -93,6 +95,7 @@ impl WasmerRunner {
         custom_env: CustomEnv,
         mut store: Store,
         module: Module,
+        is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let env = FunctionEnv::new(&mut store, custom_env);
 
@@ -102,7 +105,7 @@ impl WasmerRunner {
             };
         }
 
-        let import_object: Imports = imports! {
+        let mut import_object = imports! {
             "env" => {
                 "abort" => import!(abort_import),
                 "load" => import!(storage_load_import),
@@ -110,7 +113,6 @@ impl WasmerRunner {
                 "call" => import!(call_other_contract_import),
                 "deployFromAddress" => import!(deploy_from_address_import),
                 "sha256" => import!(sha256_import),
-                "log" => import!(console_log_import),
                 "emit" => import!(emit_import),
                 "inputs" => import!(inputs_import),
                 "outputs" => import!(outputs_import),
@@ -119,6 +121,10 @@ impl WasmerRunner {
                 "verifySchnorrSignature" => import!(verify_schnorr_import),
             }
         };
+
+        if is_debug_mode {
+            import_object.define("debug", "log", import!(console_log_import));
+        }
 
         let instance = Instance::new(&mut store, &module, &import_object).map_err(|e| {
             if e.to_string().contains("unreachable") {
