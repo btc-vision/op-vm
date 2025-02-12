@@ -1,4 +1,5 @@
 use super::constants::{LOAD_COLD, LOAD_WARM, STORE_BASE, STORE_NEW, STORE_REFUND, STORE_UPDATE};
+use std::collections::HashMap;
 use wasmer::RuntimeError;
 
 pub const STORAGE_POINTER_SIZE: usize = 32;
@@ -41,7 +42,7 @@ impl CacheResponse {
 
 #[derive(Debug, Clone)]
 pub struct Cache {
-    values: std::collections::HashMap<[u8; STORAGE_POINTER_SIZE], CacheValue>,
+    values: HashMap<[u8; STORAGE_POINTER_SIZE], CacheValue>,
     reads: usize,
     writes: usize,
 }
@@ -49,7 +50,7 @@ pub struct Cache {
 impl Cache {
     pub fn new() -> Self {
         Self {
-            values: std::collections::HashMap::new(),
+            values: HashMap::new(),
             reads: 0,
             writes: 0,
         }
@@ -74,7 +75,7 @@ impl Cache {
         if let Some(value) = self.values.get(pointer) {
             Ok(CacheResponse::new(value.current, LOAD_WARM, 0))
         }
-        // first acces of pointer
+        // first access of pointer
         else {
             let original_value = get_fn(*pointer)?;
             self.values
@@ -177,7 +178,7 @@ mod tests {
         sync::{Arc, Mutex},
     };
 
-    const POINTER: super::StoragePointer = [
+    const POINTER: StoragePointer = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
         25, 26, 27, 28, 29, 30, 31,
     ];
@@ -186,10 +187,7 @@ mod tests {
         pointer: Option<StoragePointer>,
         original_value: Option<StorageValue>,
         current_value: Option<StorageValue>,
-    ) -> (
-        Cache,
-        Arc<Mutex<HashMap<super::StoragePointer, super::StorageValue>>>,
-    ) {
+    ) -> (Cache, Arc<Mutex<HashMap<StoragePointer, StorageValue>>>) {
         let pointer = pointer.unwrap_or([1; super::STORAGE_POINTER_SIZE]);
         let store: Arc<Mutex<HashMap<StoragePointer, StorageValue>>> = if original_value.is_some() {
             Arc::new(Mutex::new(HashMap::from_iter([(
@@ -224,7 +222,7 @@ mod tests {
         let value = [0; 32];
 
         let (mut cache, store) = create_store(Some(POINTER), None, None);
-        let get_fn = |key: super::StoragePointer| {
+        let get_fn = |key: StoragePointer| {
             Ok(store
                 .lock()
                 .unwrap()
@@ -232,7 +230,7 @@ mod tests {
                 .unwrap_or(&super::STORAGE_VALUE_ZERO)
                 .clone())
         };
-        let set_fn = |key: super::StoragePointer, value: super::StorageValue| {
+        let set_fn = |key: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(key, value);
             Ok(())
         };
@@ -249,7 +247,7 @@ mod tests {
         let value = [10; 32];
 
         let (mut cache, store) = create_store(Some(POINTER), Some(value), None);
-        let get_fn = |key: super::StoragePointer| {
+        let get_fn = |key: StoragePointer| {
             Ok(store
                 .lock()
                 .unwrap()
@@ -277,7 +275,7 @@ mod tests {
         ];
 
         let (mut cache, store) = create_store(Some(key), None, None);
-        let get_fn = |key: super::StoragePointer| {
+        let get_fn = |key: StoragePointer| {
             Ok(store
                 .lock()
                 .unwrap()
@@ -285,7 +283,7 @@ mod tests {
                 .unwrap_or(&super::STORAGE_VALUE_ZERO)
                 .clone())
         };
-        let set_fn = |key: super::StoragePointer, value: super::StorageValue| {
+        let set_fn = |key: StoragePointer, value: super::StorageValue| {
             store.lock().unwrap().insert(key, value);
             Ok(())
         };

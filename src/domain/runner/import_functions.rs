@@ -437,7 +437,7 @@ fn store_pointer_external_import(
     )?;
 
     instance.use_gas(&mut store, result.gas_cost);
-    instance.refund_gas(&mut store, result.gas_refund as i64);
+    instance.refund_gas(&mut store, result.gas_refund);
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result.value, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
