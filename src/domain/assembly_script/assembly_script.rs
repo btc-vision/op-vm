@@ -179,4 +179,66 @@ impl AssemblyScript {
         }
         result
     }
+
+    pub fn lift_string(
+        store: &(impl AsStoreRef + ?Sized),
+        instance: &InstanceWrapper,
+        pointer: u32,
+    ) -> Result<Option<String>, Error> {
+        if pointer == 0 {
+            return Ok(None);
+        }
+
+        // Read the length of the string (stored at pointer - 4).
+        let length_pointer = (pointer - 4) as u64;
+        let length_bytes = Self::read_pointer(store, instance, length_pointer, 4)
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+        let length = Self::bytes_to_u32_le(length_bytes, 0);
+
+        // For AssemblyScript strings:
+        //   - Each character is 2 bytes (UTF-16).
+        //   - pointer points to the start of the character data.
+        //   - So the actual "end" index in u16-words is (pointer + length) >> 1.
+        //   - The start in u16-words is pointer >> 1.
+        //
+        // We can read memory in chunks (like the JS) to handle big strings safely:
+        let end = ((pointer) + length) >> 1;
+        let mut start = (pointer) >> 1;
+        let mut string_parts = Vec::new();
+
+        // We'll read in chunks of 1024 UTF-16 code units (2 KB).
+        while end.saturating_sub(start) > 1024 {
+            let chunk_size = 1024u64 * 2; // 1024 UTF-16 code units = 2048 bytes
+            let offset_bytes = (start as u64) * 2;
+            let chunk_data = Self::read_pointer(store, instance, offset_bytes, chunk_size)
+                .map_err(|e| Error::from_reason(e.to_string()))?;
+
+            // Convert chunk_data (bytes) into a Vec<u16> (little-endian).
+            let chunk_u16 = chunk_data
+                .chunks_exact(2)
+                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                .collect::<Vec<u16>>();
+
+            string_parts.push(String::from_utf16_lossy(&chunk_u16));
+            start += 1024;
+        }
+
+        // Final remaining chunk
+        let remaining_units = end.saturating_sub(start);
+        if remaining_units > 0 {
+            let remaining_bytes = remaining_units as u64 * 2;
+            let offset_bytes = (start as u64) * 2;
+            let remainder_data = Self::read_pointer(store, instance, offset_bytes, remaining_bytes)
+                .map_err(|e| Error::from_reason(e.to_string()))?;
+
+            let remainder_u16 = remainder_data
+                .chunks_exact(2)
+                .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                .collect::<Vec<u16>>();
+
+            string_parts.push(String::from_utf16_lossy(&remainder_u16));
+        }
+
+        Ok(Some(string_parts.join("")))
+    }
 }
