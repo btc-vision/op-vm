@@ -42,14 +42,16 @@ pub fn abort_import(
 
 pub fn storage_load_import(
     mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
+    key_ptr: u32,
+    result_ptr: u32,
+) -> Result<(), RuntimeError> {
     let (env, store) = context.data_and_store_mut();
     load_pointer_external_import(
         env,
         store,
         &env.storage_load_external,
-        ptr,
+        key_ptr,
+        result_ptr,
         LOAD_COST,
         &env.runtime,
         &env.refunded_pointers,
@@ -58,14 +60,16 @@ pub fn storage_load_import(
 
 pub fn storage_store_import(
     mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
+    key_ptr: u32,
+    value_ptr: u32,
+) -> Result<(), RuntimeError> {
     let (env, store) = context.data_and_store_mut();
     store_pointer_external_import(
         env,
         store,
         &env.storage_store_external,
-        ptr,
+        key_ptr,
+        value_ptr,
         STORE_COST,
         &env.runtime,
         STORE_REFUND_ZERO,
@@ -366,11 +370,12 @@ fn load_pointer_external_import(
     env: &CustomEnv,
     mut store: StoreMut,
     external_function: &impl ExternalFunction,
-    ptr: u32,
+    key_ptr: u32,
+    result_ptr: u32,
     gas_cost: u64,
     runtime: &Runtime,
     refunded_pointers: &Mutex<HashMap<Vec<u8>, bool>>,
-) -> Result<u32, RuntimeError> {
+) -> Result<(), RuntimeError> {
     let instance = env
         .instance
         .clone()
@@ -378,8 +383,8 @@ fn load_pointer_external_import(
 
     instance.use_gas(&mut store, gas_cost);
 
-    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+    let data = instance.read_memory(&store, key_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
     let result = external_function.execute(&data, runtime)?;
 
@@ -398,10 +403,10 @@ fn load_pointer_external_import(
         }
     }
 
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+    instance.write_memory(&store, result_ptr as u64, &result)
+        .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
 
-    Ok(value as u32)
+    Ok(())
 }
 
 fn import_external_call(
@@ -433,11 +438,12 @@ fn store_pointer_external_import(
     env: &CustomEnv,
     mut store: StoreMut,
     external_function: &impl ExternalFunction,
-    ptr: u32,
+    key_ptr: u32,
+    value_ptr: u32,
     gas_cost: u64,
     runtime: &Runtime,
     refund_if_zero_result: u64,
-) -> Result<u32, RuntimeError> {
+) -> Result<(), RuntimeError> {
     let instance = env
         .instance
         .clone()
@@ -445,21 +451,14 @@ fn store_pointer_external_import(
 
     instance.use_gas(&mut store, gas_cost);
 
-    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+    let key = instance.read_memory(&store, key_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
+    let value = instance.read_memory(&store, value_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
 
-    if data.len() != 64 {
-        return Err(RuntimeError::new("Invalid data length. Expected 64 bytes"));
-    }
+    let data = [key.as_slice(), value.as_slice()].concat();
 
-    let pointer = safe_slice(&data, 0, 32)
-        .ok_or(RuntimeError::new("Invalid buffer"))?
-        .to_vec();
-    let value = safe_slice(&data, 32, 64)
-        .ok_or(RuntimeError::new("Invalid buffer"))?
-        .to_vec();
-
-    let result = external_function.execute(&data, runtime)?;
+    external_function.execute(&data, runtime)?;
 
     // Optionally verify refund eligibility
     if refund_if_zero_result > 0 && have_only_zero_bytes(&value) {
@@ -468,14 +467,11 @@ fn store_pointer_external_import(
             &instance,
             &mut store,
             refund_if_zero_result,
-            pointer.clone(),
+            key.clone(),
         )?;
     }
 
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
-    Ok(value as u32)
+    Ok(())
 }
 
 #[cfg(test)]
