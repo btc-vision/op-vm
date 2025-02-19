@@ -15,15 +15,20 @@ pub const STORE_REFUND: u64 = 48_000_000;
 pub const CALL_COST: u64 = 343_000_000;
 pub const DEPLOY_COST: u64 = 2_500_000_000;
 
-pub const SHA256_COST: u64 = 50_000;
-pub const RIMD160_COST: u64 = 50_000;
+// Dynamic gas cost for hash function
+pub const SHA256_COST: u64 = 600_000;
+pub const SHA256_WORD_COST: u64 = 120_000;
+pub const RIMD160_COST: u64 = 6_000_000;
+pub const RIMD160_WORD_COST: u64 = 1_200_000;
 
 pub const INPUTS_COST: u64 = 5_000_000;
 pub const OUTPUTS_COST: u64 = 5_000_000;
 
 pub const EMIT_COST: u64 = 1_000_000;
 pub const IS_VALID_BITCOIN_ADDRESS_COST: u64 = 1_000_000;
+pub const IS_VALID_BITCOIN_ADDRESS_WORD_COST: u64 = 120_000;
 pub const SCHNORR_VERIFICATION_COST: u64 = 100_000_000;
+pub const SCHNORR_VERIFICATION_WORD_COST: u64 = 120_000;
 
 /** Constraints */
 pub const MAX_LENGTH_BUFFER_EXTERN: u32 = 2 * 1024 * 1024; // 4MB

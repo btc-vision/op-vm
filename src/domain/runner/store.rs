@@ -87,7 +87,7 @@ impl Cache {
 
     pub fn set<GetFun, SetFun>(
         &mut self,
-        key: [u8; STORAGE_POINTER_SIZE],
+        pointer: [u8; STORAGE_POINTER_SIZE],
         value: [u8; STORAGE_VALUE_SIZE],
         get_value: GetFun,
         set_value: SetFun,
@@ -102,13 +102,13 @@ impl Cache {
         let mut gas_cost = 0;
         let mut gas_refund: i64 = 0;
 
-        let mut cache_value = if let Some(value) = self.values.get(&key) {
+        let mut cache_value = if let Some(value) = self.values.get(&pointer) {
             // Warm access
             value.clone()
         } else {
             // Cold access
             gas_cost += LOAD_COLD;
-            CacheValue::new(get_value(key)?)
+            CacheValue::new(get_value(pointer)?)
         };
 
         if value == cache_value.current {
@@ -157,8 +157,8 @@ impl Cache {
 
             // Set value to store
             cache_value.current = value;
-            set_value(key, value)?;
-            self.values.insert(key, cache_value);
+            set_value(pointer, value)?;
+            self.values.insert(pointer, cache_value);
         }
 
         Ok(CacheResponse::new(value, gas_cost, gas_refund))
@@ -218,40 +218,15 @@ mod tests {
     }
 
     #[test]
-    pub fn test_cold_write_zero() {
-        let value = [0; 32];
-
-        let (mut cache, store) = create_store(Some(POINTER), None, None);
-        let get_fn = |key: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&key)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
-        };
-        let set_fn = |key: StoragePointer, value: StorageValue| {
-            store.lock().unwrap().insert(key, value);
-            Ok(())
-        };
-
-        cache.get(&POINTER, get_fn).unwrap();
-
-        let result = cache.set(POINTER, value, get_fn, set_fn).unwrap();
-
-        assert_eq!(result.gas_cost, 1_000_000);
-    }
-
-    #[test]
-    pub fn test_get_value() {
+    pub fn test_load_value() {
         let value = [10; 32];
 
         let (mut cache, store) = create_store(Some(POINTER), Some(value), None);
-        let get_fn = |key: StoragePointer| {
+        let get_fn = |pointer: super::StoragePointer| {
             Ok(store
                 .lock()
                 .unwrap()
-                .get(&key)
+                .get(&pointer)
                 .unwrap_or(&super::STORAGE_VALUE_ZERO)
                 .clone())
         };
@@ -268,101 +243,250 @@ mod tests {
     }
 
     #[test]
-    pub fn test_set_value() {
-        let key = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-            24, 25, 26, 27, 28, 29, 30, 31,
-        ];
-
-        let (mut cache, store) = create_store(Some(key), None, None);
-        let get_fn = |key: StoragePointer| {
+    pub fn test_store_new_cold_value() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
             Ok(store
                 .lock()
                 .unwrap()
-                .get(&key)
+                .get(&pointer)
                 .unwrap_or(&super::STORAGE_VALUE_ZERO)
                 .clone())
         };
-        let set_fn = |key: StoragePointer, value: super::StorageValue| {
-            store.lock().unwrap().insert(key, value);
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
             Ok(())
         };
 
-        // New value / cold
-        let result = cache.set(key, [1; 32], get_fn, set_fn).unwrap();
-        assert_eq!(store.lock().unwrap().get(&key).unwrap(), &[1; 32]);
+        let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        assert_eq!(store.lock().unwrap().get(&POINTER).unwrap(), &[1; 32]);
 
         assert_eq!(result.gas_cost, 221_000_000);
         assert_eq!(result.gas_refund, 0);
+    }
+
+    #[test]
+    pub fn test_store_warm_not_changed_value() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // Warm - not changed
-        let result = cache.set(key, [1; 32], get_fn, set_fn).unwrap();
+        let _result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
+    }
 
-        cache.reset();
+    #[test]
+    pub fn test_store_cold_changed() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // cold - changed
-        let result = cache.set(key, [2; 32], get_fn, set_fn).unwrap();
+        let _result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        cache.reset();
+        let result = cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 50_000_000);
         assert_eq!(result.gas_refund, 0);
+    }
+
+    #[test]
+    pub fn test_store_warm_changed_after_change() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // warm changed - after change
-        let result = cache.set(key, [3; 32], get_fn, set_fn).unwrap();
+        let _result = cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [3; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
+    }
 
-        // Warm change
+    #[test]
+    pub fn test_store_warm_changed() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
+
+        let _result = cache.set(POINTER, [3; 32], get_fn, set_fn).unwrap();
         cache.reset();
-        let result = cache.get(&key, get_fn).unwrap();
+        let result = cache.get(&POINTER, get_fn).unwrap();
         assert_eq!(result.value, [3; 32]);
 
-        let result = cache.set(key, [4; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [4; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 29_000_000);
         assert_eq!(result.gas_refund, 0);
+    }
+
+    #[test]
+    pub fn test_store_cold_reset() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // Cold reset
+        let _result = cache.set(POINTER, [4; 32], get_fn, set_fn).unwrap();
         cache.reset();
-        let result = cache.set(key, [0; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [0; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 50_000_000);
         assert_eq!(result.gas_refund, 48_000_000);
+    }
+
+    #[test]
+    pub fn test_store_warm_reset() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // warm reset
-        cache.set(key, [1; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         cache.reset();
 
-        let result = cache.get(&key, get_fn).unwrap();
+        let result = cache.get(&POINTER, get_fn).unwrap();
         assert_eq!(result.value, [1; 32]);
 
-        let result = cache.set(key, [0; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [0; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 29_000_000);
         assert_eq!(result.gas_refund, 48_000_000);
+    }
 
+    #[test]
+    pub fn test_store_default_change_default() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
         // Zero to default, change, default
         cache.reset();
-        cache.set(key, [1; 32], get_fn, set_fn).unwrap();
-        let result = cache.set(key, [0; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [0; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 199_000_000);
+    }
+
+    #[test]
+    pub fn test_store_zero_same_value() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // Value zero same value
-        cache.set(key, [1; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         cache.reset();
-        cache.set(key, [0; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [0; 32], get_fn, set_fn).unwrap();
 
-        let result = cache.set(key, [1; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 1_000_000);
 
         // TODO: This values is not in formula: https://www.evm.codes/?fork=cancun#55
         // but dialog calculation give this result
         assert_eq!(result.gas_refund, -20_000_000);
+    }
+
+    #[test]
+    pub fn test_store_zero_different_value() {
+        let (mut cache, store) = create_store(Some(POINTER), None, None);
+        let get_fn = |pointer: super::StoragePointer| {
+            Ok(store
+                .lock()
+                .unwrap()
+                .get(&pointer)
+                .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                .clone())
+        };
+        let set_fn = |pointer: super::StoragePointer, value: super::StorageValue| {
+            store.lock().unwrap().insert(pointer, value);
+            Ok(())
+        };
 
         // Value zero different value
-        cache.set(key, [1; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         cache.reset();
-        cache.set(key, [0; 32], get_fn, set_fn).unwrap();
-        let result = cache.set(key, [2; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [0; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, -48_000_000);

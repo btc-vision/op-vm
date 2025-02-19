@@ -3,6 +3,7 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
 use std::string::FromUtf8Error;
+use std::{i64, u64};
 use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
@@ -13,6 +14,11 @@ use crate::domain::runner::{
     SCHNORR_VERIFICATION_COST, SHA256_COST,
 };
 use crate::interfaces::ExternalFunction;
+
+use super::{
+    IS_VALID_BITCOIN_ADDRESS_WORD_COST, RIMD160_WORD_COST, SCHNORR_VERIFICATION_WORD_COST,
+    SHA256_WORD_COST,
+};
 
 fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
     vec.get(start..end)
@@ -159,7 +165,10 @@ pub fn sha256_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    instance.use_gas(&mut store, SHA256_COST);
+    instance.use_gas(
+        &mut store,
+        SHA256_COST + ((data.len() as u64) / 32) * SHA256_WORD_COST,
+    );
 
     Ok(value as u32)
 }
@@ -177,6 +186,7 @@ pub fn verify_schnorr_import(
 
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+    let data_len = data.len() as u64;
 
     let public_key_bytes = safe_slice(&data, 0, 32).ok_or(RuntimeError::new("Invalid buffer"))?;
     let signature_bytes =
@@ -202,7 +212,10 @@ pub fn verify_schnorr_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    instance.use_gas(&mut store, SCHNORR_VERIFICATION_COST);
+    instance.use_gas(
+        &mut store,
+        SCHNORR_VERIFICATION_COST + (data_len / 32) * SCHNORR_VERIFICATION_WORD_COST,
+    );
 
     Ok(value as u32)
 }
@@ -225,6 +238,7 @@ pub fn is_valid_bitcoin_address_import(
 
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+    let data_len = data.len() as u64;
 
     let string_data = vec8_to_string(data)
         .map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;
@@ -236,7 +250,10 @@ pub fn is_valid_bitcoin_address_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result_vec_buffer, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    instance.use_gas(&mut store, IS_VALID_BITCOIN_ADDRESS_COST);
+    instance.use_gas(
+        &mut store,
+        IS_VALID_BITCOIN_ADDRESS_COST + (data_len / 32) * IS_VALID_BITCOIN_ADDRESS_WORD_COST,
+    );
 
     Ok(value as u32)
 }
@@ -260,7 +277,10 @@ pub fn ripemd160_import(
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-    instance.use_gas(&mut store, RIMD160_COST);
+    instance.use_gas(
+        &mut store,
+        RIMD160_COST + (data.len() as u64) * RIMD160_WORD_COST / 32,
+    );
 
     Ok(value as u32)
 }
@@ -437,7 +457,13 @@ fn store_pointer_external_import(
     )?;
 
     instance.use_gas(&mut store, result.gas_cost);
-    instance.refund_gas(&mut store, result.gas_refund);
+    if result.gas_refund > 0 {
+        instance.refund_gas(&mut store, result.gas_refund as u64);
+    } else if result.gas_refund < 0 && result.gas_refund > i64::MIN {
+        instance.use_gas(&mut store, (-result.gas_refund) as u64);
+    } else if result.gas_refund == i64::MIN {
+        instance.use_gas(&mut store, u64::MAX);
+    }
 
     let value = AssemblyScript::write_buffer(&mut store, &instance, &result.value, 13, 0)
         .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
