@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::string::FromUtf8Error;
 use std::sync::Mutex;
@@ -9,10 +10,11 @@ use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
+use crate::domain::runner::call_result::CallResult;
 use crate::domain::runner::{
-    exported_import_functions, AbortData, CustomEnv, InstanceWrapper, CALL_COST, DEPLOY_COST,
-    EMIT_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, OUTPUTS_COST, RIMD160_COST,
-    SCHNORR_VERIFICATION_COST, SHA256_COST, STORE_COST, STORE_REFUND_ZERO,
+    exported_import_functions, AbortData, CustomEnv, InstanceWrapper, CALL_COST, CALL_RESULT_COST,
+    DEPLOY_COST, EMIT_COST, INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, LOAD_COST, OUTPUTS_COST,
+    RIMD160_COST, SCHNORR_VERIFICATION_COST, SHA256_COST, STORE_COST, STORE_REFUND_ZERO,
 };
 use crate::interfaces::ExternalFunction;
 
@@ -78,8 +80,11 @@ pub fn storage_store_import(
 
 pub fn call_other_contract_import(
     mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
+    address_ptr: u32,
+    calldata_ptr: u32,
+    calldata_length: u32,
+    result_length_ptr: u32,
+) -> Result<(), RuntimeError> {
     let (env, mut store) = context.data_and_store_mut();
 
     let instance = env
@@ -89,8 +94,20 @@ pub fn call_other_contract_import(
 
     instance.use_gas(&mut store, CALL_COST);
 
-    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+    let address = instance
+        .read_memory(&store, address_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading address from memory"))?;
+
+    let calldata = instance
+        .read_memory(&store, calldata_ptr as u64, calldata_length as u64)
+        .map_err(|_e| RuntimeError::new("Error reading calldata from memory"))?;
+
+    let data = [
+        address.as_slice(),
+        calldata_length.to_le_bytes().as_slice(),
+        calldata.as_slice(),
+    ]
+    .concat();
 
     let result = &env
         .call_other_contract_external
@@ -101,16 +118,104 @@ pub fn call_other_contract_import(
     let response =
         safe_slice(&result, 8, result.len()).ok_or(RuntimeError::new("Invalid buffer"))?;
 
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &response, 13, 0)
-        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
     let bytes = call_execution_cost_bytes
         .try_into()
         .map_err(|_e| RuntimeError::new("Error converting bytes"))?;
     let call_execution_cost = u64::from_le_bytes(bytes);
     instance.use_gas(&mut store, call_execution_cost);
 
-    Ok(value as u32)
+    env.last_call_result = CallResult::new(response);
+
+    let result_length = response.len() as u32;
+    let result_length_bytes = &result_length.to_be_bytes();
+
+    instance
+        .write_memory(&store, result_length_ptr as u64, result_length_bytes)
+        .map_err(|_e| RuntimeError::new("Error writing call result to memory"))?;
+
+    Ok(())
+}
+
+pub fn get_call_result_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    offset: u32,
+    length: u32,
+    result_ptr: u32,
+) -> Result<(), RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    instance.use_gas(&mut store, CALL_RESULT_COST);
+
+    let result_data = env.last_call_result.data.as_slice();
+
+    write_result_data_slice_to_memory(
+        &mut store,
+        &instance,
+        result_data,
+        offset,
+        length,
+        result_ptr,
+    )?;
+
+    write_result_data_padding_to_memory(
+        &mut store,
+        instance,
+        result_data,
+        offset,
+        length,
+        result_ptr,
+    )?;
+
+    Ok(())
+}
+
+fn write_result_data_slice_to_memory(
+    store: &mut StoreMut,
+    instance: &InstanceWrapper,
+    result_data: &[u8],
+    offset: u32,
+    length: u32,
+    result_ptr: u32,
+) -> Result<(), RuntimeError> {
+    let result_data_sliced = slice_in_bounds(result_data, offset as usize, length as usize)
+        .ok_or(RuntimeError::new("Error slicing call result"))?;
+
+    if !result_data_sliced.is_empty() {
+        instance
+            .write_memory(&store, result_ptr as u64, result_data_sliced)
+            .map_err(|_e| RuntimeError::new("Error writing call result to memory"))?;
+    }
+    Ok(())
+}
+
+fn write_result_data_padding_to_memory(
+    store: &mut StoreMut,
+    instance: InstanceWrapper,
+    result_data: &[u8],
+    offset: u32,
+    length: u32,
+    result_ptr: u32,
+) -> Result<(), RuntimeError> {
+    if result_data.len() < (offset + length) as usize {
+        let zero_bytes_length = (offset + length) as usize - result_data.len();
+        let zero_bytes_vec = vec![0; zero_bytes_length];
+        let ptr = result_ptr as u64 + result_data.len() as u64;
+        instance
+            .write_memory(&store, ptr, &zero_bytes_vec)
+            .map_err(|_e| RuntimeError::new("Error writing call result to memory"))?;
+    }
+    Ok(())
+}
+
+fn slice_in_bounds(data: &[u8], offset: usize, length: usize) -> Option<&[u8]> {
+    let start = min(offset, data.len());
+    let end = min(offset + length, data.len());
+    safe_slice(data, start, end)
 }
 
 pub fn inputs_import(mut context: FunctionEnvMut<CustomEnv>) -> Result<u32, RuntimeError> {

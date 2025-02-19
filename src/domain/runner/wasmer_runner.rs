@@ -2,9 +2,7 @@ use bytes::Bytes;
 use chrono::Local;
 use std::sync::Arc;
 use wasmer::sys::{BaseTunables, EngineBuilder};
-use wasmer::{
-    imports, CompilerConfig, Function, FunctionEnv, Instance, Module, Store, Value,
-};
+use wasmer::{imports, CompilerConfig, Function, FunctionEnv, Instance, Module, Store, Value};
 use wasmer_compiler::types::target::Target;
 use wasmer_compiler::Engine;
 use wasmer_compiler_singlepass::Singlepass;
@@ -14,9 +12,10 @@ use wasmer_types::SerializeError;
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::{
     abort_import, call_other_contract_import, console_log_import, deploy_from_address_import,
-    emit_import, inputs_import, is_valid_bitcoin_address_import, outputs_import, ripemd160_import,
-    sha256_import, storage_load_import, storage_store_import, verify_schnorr_import, AbortData,
-    ContractRunner, CustomEnv, ExtendedMemoryAccessError, InstanceWrapper,
+    emit_import, get_call_result_import, inputs_import, is_valid_bitcoin_address_import,
+    outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_store_import,
+    verify_schnorr_import, AbortData, ContractRunner, CustomEnv, ExtendedMemoryAccessError,
+    InstanceWrapper,
 };
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
@@ -111,6 +110,7 @@ impl WasmerRunner {
                 "load" => import!(storage_load_import),
                 "store" => import!(storage_store_import),
                 "call" => import!(call_other_contract_import),
+                "callResult" => import!(get_call_result_import),
                 "deployFromAddress" => import!(deploy_from_address_import),
                 "sha256" => import!(sha256_import),
                 "emit" => import!(emit_import),

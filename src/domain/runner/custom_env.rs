@@ -1,4 +1,5 @@
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
+use crate::domain::runner::call_result::CallResult;
 use crate::domain::runner::{AbortData, InstanceWrapper};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
@@ -24,6 +25,7 @@ pub struct CustomEnv {
     pub runtime: Arc<Runtime>,
 
     pub refunded_pointers: Mutex<HashMap<Vec<u8>, bool>>,
+    pub last_call_result: CallResult,
 }
 
 impl CustomEnv {
@@ -53,6 +55,7 @@ impl CustomEnv {
             outputs_external,
             runtime,
             refunded_pointers: Mutex::new(HashMap::new()),
+            last_call_result: CallResult::default(),
         })
     }
 }
