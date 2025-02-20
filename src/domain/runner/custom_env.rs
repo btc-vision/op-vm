@@ -5,7 +5,6 @@ use crate::interfaces::{
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
     OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
@@ -22,8 +21,7 @@ pub struct CustomEnv {
     pub inputs_external: InputsExternalFunction,
     pub outputs_external: OutputsExternalFunction,
     pub runtime: Arc<Runtime>,
-
-    pub refunded_pointers: Mutex<HashMap<Vec<u8>, bool>>,
+    pub store_cache: Mutex<super::store::Cache>,
 }
 
 impl CustomEnv {
@@ -52,7 +50,7 @@ impl CustomEnv {
             inputs_external,
             outputs_external,
             runtime,
-            refunded_pointers: Mutex::new(HashMap::new()),
+            store_cache: Mutex::new(super::store::Cache::new()),
         })
     }
 }
