@@ -7,7 +7,7 @@ use wasmer_compiler::types::target::Target;
 use wasmer_compiler::Engine;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::Metering;
-use wasmer_types::SerializeError;
+use wasmer_types::{SerializeError};
 
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::{
@@ -119,20 +119,24 @@ impl WasmerRunner {
                 "ripemd160" => import!(ripemd160_import),
                 "validateBitcoinAddress" => import!(is_valid_bitcoin_address_import),
                 "verifySchnorrSignature" => import!(verify_schnorr_import),
-            }
+            },
         };
 
         if is_debug_mode {
             import_object.define("debug", "log", import!(console_log_import));
         }
 
-        let instance = Instance::new(&mut store, &module, &import_object).map_err(|e| {
-            if e.to_string().contains("unreachable") {
-                anyhow::anyhow!("constructor reached an unreachable opcode (out of gas?)")
-            } else {
-                anyhow::anyhow!(e)
+        let instance_result = Instance::new(&mut store, &module, &import_object);
+        let instance = match instance_result {
+            Ok(i) => i,
+            Err(e) => {
+                if e.to_string().contains("unreachable") {
+                    return Err(anyhow::anyhow!("constructor reached an unreachable opcode (out of gas?)"))
+                }
+
+                return Err(anyhow::anyhow!("Failed to instantiate contract: {}", e));
             }
-        })?;
+        };
 
         let instance_wrapper = InstanceWrapper::new(instance.clone());
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
@@ -143,6 +147,29 @@ impl WasmerRunner {
             instance: instance_wrapper,
             env,
         };
+
+        // Start explicitly
+        let start_function = instance.exports.get_function("start").map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
+        let result_start = start_function.call(&mut imp.store, &[]);
+
+        if let Err(e) = result_start {
+            if e.to_string().contains("unreachable") {
+                return Err(anyhow::anyhow!("start function reached an unreachable opcode (out of gas?)"))
+            }
+
+            let abort_clone =  imp.env.as_ref(&imp.store).abort_data;
+            if abort_clone.is_some() {
+                let pointer = abort_clone.unwrap();
+                let message = AssemblyScript::lift_string(&mut imp.store, &imp.instance, pointer.message).map_err(|e| anyhow::anyhow!(e))?;
+                let code = AssemblyScript::lift_string(&imp.store, &imp.instance, pointer.line).map_err(|e| anyhow::anyhow!(e))?;
+                let file = AssemblyScript::lift_string(&imp.store, &imp.instance, pointer.file_name).map_err(|e| anyhow::anyhow!(e))?;
+
+                let final_message = format!("{:?}:{:?}: {:?}", file, code, message);
+                return Err(anyhow::anyhow!("Failed to call start function: {}", final_message));
+            }
+
+            return Err(anyhow::anyhow!("Failed to call start function: {}", e));
+        }
 
         let remaining_gas = imp.get_remaining_gas();
         let constructor_used_gas = MAX_GAS_CONSTRUCTOR - remaining_gas;
