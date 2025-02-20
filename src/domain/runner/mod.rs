@@ -12,4 +12,5 @@ mod custom_env;
 mod exported_import_functions;
 mod import_functions;
 mod instance_wrapper;
+mod store;
 mod wasmer_runner;
