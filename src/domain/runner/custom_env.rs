@@ -1,6 +1,5 @@
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
-use crate::domain::runner::call_result::CallResult;
-use crate::domain::runner::{AbortData, InstanceWrapper};
+use crate::domain::runner::{AbortData, CallResult, InstanceWrapper};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
