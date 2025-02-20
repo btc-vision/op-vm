@@ -10,15 +10,11 @@ use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::{
     exported_import_functions, AbortData, CustomEnv, CALL_COST, DEPLOY_COST, EMIT_COST,
-    INPUTS_COST, IS_VALID_BITCOIN_ADDRESS_COST, OUTPUTS_COST, RIMD160_COST,
-    SCHNORR_VERIFICATION_COST, SHA256_COST,
+    INPUTS_COST, VALIDATE_BITCOIN_ADDRESS_STATIC_COST, VALIDATE_BITCOIN_ADDRESS_WORD_COST, OUTPUTS_COST,
+    RIMD160_STATIC_COST, RIMD160_WORD_COST, SCHNORR_VERIFICATION_STATIC_COST, SCHNORR_VERIFICATION_WORD_COST,
+    SHA256_STATIC_COST, SHA256_WORD_COST,
 };
 use crate::interfaces::ExternalFunction;
-
-use super::{
-    IS_VALID_BITCOIN_ADDRESS_WORD_COST, RIMD160_WORD_COST, SCHNORR_VERIFICATION_WORD_COST,
-    SHA256_WORD_COST,
-};
 
 fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
     vec.get(start..end)
@@ -167,7 +163,7 @@ pub fn sha256_import(
 
     instance.use_gas(
         &mut store,
-        SHA256_COST + ((data.len() as u64) / 32) * SHA256_WORD_COST,
+        SHA256_STATIC_COST + ((data.len() + 31) / 32) as u64 * SHA256_WORD_COST,
     );
 
     Ok(value as u32)
@@ -186,7 +182,6 @@ pub fn verify_schnorr_import(
 
     let data = AssemblyScript::read_buffer(&store, &instance, ptr)
         .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-    let data_len = data.len() as u64;
 
     let public_key_bytes = safe_slice(&data, 0, 32).ok_or(RuntimeError::new("Invalid buffer"))?;
     let signature_bytes =
@@ -214,7 +209,7 @@ pub fn verify_schnorr_import(
 
     instance.use_gas(
         &mut store,
-        SCHNORR_VERIFICATION_COST + (data_len / 32) * SCHNORR_VERIFICATION_WORD_COST,
+        SCHNORR_VERIFICATION_STATIC_COST + ((data.len() + 31) / 32) as u64 * SCHNORR_VERIFICATION_WORD_COST,
     );
 
     Ok(value as u32)
@@ -252,7 +247,7 @@ pub fn is_valid_bitcoin_address_import(
 
     instance.use_gas(
         &mut store,
-        IS_VALID_BITCOIN_ADDRESS_COST + (data_len / 32) * IS_VALID_BITCOIN_ADDRESS_WORD_COST,
+        VALIDATE_BITCOIN_ADDRESS_STATIC_COST + ((data_len + 31) / 32) * VALIDATE_BITCOIN_ADDRESS_WORD_COST,
     );
 
     Ok(value as u32)
@@ -279,7 +274,7 @@ pub fn ripemd160_import(
 
     instance.use_gas(
         &mut store,
-        RIMD160_COST + (data.len() as u64) * RIMD160_WORD_COST / 32,
+        RIMD160_STATIC_COST + ((data.len() + 31) / 32) as u64 * RIMD160_WORD_COST,
     );
 
     Ok(value as u32)
