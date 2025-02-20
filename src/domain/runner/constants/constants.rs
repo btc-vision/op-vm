@@ -13,6 +13,7 @@ pub const STORE_UPDATE: u64 = 29_000_000;
 pub const STORE_REFUND: u64 = 48_000_000;
 
 pub const CALL_COST: u64 = 343_000_000;
+pub const CALL_RESULT_COST: u64 = 30_000;
 pub const DEPLOY_COST: u64 = 2_500_000_000;
 
 // Dynamic gas cost for hash function

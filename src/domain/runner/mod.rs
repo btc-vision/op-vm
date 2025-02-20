@@ -5,6 +5,7 @@ pub use self::{
 
 mod abort_data;
 mod bitcoin_network;
+mod call_result;
 mod constants;
 mod contract_runner;
 mod custom_env;
