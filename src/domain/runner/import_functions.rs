@@ -3,8 +3,6 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
 use std::cmp::min;
-use std::string::FromUtf8Error;
-use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
 use crate::domain::assembly_script::AssemblyScript;
@@ -16,12 +14,6 @@ use crate::domain::runner::{
     SHA256_WORD_COST, VALIDATE_BITCOIN_ADDRESS_STATIC_COST, VALIDATE_BITCOIN_ADDRESS_WORD_COST,
 };
 use crate::interfaces::ExternalFunction;
-
-fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
-    vec.get(start..end)
-}
-
-static SECP: Lazy<Secp256k1<secp256k1::All>> = Lazy::new(|| Secp256k1::new());
 
 pub fn abort_import(
     mut env: FunctionEnvMut<CustomEnv>,
@@ -46,8 +38,41 @@ pub fn storage_load_import(
     key_ptr: u32,
     result_ptr: u32,
 ) -> Result<(), RuntimeError> {
-    let (env, store) = context.data_and_store_mut();
-    load_pointer_external_import(env, store, key_ptr, result_ptr, &env.runtime)
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = instance.read_memory(&store, key_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
+
+    let mut cache = env
+        .store_cache
+        .lock()
+        .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
+
+    // Get method
+    let result = cache.get(
+        &data
+            .try_into()
+            .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
+        |key| {
+            Ok(env
+                .storage_load_external
+                .execute(&key, &env.runtime)?
+                .try_into()
+                .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?)
+        },
+    )?;
+
+    instance.use_gas(&mut store, result.gas_cost);
+
+    instance.write_memory(&store, result_ptr as u64, &result.value)
+        .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
+
+    Ok(())
 }
 
 pub fn storage_store_import(
@@ -55,8 +80,66 @@ pub fn storage_store_import(
     key_ptr: u32,
     value_ptr: u32,
 ) -> Result<(), RuntimeError> {
-    let (env, store) = context.data_and_store_mut();
-    store_pointer_external_import(env, store, key_ptr, value_ptr, &env.runtime)
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+    let mut cache = env
+        .store_cache
+        .lock()
+        .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
+
+    let key = instance.read_memory(&store, key_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
+    let value = instance.read_memory(&store, value_ptr as u64, 32)
+        .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
+
+    let data = [key.as_slice(), value.as_slice()].concat();
+
+    let pointer = safe_slice(&data, 0, 32)
+        .ok_or(RuntimeError::new("Invalid buffer"))?
+        .to_vec();
+    let value = safe_slice(&data, 32, 64)
+        .ok_or(RuntimeError::new("Invalid buffer"))?
+        .to_vec();
+
+    let result = cache.set(
+        pointer
+            .try_into()
+            .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
+        value
+            .try_into()
+            .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
+        |key| {
+            Ok(env
+                .storage_load_external
+                .execute(&key, &env.runtime)?
+                .try_into()
+                .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?)
+        },
+        |key, value| {
+            env.storage_store_external
+                .execute(
+                    &key.iter().chain(value.iter()).cloned().collect::<Vec<u8>>(),
+                    &env.runtime,
+                )
+                .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?;
+            Ok(())
+        },
+    )?;
+
+    instance.use_gas(&mut store, result.gas_cost);
+    if result.gas_refund > 0 {
+        instance.refund_gas(&mut store, result.gas_refund as u64);
+    } else if result.gas_refund < 0 && result.gas_refund > i64::MIN {
+        instance.use_gas(&mut store, (-result.gas_refund) as u64);
+    } else if result.gas_refund == i64::MIN {
+        instance.use_gas(&mut store, u64::MAX);
+    }
+
+    Ok(())
 }
 
 pub fn call_other_contract_import(
@@ -134,7 +217,7 @@ pub fn get_call_result_import(
 
     let result_data = env.last_call_result.data.as_slice();
 
-    write_result_data_slice_to_memory(
+    write_call_result_data_slice_to_memory(
         &mut store,
         &instance,
         result_data,
@@ -143,7 +226,7 @@ pub fn get_call_result_import(
         result_ptr,
     )?;
 
-    write_result_data_padding_to_memory(
+    write_call_result_data_padding_to_memory(
         &mut store,
         instance,
         result_data,
@@ -155,7 +238,7 @@ pub fn get_call_result_import(
     Ok(())
 }
 
-fn write_result_data_slice_to_memory(
+fn write_call_result_data_slice_to_memory(
     store: &mut StoreMut,
     instance: &InstanceWrapper,
     result_data: &[u8],
@@ -174,7 +257,7 @@ fn write_result_data_slice_to_memory(
     Ok(())
 }
 
-fn write_result_data_padding_to_memory(
+fn write_call_result_data_padding_to_memory(
     store: &mut StoreMut,
     instance: InstanceWrapper,
     result_data: &[u8],
@@ -197,6 +280,42 @@ fn slice_in_bounds(data: &[u8], offset: usize, length: usize) -> Option<&[u8]> {
     let start = min(offset, data.len());
     let end = min(offset + length, data.len());
     safe_slice(data, start, end)
+}
+
+pub fn deploy_from_address_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    instance.use_gas(&mut store, DEPLOY_COST);
+    let result = &env.deploy_from_address_external.execute(&data, &env.runtime)?;
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    Ok(value as u32)
+}
+
+pub fn emit_import(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<(), RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+    let instance = &env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Memory not found"))?;
+
+    instance.use_gas(&mut store, EMIT_COST);
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    env.emit_external.execute(&data, &env.runtime)
 }
 
 pub fn inputs_import(mut context: FunctionEnvMut<CustomEnv>) -> Result<u32, RuntimeError> {
@@ -233,21 +352,6 @@ pub fn outputs_import(mut context: FunctionEnvMut<CustomEnv>) -> Result<u32, Run
     Ok(value as u32)
 }
 
-pub fn deploy_from_address_import(
-    mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
-    let (env, store) = context.data_and_store_mut();
-    import_external_call(
-        env,
-        store,
-        &env.deploy_from_address_external,
-        ptr,
-        DEPLOY_COST,
-        &env.runtime,
-    )
-}
-
 pub fn sha256_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
@@ -275,10 +379,90 @@ pub fn sha256_import(
     Ok(value as u32)
 }
 
+fn sha256(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    let hash = Sha256::digest(data);
+    let hash_as_vec: Vec<u8> = hash.to_vec();
+
+    Ok(hash_as_vec)
+}
+
+pub fn ripemd160_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+
+    let result = rimemd160(&data)?;
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    instance.use_gas(
+        &mut store,
+        RIMD160_STATIC_COST + ((data.len() + 31) / 32) as u64 * RIMD160_WORD_COST,
+    );
+
+    Ok(value as u32)
+}
+
+fn rimemd160(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
+    let mut ripemd = Ripemd160::new();
+    ripemd.update(data);
+
+    let hash = ripemd.finalize();
+    let hash_as_vec: Vec<u8> = hash.to_vec();
+
+    Ok(hash_as_vec)
+}
+
+// TODO: Add support for other blockchains
+pub fn is_valid_bitcoin_address_import(
+    mut context: FunctionEnvMut<CustomEnv>,
+    ptr: u32,
+) -> Result<u32, RuntimeError> {
+    let (env, mut store) = context.data_and_store_mut();
+
+    let instance = env
+        .instance
+        .clone()
+        .ok_or(RuntimeError::new("Instance not found"))?;
+
+    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
+        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+    let data_len = data.len() as u64;
+
+    let string_data = String::from_utf8(data)
+        .map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;
+    let result = exported_import_functions::validate_bitcoin_address(&string_data, &env.network)
+        .map_err(|e| RuntimeError::new(e))?;
+
+    let result_vec_buffer = vec![result as u8];
+
+    let value = AssemblyScript::write_buffer(&mut store, &instance, &result_vec_buffer, 13, 0)
+        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+
+    instance.use_gas(
+        &mut store,
+        VALIDATE_BITCOIN_ADDRESS_STATIC_COST + ((data_len + 31) / 32) * VALIDATE_BITCOIN_ADDRESS_WORD_COST,
+    );
+
+    Ok(value as u32)
+}
+
 pub fn verify_schnorr_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
 ) -> Result<u32, RuntimeError> {
+    static SECP: Lazy<Secp256k1<secp256k1::All>> = Lazy::new(|| Secp256k1::new());
+
     let (env, mut store) = context.data_and_store_mut();
 
     let instance = env
@@ -321,88 +505,6 @@ pub fn verify_schnorr_import(
     Ok(value as u32)
 }
 
-fn vec8_to_string(vec: Vec<u8>) -> Result<String, FromUtf8Error> {
-    String::from_utf8(vec)
-}
-
-// TODO: Add support for other blockchains
-pub fn is_valid_bitcoin_address_import(
-    mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
-    let (env, mut store) = context.data_and_store_mut();
-
-    let instance = env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Instance not found"))?;
-
-    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-    let data_len = data.len() as u64;
-
-    let string_data = vec8_to_string(data)
-        .map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;
-    let result = exported_import_functions::validate_bitcoin_address(&string_data, &env.network)
-        .map_err(|e| RuntimeError::new(e))?;
-
-    let result_vec_buffer = vec![result as u8];
-
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &result_vec_buffer, 13, 0)
-        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
-    instance.use_gas(
-        &mut store,
-        VALIDATE_BITCOIN_ADDRESS_STATIC_COST + ((data_len + 31) / 32) * VALIDATE_BITCOIN_ADDRESS_WORD_COST,
-    );
-
-    Ok(value as u32)
-}
-
-pub fn ripemd160_import(
-    mut context: FunctionEnvMut<CustomEnv>,
-    ptr: u32,
-) -> Result<u32, RuntimeError> {
-    let (env, mut store) = context.data_and_store_mut();
-
-    let instance = env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Instance not found"))?;
-
-    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-    let result = rimemd160(&data)?;
-
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
-    instance.use_gas(
-        &mut store,
-        RIMD160_STATIC_COST + ((data.len() + 31) / 32) as u64 * RIMD160_WORD_COST,
-    );
-
-    Ok(value as u32)
-}
-
-fn sha256(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
-    let hash = Sha256::digest(data);
-    let hash_as_vec: Vec<u8> = hash.to_vec();
-
-    Ok(hash_as_vec)
-}
-
-fn rimemd160(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
-    let mut ripemd = Ripemd160::new();
-    ripemd.update(data);
-
-    let hash = ripemd.finalize();
-    let hash_as_vec: Vec<u8> = hash.to_vec();
-
-    Ok(hash_as_vec)
-}
-
 pub fn console_log_import(
     mut context: FunctionEnvMut<CustomEnv>,
     ptr: u32,
@@ -424,152 +526,8 @@ pub fn console_log_import(
     env.console_log_external.execute(&data, &env.runtime)
 }
 
-pub fn emit_import(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<(), RuntimeError> {
-    let (env, mut store) = context.data_and_store_mut();
-    let instance = &env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Memory not found"))?;
-
-    instance.use_gas(&mut store, EMIT_COST);
-
-    let data = AssemblyScript::read_buffer(&store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-    env.emit_external.execute(&data, &env.runtime)
-}
-
-fn load_pointer_external_import(
-    env: &CustomEnv,
-    mut store: StoreMut,
-    key_ptr: u32,
-    result_ptr: u32,
-    runtime: &Runtime,
-) -> Result<(), RuntimeError> {
-    let instance = env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Instance not found"))?;
-
-    let data = instance.read_memory(&store, key_ptr as u64, 32)
-        .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
-
-    let mut cache = env
-        .store_cache
-        .lock()
-        .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
-
-    // Get method
-    let result = cache.get(
-        &data
-            .try_into()
-            .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-        |key| {
-            Ok(env
-                .storage_load_external
-                .execute(&key, runtime)?
-                .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?)
-        },
-    )?;
-
-    instance.use_gas(&mut store, result.gas_cost);
-
-    instance.write_memory(&store, result_ptr as u64, &result.value)
-        .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
-
-    Ok(())
-}
-
-fn import_external_call(
-    env: &CustomEnv,
-    mut store: StoreMut,
-    external_function: &impl ExternalFunction,
-    ptr: u32,
-    gas_cost: u64,
-    runtime: &Runtime,
-) -> Result<u32, RuntimeError> {
-    let instance = env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Instance not found"))?;
-
-    let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
-        .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
-
-    instance.use_gas(&mut store, gas_cost);
-    let result = external_function.execute(&data, runtime)?;
-    let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-        .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
-
-    Ok(value as u32)
-}
-
-fn store_pointer_external_import(
-    env: &CustomEnv,
-    mut store: StoreMut,
-    key_ptr: u32,
-    value_ptr: u32,
-    runtime: &Runtime,
-) -> Result<(), RuntimeError> {
-    let instance = env
-        .instance
-        .clone()
-        .ok_or(RuntimeError::new("Instance not found"))?;
-    let mut cache = env
-        .store_cache
-        .lock()
-        .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
-
-    let key = instance.read_memory(&store, key_ptr as u64, 32)
-        .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
-    let value = instance.read_memory(&store, value_ptr as u64, 32)
-        .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
-
-    let data = [key.as_slice(), value.as_slice()].concat();
-
-    let pointer = safe_slice(&data, 0, 32)
-        .ok_or(RuntimeError::new("Invalid buffer"))?
-        .to_vec();
-    let value = safe_slice(&data, 32, 64)
-        .ok_or(RuntimeError::new("Invalid buffer"))?
-        .to_vec();
-
-    let result = cache.set(
-        pointer
-            .try_into()
-            .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-        value
-            .try_into()
-            .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-        |key| {
-            Ok(env
-                .storage_load_external
-                .execute(&key, runtime)?
-                .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?)
-        },
-        |key, value| {
-            env.storage_store_external
-                .execute(
-                    &key.iter().chain(value.iter()).cloned().collect::<Vec<u8>>(),
-                    runtime,
-                )
-                .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?;
-            Ok(())
-        },
-    )?;
-
-    instance.use_gas(&mut store, result.gas_cost);
-    if result.gas_refund > 0 {
-        instance.refund_gas(&mut store, result.gas_refund as u64);
-    } else if result.gas_refund < 0 && result.gas_refund > i64::MIN {
-        instance.use_gas(&mut store, (-result.gas_refund) as u64);
-    } else if result.gas_refund == i64::MIN {
-        instance.use_gas(&mut store, u64::MAX);
-    }
-
-    Ok(())
+fn safe_slice(vec: &[u8], start: usize, end: usize) -> Option<&[u8]> {
+    vec.get(start..end)
 }
 
 #[cfg(test)]
