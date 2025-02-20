@@ -10,16 +10,15 @@ use wasmer_middlewares::Metering;
 use wasmer_types::{SerializeError};
 
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{
-    abort_import, call_other_contract_import, console_log_import, deploy_from_address_import,
-    emit_import, get_call_result_import, inputs_import, is_valid_bitcoin_address_import,
-    outputs_import, ripemd160_import, sha256_import, storage_load_import, storage_store_import,
-    verify_schnorr_import, AbortData, ContractRunner, CustomEnv, ExtendedMemoryAccessError,
-    InstanceWrapper,
-};
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
+use crate::domain::runner::{
+    AbortData, AbortImport, CallOtherContractImport, ConsoleLogImport, ContractRunner, CustomEnv,
+    DeployFromAddressImport, EmitImport, ExtendedMemoryAccessError, GetCallResultImport,
+    InputsImport, InstanceWrapper, OutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
+    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
+};
 
 pub struct WasmerRunner {
     module: Module,
@@ -99,31 +98,31 @@ impl WasmerRunner {
         let env = FunctionEnv::new(&mut store, custom_env);
 
         macro_rules! import {
-            ($func:tt) => {
-                Function::new_typed_with_env(&mut store, &env, $func)
+            ($obj:tt) => {
+                Function::new_typed_with_env(&mut store, &env, $obj::execute)
             };
         }
 
         let mut import_object = imports! {
             "env" => {
-                "abort" => import!(abort_import),
-                "load" => import!(storage_load_import),
-                "store" => import!(storage_store_import),
-                "call" => import!(call_other_contract_import),
-                "callResult" => import!(get_call_result_import),
-                "deployFromAddress" => import!(deploy_from_address_import),
-                "sha256" => import!(sha256_import),
-                "emit" => import!(emit_import),
-                "inputs" => import!(inputs_import),
-                "outputs" => import!(outputs_import),
-                "ripemd160" => import!(ripemd160_import),
-                "validateBitcoinAddress" => import!(is_valid_bitcoin_address_import),
-                "verifySchnorrSignature" => import!(verify_schnorr_import),
+                "abort" => import!(AbortImport),
+                "load" => import!(StorageLoadImport),
+                "store" => import!(StorageStoreImport),
+                "call" => import!(CallOtherContractImport),
+                "callResult" => import!(GetCallResultImport),
+                "deployFromAddress" => import!(DeployFromAddressImport),
+                "emit" => import!(EmitImport),
+                "inputs" => import!(InputsImport),
+                "outputs" => import!(OutputsImport),
+                "sha256" => import!(Sha256Import),
+                "ripemd160" => import!(Ripemd160Import),
+                "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
+                "verifySchnorrSignature" => import!(VerifySchnorrImport),
             },
         };
 
         if is_debug_mode {
-            import_object.define("debug", "log", import!(console_log_import));
+            import_object.define("debug", "log", import!(ConsoleLogImport));
         }
 
         let instance_result = Instance::new(&mut store, &module, &import_object);

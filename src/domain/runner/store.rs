@@ -1,6 +1,13 @@
-use super::constants::{LOAD_COLD, LOAD_WARM, STORE_BASE, STORE_NEW, STORE_REFUND, STORE_UPDATE};
 use std::collections::HashMap;
 use wasmer::RuntimeError;
+
+pub const LOAD_COLD_GAS_COST: u64 = 21_000_000;
+pub const LOAD_WARM_GAS_COST: u64 = 1_000_000;
+
+pub const STORE_BASE_GAS_COST: u64 = 1_000_000;
+pub const STORE_NEW_GAS_COST: u64 = 200_000_000;
+pub const STORE_UPDATE_GAS_COST: u64 = 29_000_000;
+pub const STORE_REFUND_GAS_COST: u64 = 48_000_000;
 
 pub const STORAGE_POINTER_SIZE: usize = 32;
 pub const STORAGE_VALUE_SIZE: usize = 32;
@@ -68,7 +75,7 @@ impl Cache {
 
         // If object exists in the cache
         if let Some(value) = self.values.get(pointer) {
-            Ok(CacheResponse::new(value.current, LOAD_WARM, 0))
+            Ok(CacheResponse::new(value.current, LOAD_WARM_GAS_COST, 0))
         }
         // first access of pointer
         else {
@@ -76,7 +83,7 @@ impl Cache {
             self.values
                 .insert(*pointer, CacheValue::new(original_value));
 
-            Ok(CacheResponse::new(original_value, LOAD_COLD, 0))
+            Ok(CacheResponse::new(original_value, LOAD_COLD_GAS_COST, 0))
         }
     }
 
@@ -102,50 +109,50 @@ impl Cache {
             value.clone()
         } else {
             // Cold access
-            gas_cost += LOAD_COLD;
+            gas_cost += LOAD_COLD_GAS_COST;
             CacheValue::new(get_value(pointer)?)
         };
 
         if value == cache_value.current {
             // No changes
-            gas_cost += STORE_BASE;
+            gas_cost += STORE_BASE_GAS_COST;
         } else {
             // Clean slot (not yet updated in current execution context)
             if cache_value.original == cache_value.current {
                 // (slot started zero, currently still zero, now being changed to nonzero)
                 if cache_value.original == STORAGE_VALUE_ZERO {
-                    gas_cost += STORE_NEW;
+                    gas_cost += STORE_NEW_GAS_COST;
                 }
                 // (slot started nonzero, currently still same nonzero value, now being changed):
                 else {
-                    gas_cost += STORE_UPDATE;
+                    gas_cost += STORE_UPDATE_GAS_COST;
                 }
             } else {
-                gas_cost += STORE_BASE
+                gas_cost += STORE_BASE_GAS_COST
             };
 
             if cache_value.current == cache_value.original {
                 if cache_value.original != STORAGE_VALUE_ZERO && value == STORAGE_VALUE_ZERO {
-                    gas_refund = STORE_REFUND as i64;
+                    gas_refund = STORE_REFUND_GAS_COST as i64;
                 }
             } else {
                 if cache_value.original != STORAGE_VALUE_ZERO {
                     if cache_value.current == STORAGE_VALUE_ZERO {
                         // TODO: Add to gas???
                         if value != cache_value.original {
-                            gas_refund -= STORE_REFUND as i64;
+                            gas_refund -= STORE_REFUND_GAS_COST as i64;
                         } else {
-                            gas_refund -= (LOAD_COLD as i64) - (LOAD_WARM as i64);
+                            gas_refund -= (LOAD_COLD_GAS_COST as i64) - (LOAD_WARM_GAS_COST as i64);
                         }
                     } else if value == STORAGE_VALUE_ZERO {
-                        gas_refund = STORE_REFUND as i64;
+                        gas_refund = STORE_REFUND_GAS_COST as i64;
                     }
                 } else if cache_value.original == value {
                     if cache_value.original == STORAGE_VALUE_ZERO {
-                        gas_refund = (STORE_NEW as i64) - (STORE_BASE as i64);
+                        gas_refund = (STORE_NEW_GAS_COST as i64) - (STORE_BASE_GAS_COST as i64);
                     } else {
                         gas_refund =
-                            (STORE_REFUND as i64) - (LOAD_COLD as i64) + (LOAD_WARM as i64);
+                            (STORE_REFUND_GAS_COST as i64) - (LOAD_COLD_GAS_COST as i64) + (LOAD_WARM_GAS_COST as i64);
                     }
                 }
             }
