@@ -3,7 +3,6 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use sha2::Sha256;
 use std::string::FromUtf8Error;
-use std::{i64, u64};
 use tokio::runtime::Runtime;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
 
