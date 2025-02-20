@@ -1,6 +1,8 @@
-use crate::domain::runner::{CallResult, CustomEnv, CALL_COST};
+use crate::domain::runner::{CallResult, CustomEnv};
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+pub const STATIC_GAS_COST: u64 = 343_000_000;
 
 #[derive(Default)]
 pub struct CallOtherContractImport;
@@ -20,7 +22,7 @@ impl CallOtherContractImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, CALL_COST);
+        instance.use_gas(&mut store, STATIC_GAS_COST);
 
         let address = instance
             .read_memory(&store, address_ptr as u64, 32)

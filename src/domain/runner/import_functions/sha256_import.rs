@@ -1,7 +1,10 @@
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{CustomEnv, SHA256_STATIC_COST, SHA256_WORD_COST};
+use crate::domain::runner::CustomEnv;
 use sha2::{Digest, Sha256};
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+pub const STATIC_GAS_COST: u64 = 300_000;
+pub const GAS_COST_PER_WORD: u64 = 60_000;
 
 #[derive(Default)]
 pub struct Sha256Import;
@@ -25,7 +28,7 @@ impl Sha256Import {
 
         instance.use_gas(
             &mut store,
-            SHA256_STATIC_COST + ((data.len() + 31) / 32) as u64 * SHA256_WORD_COST,
+            STATIC_GAS_COST + ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
         );
 
         Ok(value as u32)

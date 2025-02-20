@@ -1,7 +1,9 @@
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{CustomEnv, DEPLOY_COST};
+use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+pub const STATIC_GAS_COST: u64 = 2_500_000_000;
 
 #[derive(Default)]
 pub struct DeployFromAddressImport;
@@ -17,7 +19,7 @@ impl DeployFromAddressImport {
         let data = AssemblyScript::read_buffer(&mut store, &instance, ptr)
             .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
 
-        instance.use_gas(&mut store, DEPLOY_COST);
+        instance.use_gas(&mut store, STATIC_GAS_COST);
         let result = &env
             .deploy_from_address_external
             .execute(&data, &env.runtime)?;

@@ -1,6 +1,8 @@
-use crate::domain::runner::{CustomEnv, InstanceWrapper, CALL_RESULT_COST};
+use crate::domain::runner::{CustomEnv, InstanceWrapper};
 use std::cmp::min;
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
+
+pub const STATIC_GAS_COST: u64 = 30_000;
 
 #[derive(Default)]
 pub struct GetCallResultImport;
@@ -19,7 +21,7 @@ impl GetCallResultImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, CALL_RESULT_COST);
+        instance.use_gas(&mut store, STATIC_GAS_COST);
 
         let result_data = env.last_call_result.data.as_slice();
 

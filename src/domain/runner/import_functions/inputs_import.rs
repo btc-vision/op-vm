@@ -1,6 +1,8 @@
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{CustomEnv, INPUTS_COST};
+use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+pub const STATIC_GAS_COST: u64 = 5_000_000;
 
 #[derive(Default)]
 pub struct InputsImport;
@@ -14,7 +16,7 @@ impl InputsImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, INPUTS_COST);
+        instance.use_gas(&mut store, STATIC_GAS_COST);
 
         let result = &env.inputs_external.execute(&env.runtime)?;
         let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)

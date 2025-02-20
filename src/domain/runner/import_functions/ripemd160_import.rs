@@ -1,8 +1,11 @@
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{CustomEnv, RIMD160_STATIC_COST, RIMD160_WORD_COST};
+use crate::domain::runner::CustomEnv;
 use ripemd::Ripemd160;
 use sha2::Digest;
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+pub const STATIC_GAS_COST: u64 = 300_000;
+pub const GAS_COST_PER_WORD: u64 = 60_000;
 
 #[derive(Default)]
 pub struct Ripemd160Import;
@@ -26,7 +29,7 @@ impl Ripemd160Import {
 
         instance.use_gas(
             &mut store,
-            RIMD160_STATIC_COST + ((data.len() + 31) / 32) as u64 * RIMD160_WORD_COST,
+            STATIC_GAS_COST + ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
         );
 
         Ok(value as u32)

@@ -1,10 +1,11 @@
 use crate::domain::assembly_script::AssemblyScript;
-use crate::domain::runner::{
-    CustomEnv, SCHNORR_VERIFICATION_STATIC_COST, SCHNORR_VERIFICATION_WORD_COST,
-};
+use crate::domain::runner::CustomEnv;
 use once_cell::sync::Lazy;
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+pub const STATIC_GAS_COST: u64 = 100_000_000;
+pub const GAS_COST_PER_WORD: u64 = 120_000;
 
 #[derive(Default)]
 pub struct VerifySchnorrImport;
@@ -52,8 +53,8 @@ impl VerifySchnorrImport {
 
         instance.use_gas(
             &mut store,
-            SCHNORR_VERIFICATION_STATIC_COST
-                + ((data.len() + 31) / 32) as u64 * SCHNORR_VERIFICATION_WORD_COST,
+            STATIC_GAS_COST
+                + ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
         );
 
         Ok(value as u32)
