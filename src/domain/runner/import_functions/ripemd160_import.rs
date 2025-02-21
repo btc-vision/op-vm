@@ -1,4 +1,3 @@
-use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::CustomEnv;
 use ripemd::Ripemd160;
 use sha2::Digest;
@@ -11,7 +10,12 @@ pub const GAS_COST_PER_WORD: u64 = 60_000;
 pub struct Ripemd160Import;
 
 impl Ripemd160Import {
-    pub fn execute(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<u32, RuntimeError> {
+    pub fn execute(
+        mut context: FunctionEnvMut<CustomEnv>,
+        data_ptr: u32,
+        data_length: u32,
+        result_ptr: u32,
+    ) -> Result<(), RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
 
         let instance = env
@@ -19,20 +23,22 @@ impl Ripemd160Import {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        let data = AssemblyScript::read_buffer(&store, &instance, ptr)
-            .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+        let data = instance
+            .read_memory(&store, data_ptr as u64, data_length as u64)
+            .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
         let result = Self::ripemd160(&data)?;
 
-        let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-            .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
+        instance
+            .write_memory(&store, result_ptr as u64, &result)
+            .map_err(|_e| RuntimeError::new("Error writing result to memory"))?;
 
         instance.use_gas(
             &mut store,
             STATIC_GAS_COST + ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
         );
 
-        Ok(value as u32)
+        Ok(())
     }
 
     fn ripemd160(data: &[u8]) -> Result<Vec<u8>, RuntimeError> {
