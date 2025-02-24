@@ -1,4 +1,3 @@
-use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -8,7 +7,10 @@ pub const STATIC_GAS_COST: u64 = 5_000_000;
 pub struct InputsImport;
 
 impl InputsImport {
-    pub fn execute(mut context: FunctionEnvMut<CustomEnv>) -> Result<u32, RuntimeError> {
+    pub fn execute(
+        mut context: FunctionEnvMut<CustomEnv>,
+        result_ptr: u32,
+    ) -> Result<(), RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
 
         let instance = env
@@ -19,9 +21,11 @@ impl InputsImport {
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
         let result = &env.inputs_external.execute(&env.runtime)?;
-        let value = AssemblyScript::write_buffer(&mut store, &instance, &result, 13, 0)
-            .map_err(|e| RuntimeError::new(format!("Error writing buffer: {}", e)))?;
 
-        Ok(value as u32)
+        instance
+            .write_memory(&store, result_ptr as u64, result)
+            .map_err(|_e| RuntimeError::new("Error writing inputs to memory"))?;
+
+        Ok(())
     }
 }

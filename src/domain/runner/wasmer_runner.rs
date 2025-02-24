@@ -13,12 +13,7 @@ use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
-use crate::domain::runner::{
-    AbortData, AbortImport, CallOtherContractImport, ConsoleLogImport, ContractRunner, CustomEnv,
-    DeployFromAddressImport, EmitImport, ExtendedMemoryAccessError, GetCallResultImport,
-    InputsImport, InstanceWrapper, OutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
-    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
-};
+use crate::domain::runner::{AbortData, AbortImport, CallOtherContractImport, ConsoleLogImport, ContractRunner, CustomEnv, DeployFromAddressImport, EmitImport, ExtendedMemoryAccessError, GetCallResultImport, GetInputsSizeImport, GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport, StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport};
 
 pub struct WasmerRunner {
     module: Module,
@@ -113,7 +108,9 @@ impl WasmerRunner {
                 "deployFromAddress" => import!(DeployFromAddressImport),
                 "emit" => import!(EmitImport),
                 "inputs" => import!(InputsImport),
+                "inputsSize" => import!(GetInputsSizeImport),
                 "outputs" => import!(OutputsImport),
+                "outputsSize" => import!(GetOuputsSizeImport),
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
