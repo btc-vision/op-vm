@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use napi::Error;
 use wasmer::Value;
 
-use crate::domain::runner::{AbortData, ContractRunner, ExtendedMemoryAccessError};
+use crate::domain::runner::{ContractRunner, ExtendedMemoryAccessError, RevertData};
 
 pub struct ContractService {
     max_gas: u64,
@@ -83,9 +83,9 @@ impl ContractService {
         runner.write_buffer(value, id, align)
     }
 
-    pub fn get_abort_data(&self) -> Option<AbortData> {
+    pub fn get_revert_data(&self) -> Option<RevertData> {
         let runner = self.runner.lock().unwrap();
-        runner.get_abort_data()
+        runner.get_revert_data()
     }
 
     #[allow(dead_code)]

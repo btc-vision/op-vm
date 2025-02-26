@@ -7,17 +7,18 @@ use wasmer_compiler::types::target::Target;
 use wasmer_compiler::Engine;
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::Metering;
-use wasmer_types::{SerializeError};
+use wasmer_types::SerializeError;
 
 use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
 use crate::domain::runner::{
-    AbortData, AbortImport, CallOtherContractImport, ConsoleLogImport, ContractRunner, CustomEnv,
-    DeployFromAddressImport, EmitImport, ExtendedMemoryAccessError, GetCallResultImport,
-    InputsImport, InstanceWrapper, OutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
-    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
+    CallOtherContractImport, ConsoleLogImport, ContractRunner, CustomEnv, DeployFromAddressImport,
+    EmitImport, ExtendedMemoryAccessError, GetCallResultImport, GetInputsSizeImport,
+    GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, RevertData, RevertImport,
+    Ripemd160Import, Sha256Import, StorageLoadImport, StorageStoreImport,
+    ValidateBitcoinAddressImport, VerifySchnorrImport,
 };
 
 pub struct WasmerRunner {
@@ -105,7 +106,7 @@ impl WasmerRunner {
 
         let mut import_object = imports! {
             "env" => {
-                "abort" => import!(AbortImport),
+                "revert" => import!(RevertImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
                 "call" => import!(CallOtherContractImport),
@@ -113,7 +114,9 @@ impl WasmerRunner {
                 "deployFromAddress" => import!(DeployFromAddressImport),
                 "emit" => import!(EmitImport),
                 "inputs" => import!(InputsImport),
+                "inputsSize" => import!(GetInputsSizeImport),
                 "outputs" => import!(OutputsImport),
+                "outputsSize" => import!(GetOuputsSizeImport),
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
@@ -130,7 +133,9 @@ impl WasmerRunner {
             Ok(i) => i,
             Err(e) => {
                 if e.to_string().contains("unreachable") {
-                    return Err(anyhow::anyhow!("constructor reached an unreachable opcode (out of gas?)"))
+                    return Err(anyhow::anyhow!(
+                        "constructor reached an unreachable opcode (out of gas?)"
+                    ));
                 }
 
                 return Err(anyhow::anyhow!("Failed to instantiate contract: {}", e));
@@ -148,23 +153,25 @@ impl WasmerRunner {
         };
 
         // Start explicitly
-        let start_function = instance.exports.get_function("start").map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
+        let start_function = instance
+            .exports
+            .get_function("start")
+            .map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
         let result_start = start_function.call(&mut imp.store, &[]);
 
         if let Err(e) = result_start {
             if e.to_string().contains("unreachable") {
-                return Err(anyhow::anyhow!("start function reached an unreachable opcode (out of gas?)"))
+                return Err(anyhow::anyhow!(
+                    "start function reached an unreachable opcode (out of gas?)"
+                ));
             }
 
-            let abort_clone =  imp.env.as_ref(&imp.store).abort_data;
-            if abort_clone.is_some() {
-                let pointer = abort_clone.unwrap();
-                let message = AssemblyScript::lift_string(&mut imp.store, &imp.instance, pointer.message).map_err(|e| anyhow::anyhow!(e))?;
-                let code = AssemblyScript::lift_string(&imp.store, &imp.instance, pointer.line).map_err(|e| anyhow::anyhow!(e))?;
-                let file = AssemblyScript::lift_string(&imp.store, &imp.instance, pointer.file_name).map_err(|e| anyhow::anyhow!(e))?;
-
-                let final_message = format!("{:?}:{:?}: {:?}", file, code, message);
-                return Err(anyhow::anyhow!("Failed to call start function: {}", final_message));
+            let revert_data_clone = imp.env.as_ref(&imp.store).revert_data.clone();
+            if revert_data_clone.is_some() {
+                return Err(anyhow::anyhow!(
+                    "Failed to call start function: {}",
+                    revert_data_clone.unwrap()
+                ));
             }
 
             return Err(anyhow::anyhow!("Failed to call start function: {}", e));
@@ -178,15 +185,6 @@ impl WasmerRunner {
 
         Ok(imp)
     }
-
-    /*fn reset(&mut self) {
-        let engine = EngineBuilder::headless().set_features(None).engine();
-        self.store = Store::new(Self::create_tunable(engine));
-
-        self.set_remaining_gas(MAX_GAS_CONSTRUCTOR);
-
-        let instance = Instance::new(&mut self.store, &self.module, &imports! {}).unwrap();
-    }*/
 
     fn create_tunable(mut engine: Engine) -> Engine {
         let base = BaseTunables::for_target(&Target::default());
@@ -245,7 +243,7 @@ impl ContractRunner for WasmerRunner {
         self.instance.use_gas(&mut self.store, gas)
     }
 
-    fn get_abort_data(&self) -> Option<AbortData> {
-        self.env.as_ref(&self.store).abort_data
+    fn get_revert_data(&self) -> Option<RevertData> {
+        self.env.as_ref(&self.store).revert_data.clone()
     }
 }
