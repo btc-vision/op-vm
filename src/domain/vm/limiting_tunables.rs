@@ -1,11 +1,10 @@
 use std::ptr::NonNull;
 
-use wasmer::{
-    MemoryType
-    , Pages, TableType, Tunables
-    , vm::{self, MemoryError, MemoryStyle, TableStyle, VMMemoryDefinition, VMTableDefinition},
-};
 use wasmer::sys::VMConfig;
+use wasmer::{
+    vm::{self, MemoryError, MemoryStyle, TableStyle, VMMemoryDefinition, VMTableDefinition},
+    MemoryType, Pages, TableType, Tunables,
+};
 
 /// A custom tunables that allows you to set a memory limit.
 ///
@@ -26,7 +25,11 @@ impl<T: Tunables> LimitingTunables<T> {
         let vm_config = VMConfig {
             wasm_stack_size: Some(stack_size),
         };
-        Self { max_pages: Pages(max_pages), vm_config, base }
+        Self {
+            max_pages: Pages(max_pages),
+            vm_config,
+            base,
+        }
     }
 
     /// Takes an input memory type as requested by the guest and sets

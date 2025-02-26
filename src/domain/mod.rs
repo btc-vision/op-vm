@@ -1,3 +1,3 @@
 pub mod assembly_script;
-pub mod vm;
 pub mod runner;
+pub mod vm;

@@ -13,7 +13,9 @@ impl ConsoleLogExternalFunction {
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
         id: u64,
     ) -> Self {
-        Self { external_function: GenericExternalFunction::new(tsfn, id) }
+        Self {
+            external_function: GenericExternalFunction::new(tsfn, id),
+        }
     }
 }
 

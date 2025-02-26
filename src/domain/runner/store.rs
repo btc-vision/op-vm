@@ -151,8 +151,8 @@ impl Cache {
                     if cache_value.original == STORAGE_VALUE_ZERO {
                         gas_refund = (STORE_NEW_GAS_COST as i64) - (STORE_BASE_GAS_COST as i64);
                     } else {
-                        gas_refund =
-                            (STORE_REFUND_GAS_COST as i64) - (LOAD_COLD_GAS_COST as i64) + (LOAD_WARM_GAS_COST as i64);
+                        gas_refund = (STORE_REFUND_GAS_COST as i64) - (LOAD_COLD_GAS_COST as i64)
+                            + (LOAD_WARM_GAS_COST as i64);
                     }
                 }
             }

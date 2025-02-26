@@ -29,7 +29,7 @@ impl ValidateBitcoinAddressImport {
 
         let address_str = String::from_utf8(address_bytes)
             .map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;
-        
+
         let result = Self::validate_bitcoin_address(&address_str, &env.network)
             .map_err(|e| RuntimeError::new(e))?;
 

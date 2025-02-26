@@ -32,7 +32,11 @@ impl RuntimePool {
     }*/
 
     pub fn increase(&self, size: usize) {
-        let l = self.expected_size.lock().map_err(|_| anyhow::anyhow!("Failed to lock expected_size")).unwrap();
+        let l = self
+            .expected_size
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock expected_size"))
+            .unwrap();
         l.fetch_add(size, Relaxed);
 
         let mut runtimes = self.runtimes.lock().unwrap();
@@ -69,20 +73,34 @@ impl RuntimePool {
     }
 
     pub fn get_runtime(&self) -> Option<Arc<Runtime>> {
-        let idling = self.idling.lock().map_err(|_| anyhow::anyhow!("Failed to lock idling")).unwrap();
+        let idling = self
+            .idling
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock idling"))
+            .unwrap();
         if idling.load(Relaxed) == 0 {
             return Some(Self::create_runtime());
         }
 
         idling.fetch_sub(1, Relaxed);
 
-        let mut runtimes = self.runtimes.lock().map_err(|_| anyhow::anyhow!("Failed to lock runtimes")).unwrap();
+        let mut runtimes = self
+            .runtimes
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock runtimes"))
+            .unwrap();
         runtimes.pop_front()
     }
 
     pub fn return_runtime(&self, runtime: Arc<Runtime>) -> anyhow::Result<()> {
-        let idling = self.idling.lock().map_err(|_| anyhow::anyhow!("Failed to lock idling"))?;
-        let expected_size = self.expected_size.lock().map_err(|_| anyhow::anyhow!("Failed to lock expected_size"))?;
+        let idling = self
+            .idling
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock idling"))?;
+        let expected_size = self
+            .expected_size
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock expected_size"))?;
 
         if idling.load(Relaxed) > expected_size.load(Relaxed) {
             //println!("RuntimePool: Destroying runtime. idling: {}, expected_size: {}", idling.load(Relaxed), expected_size.load(Relaxed));
@@ -94,7 +112,10 @@ impl RuntimePool {
 
         //println!("RuntimePool: Returning runtime. idling: {}, expected_size: {}", idling.load(Relaxed), expected_size.load(Relaxed));
 
-        let mut runtimes = self.runtimes.lock().map_err(|_| anyhow::anyhow!("Failed to lock runtimes"))?;
+        let mut runtimes = self
+            .runtimes
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock runtimes"))?;
         Ok(runtimes.push_back(runtime))
     }
 }

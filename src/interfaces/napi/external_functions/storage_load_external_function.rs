@@ -16,7 +16,7 @@ impl StorageLoadExternalFunction {
         id: u64,
     ) -> Self {
         Self {
-            external_function: GenericExternalFunction::new(tsfn, id)
+            external_function: GenericExternalFunction::new(tsfn, id),
         }
     }
 }

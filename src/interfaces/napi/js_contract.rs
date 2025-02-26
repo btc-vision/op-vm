@@ -17,9 +17,10 @@ use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
-    RevertDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, OutputsExternalFunction,
-    StorageLoadExternalFunction, StorageStoreExternalFunction,
+    CallOtherContractExternalFunction, ConsoleLogExternalFunction,
+    DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
+    OutputsExternalFunction, RevertDataResponse, StorageLoadExternalFunction,
+    StorageStoreExternalFunction,
 };
 
 #[napi(object)]
@@ -98,11 +99,21 @@ impl JsContract {
             let runner: WasmerRunner;
 
             if let Some(bytecode) = params.bytecode {
-                runner = WasmerRunner::from_bytecode(&bytecode, params.max_gas, custom_env, params.is_debug_mode)
-                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                runner = WasmerRunner::from_bytecode(
+                    &bytecode,
+                    params.max_gas,
+                    custom_env,
+                    params.is_debug_mode,
+                )
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
             } else if let Some(serialized) = params.serialized {
-                runner = WasmerRunner::from_serialized(serialized, params.max_gas, custom_env, params.is_debug_mode)
-                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                runner = WasmerRunner::from_serialized(
+                    serialized,
+                    params.max_gas,
+                    custom_env,
+                    params.is_debug_mode,
+                )
+                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
             } else {
                 return Err(Error::from_reason("No bytecode or serialized data"));
             }
