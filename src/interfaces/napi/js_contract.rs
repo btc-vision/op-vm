@@ -17,7 +17,7 @@ use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
-    AbortDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
+    RevertDataResponse, CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction, OutputsExternalFunction,
     StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
@@ -318,9 +318,9 @@ impl JsContract {
         Ok(result)
     }
 
-    pub fn get_abort_data(&self) -> Result<AbortDataResponse> {
+    pub fn get_revert_data(&self) -> Result<RevertDataResponse> {
         let contract = self.contract.clone();
-        let result: Option<AbortDataResponse> = {
+        let result: Option<RevertDataResponse> = {
             let contract = contract.try_lock().map_err(|e| match e {
                 TryLockError::Poisoned(_) => {
                     Error::from_reason("Contract mutex is poisoned".to_string())
@@ -329,10 +329,10 @@ impl JsContract {
                     Error::from_reason("Contract mutex is already locked".to_string())
                 }
             })?;
-            contract.get_abort_data().map(|data| data.into())
+            contract.get_revert_data().map(|data| data.into())
         };
 
-        result.ok_or(Error::from_reason("No abort data"))
+        result.ok_or(Error::from_reason("No revert data"))
     }
 
     /// Convert raw Wasmer `Value`s into a JS Array in the current Env
