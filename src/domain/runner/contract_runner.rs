@@ -1,6 +1,6 @@
 use wasmer::Value;
 
-use crate::domain::runner::{AbortData, ExtendedMemoryAccessError};
+use crate::domain::runner::{ExtendedMemoryAccessError, RevertData};
 
 pub trait ContractRunner: Send + Sync {
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>>;
@@ -11,5 +11,5 @@ pub trait ContractRunner: Send + Sync {
     fn is_out_of_memory(&self) -> Result<bool, ExtendedMemoryAccessError>;
     fn set_remaining_gas(&mut self, gas: u64);
     fn use_gas(&mut self, gas: u64);
-    fn get_abort_data(&self) -> Option<AbortData>;
+    fn get_revert_data(&self) -> Option<RevertData>;
 }

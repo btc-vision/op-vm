@@ -3,7 +3,7 @@ use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::AbortDataResponse;
+use crate::interfaces::RevertDataResponse;
 use anyhow::anyhow;
 use bytes::Bytes;
 use napi::bindgen_prelude::{BigInt, Buffer, Undefined};
@@ -265,14 +265,14 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn get_abort_data(&self, contract_id: BigInt) -> Result<AbortDataResponse, Error> {
+    pub fn get_revert_data(&self, contract_id: BigInt) -> Result<RevertDataResponse, Error> {
         let id = contract_id.get_u64().1;
 
         let contract = self
             .contracts
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.get_abort_data()
+        contract.get_revert_data()
     }
 
     #[napi]

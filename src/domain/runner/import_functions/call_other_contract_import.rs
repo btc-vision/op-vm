@@ -1,4 +1,5 @@
-use crate::domain::runner::{CallResult, CustomEnv};
+use crate::domain::runner::call_result::CallResult;
+use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 

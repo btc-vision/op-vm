@@ -1,5 +1,6 @@
 use crate::domain::runner::bitcoin_network::BitcoinNetwork;
-use crate::domain::runner::{AbortData, CallResult, InstanceWrapper};
+use crate::domain::runner::call_result::CallResult;
+use crate::domain::runner::{InstanceWrapper, RevertData};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
@@ -11,7 +12,7 @@ use tokio::runtime::Runtime;
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
     pub network: BitcoinNetwork,
-    pub abort_data: Option<AbortData>,
+    pub revert_data: Option<RevertData>,
     pub storage_load_external: StorageLoadExternalFunction,
     pub storage_store_external: StorageStoreExternalFunction,
     pub call_other_contract_external: CallOtherContractExternalFunction,
@@ -41,7 +42,7 @@ impl CustomEnv {
         Ok(Self {
             instance: None,
             network,
-            abort_data: None,
+            revert_data: None,
             storage_load_external,
             storage_store_external,
             call_other_contract_external,
