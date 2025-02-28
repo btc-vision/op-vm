@@ -3,6 +3,7 @@ use wasmer::Value;
 use crate::domain::runner::{ExtendedMemoryAccessError, RevertData};
 
 pub trait ContractRunner: Send + Sync {
+    fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<Box<[Value]>>;
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>>;
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError>;
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), ExtendedMemoryAccessError>;

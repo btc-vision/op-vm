@@ -1,6 +1,6 @@
-use crate::domain::runner::bitcoin_network::BitcoinNetwork;
-use crate::domain::runner::call_result::CallResult;
-use crate::domain::runner::{InstanceWrapper, RevertData};
+use crate::domain::runner::{
+    BitcoinNetwork, Cache, CallResult, Calldata, InstanceWrapper, RevertData,
+};
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
@@ -22,7 +22,8 @@ pub struct CustomEnv {
     pub inputs_external: InputsExternalFunction,
     pub outputs_external: OutputsExternalFunction,
     pub runtime: Arc<Runtime>,
-    pub store_cache: Mutex<super::store::Cache>,
+    pub store_cache: Mutex<Cache>,
+    pub calldata: Calldata,
     pub last_call_result: CallResult,
 }
 
@@ -52,7 +53,8 @@ impl CustomEnv {
             inputs_external,
             outputs_external,
             runtime,
-            store_cache: Mutex::new(super::store::Cache::new()),
+            store_cache: Mutex::new(Cache::new()),
+            calldata: Calldata::default(),
             last_call_result: CallResult::default(),
         })
     }

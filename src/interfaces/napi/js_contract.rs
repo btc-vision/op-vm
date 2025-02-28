@@ -131,6 +131,22 @@ impl JsContract {
         .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
+    pub fn execute(&self, calldata: Buffer) -> Result<Box<[Value]>> {
+        // Lock the contract and call
+        let mut contract = self
+            .contract
+            .lock()
+            .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+
+        let call_result = contract.execute(&calldata);
+
+        // Return the raw Values for later JS conversion
+        match call_result {
+            Ok(values) => Ok(values),
+            Err(e) => Err(Error::from_reason(format!("{:?}", e))),
+        }
+    }
+
     pub fn call_sync(&self, func_name: &str, int_params: &[i32]) -> Result<Box<[Value]>> {
         // Convert the i32s to Wasmer `Value`
         let wasm_params: Vec<Value> = int_params.iter().map(|i| Value::I32(*i)).collect();

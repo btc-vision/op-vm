@@ -13,13 +13,7 @@ use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
-use crate::domain::runner::{
-    CallOtherContractImport, ConsoleLogImport, ContractRunner, CustomEnv, DeployFromAddressImport,
-    EmitImport, ExtendedMemoryAccessError, GetCallResultImport, GetInputsSizeImport,
-    GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, RevertData, RevertImport,
-    Ripemd160Import, Sha256Import, StorageLoadImport, StorageStoreImport,
-    ValidateBitcoinAddressImport, VerifySchnorrImport,
-};
+use crate::domain::runner::{CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv, DeployFromAddressImport, EmitImport, ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport, GetInputsSizeImport, GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, RevertData, RevertImport, Ripemd160Import, Sha256Import, StorageLoadImport, StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport};
 
 pub struct WasmerRunner {
     module: Module,
@@ -107,6 +101,7 @@ impl WasmerRunner {
         let mut import_object = imports! {
             "env" => {
                 "revert" => import!(RevertImport),
+                "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
                 "call" => import!(CallOtherContractImport),
@@ -211,6 +206,13 @@ impl WasmerRunner {
 }
 
 impl ContractRunner for WasmerRunner {
+    fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<Box<[Value]>> {
+        let env = self.env.as_mut(&mut self.store);
+        env.calldata = Calldata::new(&calldata);
+
+        self.instance.call_entrypoint(&mut self.store, calldata.len() as u32)
+    }
+
     fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         self.instance.call(&mut self.store, function, params)
     }
