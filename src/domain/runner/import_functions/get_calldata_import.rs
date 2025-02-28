@@ -5,9 +5,9 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 pub const STATIC_GAS_COST: u64 = 30_000;
 
 #[derive(Default)]
-pub struct GetCallResultImport;
+pub struct GetCalldataImport;
 
-impl GetCallResultImport {
+impl GetCalldataImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         offset: u32,
@@ -23,12 +23,12 @@ impl GetCallResultImport {
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
-        let result_data = env.last_call_result.data.as_slice();
+        let calldata = &env.calldata.to_bytes();
 
         DataSliceWriter::write_data_and_padding_to_memory(
             &mut store,
             &instance,
-            result_data,
+            calldata,
             offset,
             length,
             result_ptr,

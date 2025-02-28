@@ -402,6 +402,55 @@ impl ContractManager {
         Ok(promise)
     }
 
+    #[napi(ts_return_type = "Promise<number[]>")]
+    pub fn execute(
+        &self,
+        env: Env,
+        id: BigInt,
+        calldata: Buffer,
+    ) -> napi::Result<napi::JsObject> {
+        let id_u64 = id.get_u64().1;
+        let contract_arc = self
+            .contracts
+            .get(&id_u64)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?
+            .clone();
+
+        // We must clone the Arc for background usage and for final JS creation:
+        let arc_for_bg = contract_arc.clone();
+        let arc_for_js = contract_arc.clone();
+
+        let calldata_for_bg = calldata.clone();
+
+        // The future to run in the background:
+        let future = async move {
+            // Inside spawn_blocking to avoid blocking async runtime
+            let values_boxed = tokio::task::spawn_blocking(move || {
+                // The heavy-lifting synchronous call
+                arc_for_bg.execute(calldata_for_bg)
+            })
+                .await
+                .map_err(|join_err| {
+                    Error::from_reason(format!("Tokio join error: {:?}", join_err))
+                })??;
+
+            // Return the raw values to the next closure
+            Ok(values_boxed)
+        };
+
+        // Now convert that `future` into a JS Promise using `execute_tokio_future`.
+        let promise = env.execute_tokio_future(
+            future,
+            // This closure is run on the main thread to convert Rust data to JS objects
+            move |&mut env, values_boxed| {
+                // use the second Arc to build a JS array
+                arc_for_js.convert_values_to_js_array(&env, values_boxed)
+            },
+        )?;
+
+        Ok(promise)
+    }
+
     #[napi]
     pub fn length(&self) -> Result<BigInt, Error> {
         Ok(BigInt::from(self.contracts.len() as u64))

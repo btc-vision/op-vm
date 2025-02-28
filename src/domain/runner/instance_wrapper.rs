@@ -5,6 +5,8 @@ use wasmer::{
 };
 use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, MeteringPoints};
 
+const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
+
 #[derive(Clone)]
 pub struct InstanceWrapper {
     instance: Instance,
@@ -23,6 +25,18 @@ pub enum ExtendedMemoryAccessError {
 impl InstanceWrapper {
     pub fn new(instance: Instance) -> Self {
         Self { instance }
+    }
+
+    pub fn call_entrypoint(
+        &self,
+        store: &mut impl AsStoreMut,
+        calldata_length: u32,
+    ) -> anyhow::Result<Box<[Value]>> {
+        let export = Self::get_function(&self.instance, CONTRACT_ENTRYPOINT_FUNCTION_NAME)?;
+        let params = &[Value::I32(calldata_length as i32)];
+        let result = export.call(store, params)?;
+
+        Ok(result)
     }
 
     pub fn call(
