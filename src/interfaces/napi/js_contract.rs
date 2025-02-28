@@ -11,7 +11,7 @@ use tokio::runtime::Runtime;
 use wasmer::Value;
 
 use crate::application::contract::ContractService;
-use crate::domain::runner::{CustomEnv, WasmerRunner};
+use crate::domain::runner::{CustomEnv, ExitData, WasmerRunner};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
@@ -19,7 +19,7 @@ use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
-    OutputsExternalFunction, RevertDataResponse, StorageLoadExternalFunction,
+    OutputsExternalFunction, ExitDataResponse, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
 
@@ -131,7 +131,7 @@ impl JsContract {
         .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
-    pub fn execute(&self, calldata: Buffer) -> Result<Box<[Value]>> {
+    pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
         // Lock the contract and call
         let mut contract = self
             .contract
@@ -140,7 +140,6 @@ impl JsContract {
 
         let call_result = contract.execute(&calldata);
 
-        // Return the raw Values for later JS conversion
         match call_result {
             Ok(values) => Ok(values),
             Err(e) => Err(Error::from_reason(format!("{:?}", e))),
@@ -345,9 +344,9 @@ impl JsContract {
         Ok(result)
     }
 
-    pub fn get_revert_data(&self) -> Result<RevertDataResponse> {
+    pub fn get_exit_data(&self) -> Result<ExitDataResponse> {
         let contract = self.contract.clone();
-        let result: Option<RevertDataResponse> = {
+        let result: ExitDataResponse = {
             let contract = contract.try_lock().map_err(|e| match e {
                 TryLockError::Poisoned(_) => {
                     Error::from_reason("Contract mutex is poisoned".to_string())
@@ -356,10 +355,10 @@ impl JsContract {
                     Error::from_reason("Contract mutex is already locked".to_string())
                 }
             })?;
-            contract.get_revert_data().map(|data| data.into())
+            contract.get_exit_data().into()
         };
 
-        result.ok_or(Error::from_reason("No revert data"))
+        Ok(result)
     }
 
     /// Convert raw Wasmer `Value`s into a JS Array in the current Env

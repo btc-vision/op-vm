@@ -3,7 +3,7 @@ use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::RevertDataResponse;
+use crate::interfaces::ExitDataResponse;
 use anyhow::anyhow;
 use bytes::Bytes;
 use napi::bindgen_prelude::{BigInt, Buffer, Undefined};
@@ -265,14 +265,14 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn get_revert_data(&self, contract_id: BigInt) -> Result<RevertDataResponse, Error> {
+    pub fn get_exit_data(&self, contract_id: BigInt) -> Result<ExitDataResponse, Error> {
         let id = contract_id.get_u64().1;
 
         let contract = self
             .contracts
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.get_revert_data()
+        contract.get_exit_data()
     }
 
     #[napi]
@@ -402,13 +402,8 @@ impl ContractManager {
         Ok(promise)
     }
 
-    #[napi(ts_return_type = "Promise<number[]>")]
-    pub fn execute(
-        &self,
-        env: Env,
-        id: BigInt,
-        calldata: Buffer,
-    ) -> napi::Result<napi::JsObject> {
+    #[napi(ts_return_type = "Promise<{ status: number, data: Buffer }>")]
+    pub fn execute(&self, env: Env, id: BigInt, calldata: Buffer) -> napi::Result<napi::JsObject> {
         let id_u64 = id.get_u64().1;
         let contract_arc = self
             .contracts
@@ -425,26 +420,33 @@ impl ContractManager {
         // The future to run in the background:
         let future = async move {
             // Inside spawn_blocking to avoid blocking async runtime
-            let values_boxed = tokio::task::spawn_blocking(move || {
+            let exit_data = tokio::task::spawn_blocking(move || {
                 // The heavy-lifting synchronous call
                 arc_for_bg.execute(calldata_for_bg)
             })
-                .await
-                .map_err(|join_err| {
-                    Error::from_reason(format!("Tokio join error: {:?}", join_err))
-                })??;
+            .await
+            .map_err(|join_err| {
+                Error::from_reason(format!("Tokio join error: {:?}", join_err))
+            })??;
 
-            // Return the raw values to the next closure
-            Ok(values_boxed)
+            // Return the result to the next closure
+            Ok(exit_data)
         };
 
         // Now convert that `future` into a JS Promise using `execute_tokio_future`.
         let promise = env.execute_tokio_future(
             future,
             // This closure is run on the main thread to convert Rust data to JS objects
-            move |&mut env, values_boxed| {
+            move |&mut env, exit_data| {
                 // use the second Arc to build a JS array
-                arc_for_js.convert_values_to_js_array(&env, values_boxed)
+                let mut js_object = env.create_object()?;
+                js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
+                js_object.set_named_property(
+                    "data",
+                    env.create_buffer_with_data(exit_data.data.to_vec())?
+                        .into_raw(),
+                )?;
+                Ok(js_object)
             },
         )?;
 

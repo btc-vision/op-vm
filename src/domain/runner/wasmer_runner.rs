@@ -1,8 +1,11 @@
+use anyhow::Error;
 use bytes::Bytes;
 use chrono::Local;
 use std::sync::Arc;
 use wasmer::sys::{BaseTunables, EngineBuilder};
-use wasmer::{imports, CompilerConfig, Function, FunctionEnv, Instance, Module, Store, Value};
+use wasmer::{
+    imports, CompilerConfig, Function, FunctionEnv, Instance, Module, RuntimeError, Store, Value,
+};
 use wasmer_compiler::types::target::Target;
 use wasmer_compiler::Engine;
 use wasmer_compiler_singlepass::Singlepass;
@@ -13,7 +16,14 @@ use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
-use crate::domain::runner::{CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv, DeployFromAddressImport, EmitImport, ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport, GetInputsSizeImport, GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, RevertData, RevertImport, Ripemd160Import, Sha256Import, StorageLoadImport, StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport};
+use crate::domain::runner::{
+    CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
+    DeployFromAddressImport, EmitImport, ExitData, ExitImport, ExitResult,
+    ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport, GetInputsSizeImport,
+    GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, Ripemd160Import,
+    Sha256Import, StorageLoadImport, StorageStoreImport, ValidateBitcoinAddressImport,
+    VerifySchnorrImport,
+};
 
 pub struct WasmerRunner {
     module: Module,
@@ -100,7 +110,7 @@ impl WasmerRunner {
 
         let mut import_object = imports! {
             "env" => {
-                "revert" => import!(RevertImport),
+                "exit" => Function::new_typed_with_env(&mut store, &env, ExitImport::execute),
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
@@ -161,11 +171,11 @@ impl WasmerRunner {
                 ));
             }
 
-            let revert_data_clone = imp.env.as_ref(&imp.store).revert_data.clone();
-            if revert_data_clone.is_some() {
+            let revert_data_clone = imp.env.as_ref(&imp.store).exit_data.clone();
+            if !revert_data_clone.is_ok() {
                 return Err(anyhow::anyhow!(
                     "Failed to call start function: {}",
-                    revert_data_clone.unwrap()
+                    revert_data_clone
                 ));
             }
 
@@ -203,18 +213,76 @@ impl WasmerRunner {
         let store = Store::new(Self::create_tunable(engine));
         Ok(store)
     }
+
+    fn handle_errors(
+        &mut self,
+        response: anyhow::Result<Box<[Value]>>,
+        max_gas: u64,
+    ) -> anyhow::Result<Box<[Value]>> {
+        response.map_err(|e| {
+            if e.to_string().contains("unreachable") {
+                let gas_used = self.get_remaining_gas();
+                if gas_used == 0 {
+                    anyhow::anyhow!("out of gas (consumed: {})", max_gas)
+                } else {
+                    let out_of_memory = self.is_out_of_memory().unwrap_or(false);
+
+                    if out_of_memory {
+                        anyhow::anyhow!("out of memory")
+                    } else {
+                        anyhow::anyhow!(e)
+                    }
+                }
+            } else {
+                anyhow::anyhow!(e)
+            }
+        })
+    }
 }
 
 impl ContractRunner for WasmerRunner {
-    fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<Box<[Value]>> {
+    fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 
-        self.instance.call_entrypoint(&mut self.store, calldata.len() as u32)
+        let response = self
+            .instance
+            .call_entrypoint(&mut self.store, calldata.len() as u32);
+
+        let response = match response {
+            Ok(result) => Ok(result),
+            Err(error) => match error.downcast::<ExitResult>() {
+                Ok(result) => match result {
+                    ExitResult::Ok(data) => return Ok(data),
+                    ExitResult::Err(e) => Err(Error::from(e)),
+                },
+                Err(e) => Err(e),
+            },
+        };
+
+        let result = self.handle_errors(response, max_gas);
+
+        let status = result?
+            .get(0)
+            .ok_or(RuntimeError::new("Invalid value returned from contract"))?
+            .i32()
+            .ok_or(RuntimeError::new("Invalid value returned from contract"))?
+            as u32;
+
+        let env = self.env.as_mut(&mut self.store);
+        env.exit_data.status = status;
+
+        Ok(env.exit_data.clone())
     }
 
-    fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
-        self.instance.call(&mut self.store, function, params)
+    fn call(
+        &mut self,
+        function: &str,
+        params: &[Value],
+        max_gas: u64,
+    ) -> anyhow::Result<Box<[Value]>> {
+        let response = self.instance.call(&mut self.store, function, params);
+        self.handle_errors(response, max_gas)
     }
 
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
@@ -245,7 +313,7 @@ impl ContractRunner for WasmerRunner {
         self.instance.use_gas(&mut self.store, gas)
     }
 
-    fn get_revert_data(&self) -> Option<RevertData> {
-        self.env.as_ref(&self.store).revert_data.clone()
+    fn get_exit_data(&self) -> ExitData {
+        self.env.as_ref(&self.store).exit_data.clone()
     }
 }
