@@ -35,7 +35,7 @@ impl CallOtherContractImport {
 
         let data = [
             address.as_slice(),
-            calldata_length.to_le_bytes().as_slice(),
+            calldata_length.to_be_bytes().as_slice(),
             calldata.as_slice(),
         ]
         .concat();
