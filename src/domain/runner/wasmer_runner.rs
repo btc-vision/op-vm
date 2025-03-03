@@ -1,4 +1,3 @@
-use anyhow::Error;
 use bytes::Bytes;
 use chrono::Local;
 use std::sync::Arc;
@@ -24,6 +23,8 @@ use crate::domain::runner::{
     Sha256Import, StorageLoadImport, StorageStoreImport, ValidateBitcoinAddressImport,
     VerifySchnorrImport,
 };
+
+const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
 
 pub struct WasmerRunner {
     module: Module,
@@ -216,7 +217,7 @@ impl WasmerRunner {
 
     fn handle_errors(
         &mut self,
-        response: anyhow::Result<Box<[Value]>>,
+        response: Result<Box<[Value]>, RuntimeError>,
         max_gas: u64,
     ) -> anyhow::Result<Box<[Value]>> {
         response.map_err(|e| {
@@ -245,24 +246,27 @@ impl ContractRunner for WasmerRunner {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 
-        let response = self
-            .instance
-            .call_entrypoint(&mut self.store, calldata.len() as u32);
+        let export = self.instance.get_function(CONTRACT_ENTRYPOINT_FUNCTION_NAME)?;
+        let params = &[Value::I32(calldata.len() as i32)];
+        let response = export.call(&mut self.store, params);
 
-        let response = match response {
+        let response: Result<Box<[Value]>, RuntimeError> = match response {
             Ok(result) => Ok(result),
             Err(error) => match error.downcast::<ExitResult>() {
                 Ok(result) => match result {
-                    ExitResult::Ok(data) => return Ok(data),
-                    ExitResult::Err(e) => Err(Error::from(e)),
+                    ExitResult::Ok(_) => {
+                        let env = self.env.as_ref(&self.store);
+                        return Ok(env.exit_data.clone());
+                    }
+                    ExitResult::Err(e) => Err(e)?,
                 },
                 Err(e) => Err(e),
             },
         };
 
-        let result = self.handle_errors(response, max_gas);
+        let result = self.handle_errors(response, max_gas)?;
 
-        let status = result?
+        let status = result
             .get(0)
             .ok_or(RuntimeError::new("Invalid value returned from contract"))?
             .i32()
@@ -281,7 +285,8 @@ impl ContractRunner for WasmerRunner {
         params: &[Value],
         max_gas: u64,
     ) -> anyhow::Result<Box<[Value]>> {
-        let response = self.instance.call(&mut self.store, function, params);
+        let export = self.instance.get_function(function)?;
+        let response = export.call(&mut self.store, params);
         self.handle_errors(response, max_gas)
     }
 

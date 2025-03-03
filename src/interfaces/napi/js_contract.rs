@@ -18,8 +18,8 @@ use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
-    OutputsExternalFunction, ExitDataResponse, StorageLoadExternalFunction,
+    DeployFromAddressExternalFunction, EmitExternalFunction, ExitDataResponse,
+    InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
 
@@ -52,7 +52,7 @@ impl JsContract {
     }
 
     pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
-        catch_unwind(|| unsafe {
+        catch_unwind(|| {
             let time = Local::now();
 
             let storage_load_tsfn = manager.storage_load_tsfn.clone();
@@ -107,13 +107,15 @@ impl JsContract {
                 )
                 .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
             } else if let Some(serialized) = params.serialized {
-                runner = WasmerRunner::from_serialized(
-                    serialized,
-                    params.max_gas,
-                    custom_env,
-                    params.is_debug_mode,
-                )
-                .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                unsafe {
+                    runner = WasmerRunner::from_serialized(
+                        serialized,
+                        params.max_gas,
+                        custom_env,
+                        params.is_debug_mode,
+                    )
+                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+                }
             } else {
                 return Err(Error::from_reason("No bytecode or serialized data"));
             }

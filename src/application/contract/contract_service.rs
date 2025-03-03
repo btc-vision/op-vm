@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use napi::Error;
 use wasmer::Value;
 
-use crate::domain::runner::{ContractRunner, ExtendedMemoryAccessError, ExitData};
+use crate::domain::runner::{ContractRunner, ExitData, ExtendedMemoryAccessError};
 
 pub struct ContractService {
     max_gas: u64,
