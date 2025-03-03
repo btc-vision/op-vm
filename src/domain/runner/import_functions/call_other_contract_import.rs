@@ -60,8 +60,6 @@ impl CallOtherContractImport {
             .map_err(|_e| RuntimeError::new("Error converting bytes"))?;
 
         let call_execution_cost = u64::from_be_bytes(bytes);
-        println!("Call cost: {}", call_execution_cost);
-
         instance.use_gas(&mut store, call_execution_cost);
 
         env.last_call_result = CallResult::new(response);
