@@ -14,8 +14,8 @@ impl Error for ExitResult {}
 impl Display for ExitResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            ExitResult::Ok(_) => write!(f, "Exit data: {}", self),
-            ExitResult::Err(_) => write!(f, "Error: {}", self),
+            ExitResult::Ok(data) => write!(f, "Exit data: {}", data),
+            ExitResult::Err(error) => write!(f, "Error: {}", error),
         }
     }
 }

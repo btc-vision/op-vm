@@ -413,7 +413,6 @@ impl ContractManager {
 
         // We must clone the Arc for background usage and for final JS creation:
         let arc_for_bg = contract_arc.clone();
-        let arc_for_js = contract_arc.clone();
 
         let calldata_for_bg = calldata.clone();
 

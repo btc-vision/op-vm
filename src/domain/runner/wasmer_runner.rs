@@ -246,7 +246,9 @@ impl ContractRunner for WasmerRunner {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 
-        let export = self.instance.get_function(CONTRACT_ENTRYPOINT_FUNCTION_NAME)?;
+        let export = self
+            .instance
+            .get_function(CONTRACT_ENTRYPOINT_FUNCTION_NAME)?;
         let params = &[Value::I32(calldata.len() as i32)];
         let response = export.call(&mut self.store, params);
 
@@ -254,10 +256,7 @@ impl ContractRunner for WasmerRunner {
             Ok(result) => Ok(result),
             Err(error) => match error.downcast::<ExitResult>() {
                 Ok(result) => match result {
-                    ExitResult::Ok(_) => {
-                        let env = self.env.as_ref(&self.store);
-                        return Ok(env.exit_data.clone());
-                    }
+                    ExitResult::Ok(data) => return Ok(data),
                     ExitResult::Err(e) => Err(e)?,
                 },
                 Err(e) => Err(e),
