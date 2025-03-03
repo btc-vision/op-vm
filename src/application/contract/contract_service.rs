@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use napi::Error;
 use wasmer::Value;
 
-use crate::domain::runner::{ContractRunner, ExtendedMemoryAccessError, RevertData};
+use crate::domain::runner::{ContractRunner, ExitData, ExtendedMemoryAccessError};
 
 pub struct ContractService {
     max_gas: u64,
@@ -15,32 +15,13 @@ impl ContractService {
         Self { max_gas, runner }
     }
 
-    pub fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<Box<[Value]>> {
+    pub fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<ExitData> {
         let mut runner = self
             .runner
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
 
-        let response = runner.execute(calldata).map_err(|e| {
-            if e.to_string().contains("unreachable") {
-                let gas_used = runner.get_remaining_gas();
-                if gas_used == 0 {
-                    anyhow::anyhow!("out of gas (consumed: {})", self.max_gas)
-                } else {
-                    let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
-
-                    if out_of_memory {
-                        anyhow::anyhow!("out of memory")
-                    } else {
-                        anyhow::anyhow!(e)
-                    }
-                }
-            } else {
-                anyhow::anyhow!(e)
-            }
-        });
-
-        response
+        runner.execute(calldata, self.max_gas)
     }
 
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
@@ -48,7 +29,7 @@ impl ContractService {
             .runner
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
-        let response = runner.call(function, params).map_err(|e| {
+        let response = runner.call(function, params, self.max_gas).map_err(|e| {
             if e.to_string().contains("unreachable") {
                 let gas_used = runner.get_remaining_gas();
                 if gas_used == 0 {
@@ -115,9 +96,9 @@ impl ContractService {
         runner.write_buffer(value, id, align)
     }
 
-    pub fn get_revert_data(&self) -> Option<RevertData> {
+    pub fn get_exit_data(&self) -> ExitData {
         let runner = self.runner.lock().unwrap();
-        runner.get_revert_data()
+        runner.get_exit_data()
     }
 
     #[allow(dead_code)]
