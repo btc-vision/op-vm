@@ -25,6 +25,8 @@ impl CallOtherContractImport {
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
+        let gas_used = instance.get_gas_used(&mut store);
+
         let address = instance
             .read_memory(&store, address_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading address from memory"))?;
@@ -34,6 +36,7 @@ impl CallOtherContractImport {
             .map_err(|_e| RuntimeError::new("Error reading calldata from memory"))?;
 
         let data = [
+            gas_used.to_be_bytes().as_slice(),
             address.as_slice(),
             calldata_length.to_be_bytes().as_slice(),
             calldata.as_slice(),
@@ -47,6 +50,7 @@ impl CallOtherContractImport {
         let call_execution_cost_bytes = result
             .get(0..8)
             .ok_or(RuntimeError::new("Invalid buffer"))?;
+
         let response = result
             .get(8..result.len())
             .ok_or(RuntimeError::new("Invalid buffer"))?;
@@ -54,7 +58,10 @@ impl CallOtherContractImport {
         let bytes = call_execution_cost_bytes
             .try_into()
             .map_err(|_e| RuntimeError::new("Error converting bytes"))?;
-        let call_execution_cost = u64::from_le_bytes(bytes);
+
+        let call_execution_cost = u64::from_be_bytes(bytes);
+        println!("Call cost: {}", call_execution_cost);
+
         instance.use_gas(&mut store, call_execution_cost);
 
         env.last_call_result = CallResult::new(response);

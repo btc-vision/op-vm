@@ -148,7 +148,7 @@ impl WasmerRunner {
             }
         };
 
-        let instance_wrapper = InstanceWrapper::new(instance.clone());
+        let instance_wrapper = InstanceWrapper::new(instance.clone(), max_gas);
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
 
         let mut imp = Self {
@@ -158,13 +158,15 @@ impl WasmerRunner {
             env,
         };
 
+        imp.set_remaining_gas(MAX_GAS_CONSTRUCTOR);
+
         // Start explicitly
         let start_function = instance
             .exports
             .get_function("start")
             .map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
-        let result_start = start_function.call(&mut imp.store, &[]);
 
+        let result_start = start_function.call(&mut imp.store, &[]);
         if let Err(e) = result_start {
             if e.to_string().contains("unreachable") {
                 return Err(anyhow::anyhow!(

@@ -1,53 +1,53 @@
 {
-    "name": "@btc-vision/op-vm",
-    "description": "OP-VM executable for Bitcoin Smart Contracts",
-    "version": "0.2.7",
-    "license": "LICENSE.MD",
-    "main": "index.js",
-    "types": "index.d.ts",
-    "typings": "index.d.ts",
-    "homepage": "https://opnet.org/",
-    "keywords": [
-        "opnet",
-        "bsi",
-        "bsi-binary",
-        "bsi-bitcoin-rpc",
-        "bitcoin",
-        "btc",
-        "bitcoin smart contracts",
-        "smart inscriptions",
-        "ordinals"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/btc-vision/op-vm.git"
-    },
-    "napi": {
-        "name": "op-vm",
-        "triples": {
-            "additional": [
-                "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "aarch64-unknown-linux-gnu",
-                "aarch64-pc-windows-msvc",
-                "universal-apple-darwin"
-            ]
-        }
-    },
-    "engines": {
-        "node": ">= 18"
-    },
-    "dependencies": {
-        "@napi-rs/cli": "^2.18.4"
-    },
-    "scripts": {
-        "artifacts": "napi artifacts",
-        "build": "napi build --platform --release",
-        "build:debug": "napi build --platform",
-        "test": "echo ''",
-        "prepublishOnly": "napi prepublish -t npm",
-        "universal": "napi universal",
-        "version": "napi version",
-        "postinstall": "npm run build"
+  "name": "@btc-vision/op-vm",
+  "description": "OP-VM executable for Bitcoin Smart Contracts",
+  "version": "0.3.0",
+  "license": "LICENSE.MD",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "typings": "index.d.ts",
+  "homepage": "https://opnet.org/",
+  "keywords": [
+    "opnet",
+    "bsi",
+    "bsi-binary",
+    "bsi-bitcoin-rpc",
+    "bitcoin",
+    "btc",
+    "bitcoin smart contracts",
+    "smart inscriptions",
+    "ordinals"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/op-vm.git"
+  },
+  "napi": {
+    "name": "op-vm",
+    "triples": {
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-linux-android",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-pc-windows-msvc",
+        "universal-apple-darwin"
+      ]
     }
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "dependencies": {
+    "@napi-rs/cli": "^2.18.4"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "echo ''",
+    "prepublishOnly": "napi prepublish -t npm",
+    "universal": "napi universal",
+    "version": "napi version",
+    "postinstall": "npm run build"
+  }
 }

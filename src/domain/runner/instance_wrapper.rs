@@ -8,6 +8,7 @@ use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, M
 #[derive(Clone)]
 pub struct InstanceWrapper {
     instance: Instance,
+    max_gas: u64,
 }
 
 #[derive(Clone, Copy, Debug, Error)]
@@ -21,8 +22,8 @@ pub enum ExtendedMemoryAccessError {
 }
 
 impl InstanceWrapper {
-    pub fn new(instance: Instance) -> Self {
-        Self { instance }
+    pub fn new(instance: Instance, max_gas: u64) -> Self {
+        Self { instance, max_gas }
     }
 
     pub fn call(
@@ -120,6 +121,14 @@ impl InstanceWrapper {
         }
     }
 
+    pub fn get_gas_used(&self, store: &mut impl AsStoreMut) -> u64 {
+        let remaining_points = get_remaining_points(store, &self.instance);
+        match remaining_points {
+            MeteringPoints::Remaining(remaining) => self.max_gas - remaining,
+            MeteringPoints::Exhausted => self.max_gas,
+        }
+    }
+
     pub fn set_remaining_gas(&self, store: &mut impl AsStoreMut, gas: u64) {
         set_remaining_points(store, &self.instance, gas);
     }
@@ -132,10 +141,7 @@ impl InstanceWrapper {
             .map_err(|_| ExtendedMemoryAccessError::UnableToGetMemory)
     }
 
-    pub fn get_function(
-        &self,
-        function: &str,
-    ) -> Result<&Function, ExportError> {
+    pub fn get_function(&self, function: &str) -> Result<&Function, ExportError> {
         self.instance.exports.get_function(function)
     }
 }
