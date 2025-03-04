@@ -24,6 +24,15 @@ impl ContractService {
         runner.execute(calldata, self.max_gas)
     }
 
+    pub fn on_deploy(&mut self, calldata: &[u8]) -> anyhow::Result<ExitData> {
+        let mut runner = self
+            .runner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
+
+        runner.on_deploy(calldata, self.max_gas)
+    }
+
     pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
         let mut runner = self
             .runner
