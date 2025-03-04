@@ -25,6 +25,7 @@ use crate::domain::runner::{
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
+const CONTRACT_ON_DEPLOY_FUNCTION_NAME: &'static str = "onDeploy";
 
 pub struct WasmerRunner {
     module: Module,
@@ -275,7 +276,43 @@ impl ContractRunner for WasmerRunner {
             as u32;
 
         let env = self.env.as_mut(&mut self.store);
-        env.exit_data.status = status;
+        env.exit_data = ExitData::new(status, &[]);
+
+        Ok(env.exit_data.clone())
+    }
+
+    fn on_deploy(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
+        let env = self.env.as_mut(&mut self.store);
+        env.calldata = Calldata::new(&calldata);
+
+        let export = self
+            .instance
+            .get_function(CONTRACT_ON_DEPLOY_FUNCTION_NAME)?;
+        let params = &[Value::I32(calldata.len() as i32)];
+        let response = export.call(&mut self.store, params);
+
+        let response: Result<Box<[Value]>, RuntimeError> = match response {
+            Ok(result) => Ok(result),
+            Err(error) => match error.downcast::<ExitResult>() {
+                Ok(result) => match result {
+                    ExitResult::Ok(data) => return Ok(data),
+                    ExitResult::Err(e) => Err(e)?,
+                },
+                Err(e) => Err(e),
+            },
+        };
+
+        let result = self.handle_errors(response, max_gas)?;
+
+        let status = result
+            .get(0)
+            .ok_or(RuntimeError::new("Invalid value returned from contract"))?
+            .i32()
+            .ok_or(RuntimeError::new("Invalid value returned from contract"))?
+            as u32;
+
+        let env = self.env.as_mut(&mut self.store);
+        env.exit_data = ExitData::new(status, &[]);
 
         Ok(env.exit_data.clone())
     }
