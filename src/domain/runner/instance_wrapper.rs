@@ -26,18 +26,6 @@ impl InstanceWrapper {
         Self { instance, max_gas }
     }
 
-    pub fn call(
-        &self,
-        store: &mut impl AsStoreMut,
-        function: &str,
-        params: &[Value],
-    ) -> anyhow::Result<Box<[Value]>> {
-        let export = self.get_function(function)?;
-        let result = export.call(store, params)?;
-
-        Ok(result)
-    }
-
     pub fn is_out_of_memory(
         &self,
         store: &(impl AsStoreRef + ?Sized),
@@ -63,17 +51,6 @@ impl InstanceWrapper {
             .map_err(|e| ExtendedMemoryAccessError::Base(e))?;
 
         Ok(buffer)
-    }
-
-    pub fn read_memory_u8(
-        &self,
-        store: &(impl AsStoreRef + ?Sized),
-        offset: u64,
-    ) -> Result<u8, ExtendedMemoryAccessError> {
-        let memory = Self::get_memory(&self.instance)?;
-        let view = memory.view(store);
-        view.read_u8(offset)
-            .map_err(|e| ExtendedMemoryAccessError::Base(e))
     }
 
     pub fn write_memory(

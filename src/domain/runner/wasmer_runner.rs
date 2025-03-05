@@ -11,7 +11,6 @@ use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::Metering;
 use wasmer_types::SerializeError;
 
-use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
@@ -340,10 +339,6 @@ impl ContractRunner for WasmerRunner {
 
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), ExtendedMemoryAccessError> {
         self.instance.write_memory(&self.store, offset, data)
-    }
-
-    fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, napi::Error> {
-        AssemblyScript::write_buffer(&mut self.store, &self.instance, value, id, align)
     }
 
     fn get_remaining_gas(&mut self) -> u64 {

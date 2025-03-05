@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use napi::Error;
 use wasmer::Value;
 
 use crate::domain::runner::{
@@ -114,11 +113,6 @@ impl ContractService {
     pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), ExtendedMemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.write_memory(offset, data)
-    }
-
-    pub fn write_buffer(&mut self, value: &[u8], id: i32, align: u32) -> Result<i64, Error> {
-        let mut runner = self.runner.lock().unwrap();
-        runner.write_buffer(value, id, align)
     }
 
     pub fn get_exit_data(&self) -> ExitData {
