@@ -35,7 +35,6 @@ The project is organized into the following directories:
 - **`src/`**: Contains the Rust source code for the VM.
     - **`application/`**: (Currently empty, might be reserved for application-level logic in the future)
     - **`domain/`**: Core domain logic of the VM.
-        - **`assembly_script/`**: Handles functionality related to AssemblyScript.
         - **`runner/`**: Contains the code that runs and manages contracts, including setting up environments, managing
           instances, and handling custom imports.
         - **`vm/`**: Core virtual machine components, including gas cost management, logging, and other critical VM

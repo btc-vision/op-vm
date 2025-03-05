@@ -357,25 +357,6 @@ impl JsContract {
         Ok(())
     }
 
-    pub fn write_buffer(&self, value: Buffer, id: i32, align: u32) -> Result<i64> {
-        let value = value.to_vec();
-        let contract = self.contract.clone();
-
-        let result = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
-            contract.write_buffer(&value, id, align)?
-        };
-
-        Ok(result)
-    }
-
     pub fn get_exit_data(&self) -> Result<ExitDataResponse> {
         let contract = self.contract.clone();
         let result: ExitDataResponse = {

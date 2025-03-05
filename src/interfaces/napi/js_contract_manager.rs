@@ -249,23 +249,6 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn write_buffer(
-        &self,
-        contract_id: BigInt,
-        value: Buffer,
-        id: i32,
-        align: u32,
-    ) -> Result<i64, Error> {
-        let contract_id = contract_id.get_u64().1;
-
-        let contract = self
-            .contracts
-            .get(&contract_id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.write_buffer(value, id, align)
-    }
-
-    #[napi]
     pub fn get_exit_data(&self, contract_id: BigInt) -> Result<ExitDataResponse, Error> {
         let id = contract_id.get_u64().1;
 
