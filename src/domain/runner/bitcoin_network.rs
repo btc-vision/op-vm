@@ -15,14 +15,6 @@ impl BitcoinNetwork {
         prefix.to_string()
     }
 
-    pub fn enable_debug(&self) -> bool {
-        match self {
-            BitcoinNetwork::Mainnet => false,
-            BitcoinNetwork::Testnet => false,
-            BitcoinNetwork::Regtest => true,
-        }
-    }
-
     pub fn is_test_network(&self) -> bool {
         match self {
             BitcoinNetwork::Mainnet => false,

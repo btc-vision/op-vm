@@ -1,4 +1,3 @@
-use crate::domain::assembly_script::AssemblyScript;
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -6,20 +5,20 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 pub struct ConsoleLogImport;
 
 impl ConsoleLogImport {
-    pub fn execute(mut context: FunctionEnvMut<CustomEnv>, ptr: u32) -> Result<(), RuntimeError> {
+    pub fn execute(
+        mut context: FunctionEnvMut<CustomEnv>,
+        data_ptr: u32,
+        data_length: u32,
+    ) -> Result<(), RuntimeError> {
         let (env, store) = context.data_and_store_mut();
         let instance = &env
             .instance
             .clone()
             .ok_or(RuntimeError::new("Memory not found"))?;
 
-        let network = &env.network;
-        if !&network.enable_debug() {
-            return Err(RuntimeError::new("Contracts may not log this network"));
-        }
-
-        let data = AssemblyScript::read_buffer(&store, &instance, ptr)
-            .map_err(|_e| RuntimeError::new("Error lifting typed array"))?;
+        let data = instance
+            .read_memory(&store, data_ptr as u64, data_length as u64)
+            .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
         env.console_log_external.execute(&data, &env.runtime)
     }
