@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
-use napi::bindgen_prelude::{Array, BigInt, Buffer, Undefined};
+use napi::bindgen_prelude::{Array, BigInt, Buffer};
 use napi::Env;
 use napi::Error;
 use napi::JsUnknown;
@@ -14,6 +14,7 @@ use crate::application::contract::ContractService;
 use crate::domain::runner::{CustomEnv, ExitData, WasmerRunner};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
+use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
@@ -22,13 +23,6 @@ use crate::interfaces::{
     InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
-
-#[napi(object)]
-pub struct CallResponse {
-    #[napi(ts_type = "number[]")]
-    pub result: Array,
-    pub gas_used: BigInt,
-}
 
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
@@ -131,6 +125,27 @@ impl JsContract {
             Ok(contract)
         })
         .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+    }
+
+    pub fn set_environment_variables(
+        &self,
+        environment_variables: EnvironmentVariablesRequest,
+    ) -> Result<()> {
+        let contract = self.contract.clone();
+
+        let mut contract = contract.try_lock().map_err(|e| match e {
+            TryLockError::Poisoned(_) => {
+                Error::from_reason("Contract mutex is poisoned".to_string())
+            }
+            TryLockError::WouldBlock => {
+                Error::from_reason("Contract mutex is already locked".to_string())
+            }
+        })?;
+        contract
+            .set_environment_variables(environment_variables.into())
+            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+        Ok(())
     }
 
     pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
@@ -240,7 +255,7 @@ impl JsContract {
         Ok(Buffer::from(resp))
     }
 
-    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<Undefined> {
+    pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<()> {
         let data: Vec<u8> = data.into();
         let offset = offset.get_u64().1;
         let contract = self.contract.clone();

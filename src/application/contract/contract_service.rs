@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use napi::Error;
 use wasmer::Value;
 
-use crate::domain::runner::{ContractRunner, ExitData, ExtendedMemoryAccessError};
+use crate::domain::runner::{
+    ContractRunner, EnvironmentVariables, ExitData, ExtendedMemoryAccessError,
+};
 
 pub struct ContractService {
     max_gas: u64,
@@ -13,6 +15,20 @@ pub struct ContractService {
 impl ContractService {
     pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
         Self { max_gas, runner }
+    }
+
+    pub fn set_environment_variables(
+        &mut self,
+        environment_variables: EnvironmentVariables,
+    ) -> anyhow::Result<()> {
+        let mut runner = self
+            .runner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
+
+        runner.set_environment_variables(environment_variables);
+
+        Ok(())
     }
 
     pub fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<ExitData> {

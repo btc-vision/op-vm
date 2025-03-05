@@ -17,11 +17,11 @@ use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
 use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
-    DeployFromAddressImport, EmitImport, ExitData, ExitImport, ExitResult,
-    ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport, GetInputsSizeImport,
-    GetOuputsSizeImport, InputsImport, InstanceWrapper, OutputsImport, Ripemd160Import,
-    Sha256Import, StorageLoadImport, StorageStoreImport, ValidateBitcoinAddressImport,
-    VerifySchnorrImport,
+    DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
+    ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
+    GetEnvironmentVariablesImport, GetInputsSizeImport, GetOuputsSizeImport, InputsImport,
+    InstanceWrapper, OutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
+    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
@@ -113,6 +113,7 @@ impl WasmerRunner {
         let mut import_object = imports! {
             "env" => {
                 "exit" => Function::new_typed_with_env(&mut store, &env, ExitImport::execute),
+                "environment" => import!(GetEnvironmentVariablesImport),
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
@@ -245,6 +246,11 @@ impl WasmerRunner {
 }
 
 impl ContractRunner for WasmerRunner {
+    fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables) {
+        let env = self.env.as_mut(&mut self.store);
+        env.environment_variables = Some(environment_variables);
+    }
+
     fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
