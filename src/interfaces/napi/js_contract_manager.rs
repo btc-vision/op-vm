@@ -1,12 +1,13 @@
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
+use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use crate::interfaces::ExitDataResponse;
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::{BigInt, Buffer, Undefined};
+use napi::bindgen_prelude::{BigInt, Buffer};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
 use napi::Env;
 use napi::{Error, JsFunction, JsNumber};
@@ -320,12 +321,7 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn write_memory(
-        &self,
-        id: BigInt,
-        offset: BigInt,
-        data: Buffer,
-    ) -> Result<Undefined, Error> {
+    pub fn write_memory(&self, id: BigInt, offset: BigInt, data: Buffer) -> Result<(), Error> {
         let id = id.get_u64().1;
 
         let contract = self
@@ -344,6 +340,22 @@ impl ContractManager {
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.read_memory(offset, length)
+    }
+
+    #[napi]
+    pub fn set_environment_variables(
+        &self,
+        id: BigInt,
+        environment_variables: EnvironmentVariablesRequest,
+    ) -> Result<(), Error> {
+        let id = id.get_u64().1;
+
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
+
+        contract.set_environment_variables(environment_variables)
     }
 
     #[napi(ts_return_type = "Promise<number[]>")]

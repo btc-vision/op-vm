@@ -1,5 +1,6 @@
+use crate::domain::runner::environment_variables::EnvironmentVariables;
 use crate::domain::runner::{
-    BitcoinNetwork, Cache, CallResult, Calldata, InstanceWrapper, ExitData,
+    BitcoinNetwork, Cache, CallResult, Calldata, ExitData, InstanceWrapper,
 };
 use crate::interfaces::{
     CallOtherContractExternalFunction, ConsoleLogExternalFunction,
@@ -24,6 +25,7 @@ pub struct CustomEnv {
     pub runtime: Arc<Runtime>,
     pub store_cache: Mutex<Cache>,
     pub calldata: Calldata,
+    pub environment_variables: Option<EnvironmentVariables>,
     pub last_call_result: CallResult,
 }
 
@@ -55,6 +57,7 @@ impl CustomEnv {
             runtime,
             store_cache: Mutex::new(Cache::new()),
             calldata: Calldata::default(),
+            environment_variables: None,
             last_call_result: CallResult::default(),
         })
     }
