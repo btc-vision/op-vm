@@ -65,7 +65,7 @@ impl WasmerRunner {
         let module = Module::from_binary(&store, &bytecode)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
 
-        log_time_diff(&time, "WasmerInstance::from_bytecode");
+        log_time_diff(&time, "WasmerRunner::from_bytecode");
 
         Ok(instance)
     }
@@ -89,7 +89,7 @@ impl WasmerRunner {
         let module = Module::deserialize(&store, serialized)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
 
-        log_time_diff(&time, "WasmerInstance::from_serialized");
+        log_time_diff(&time, "WasmerRunner::from_serialized");
 
         Ok(instance)
     }
@@ -251,6 +251,7 @@ impl ContractRunner for WasmerRunner {
     }
 
     fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
+        let time = Local::now();
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 
@@ -283,7 +284,10 @@ impl ContractRunner for WasmerRunner {
         let env = self.env.as_mut(&mut self.store);
         env.exit_data = ExitData::new(status, &[]);
 
-        Ok(env.exit_data.clone())
+        let result = env.exit_data.clone();
+
+        log_time_diff(&time, "WasmerRunner::execute");
+        Ok(result)
     }
 
     fn on_deploy(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {

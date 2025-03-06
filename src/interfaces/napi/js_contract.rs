@@ -149,6 +149,7 @@ impl JsContract {
     }
 
     pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
+        let time = Local::now();
         // Lock the contract and call
         let mut contract = self
             .contract
@@ -157,10 +158,14 @@ impl JsContract {
 
         let call_result = contract.execute(&calldata);
 
-        match call_result {
+        let result = match call_result {
             Ok(values) => Ok(values),
             Err(e) => Err(Error::from_reason(format!("{:?}", e))),
-        }
+        };
+        
+        log_time_diff(&time, "JsContract::execute");
+        
+        result
     }
 
     pub fn on_deploy(&self, calldata: Buffer) -> Result<ExitData> {
