@@ -111,7 +111,7 @@ impl WasmerRunner {
 
         let mut import_object = imports! {
             "env" => {
-                "exit" => Function::new_typed_with_env(&mut store, &env, ExitImport::execute),
+                "exit" => import!(ExitImport),
                 "environment" => import!(GetEnvironmentVariablesImport),
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
