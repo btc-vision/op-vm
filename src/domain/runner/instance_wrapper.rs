@@ -1,8 +1,6 @@
 use crate::domain::runner::MAX_MEMORY_SIZE;
 use thiserror::Error;
-use wasmer::{
-    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError, Value,
-};
+use wasmer::{AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError};
 use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, MeteringPoints};
 
 #[derive(Clone)]
