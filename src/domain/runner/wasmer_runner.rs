@@ -175,11 +175,11 @@ impl WasmerRunner {
                 ));
             }
 
-            let revert_data_clone = imp.env.as_ref(&imp.store).exit_data.clone();
-            if !revert_data_clone.is_ok() {
+            let exit_data_clone = imp.env.as_ref(&imp.store).exit_data.clone();
+            if !exit_data_clone.is_ok() {
                 return Err(anyhow::anyhow!(
                     "Failed to call start function: {}",
-                    revert_data_clone
+                    exit_data_clone
                 ));
             }
 
