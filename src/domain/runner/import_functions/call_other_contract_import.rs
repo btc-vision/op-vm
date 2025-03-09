@@ -15,7 +15,7 @@ impl CallOtherContractImport {
         calldata_ptr: u32,
         calldata_length: u32,
         result_length_ptr: u32,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<u32, RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
@@ -55,16 +55,27 @@ impl CallOtherContractImport {
             .get(0..8)
             .ok_or(RuntimeError::new("Invalid buffer"))?;
 
-        let response = result
-            .get(8..result.len())
+        let exit_status_bytes = result
+            .get(8..12)
             .ok_or(RuntimeError::new("Invalid buffer"))?;
 
-        let bytes = call_execution_cost_bytes
-            .try_into()
-            .map_err(|_e| RuntimeError::new("Error converting bytes"))?;
+        let response = result
+            .get(12..result.len())
+            .ok_or(RuntimeError::new("Invalid buffer"))?;
 
-        let call_execution_cost = u64::from_be_bytes(bytes);
+        let call_execution_cost = u64::from_be_bytes(
+            call_execution_cost_bytes
+                .try_into()
+                .map_err(|_e| RuntimeError::new("Error converting bytes"))?,
+        );
+
         instance.use_gas(&mut store, call_execution_cost);
+
+        let exit_status = u32::from_be_bytes(
+            exit_status_bytes
+                .try_into()
+                .map_err(|_e| RuntimeError::new("Error converting bytes"))?,
+        );
 
         env.last_call_result = CallResult::new(response);
 
@@ -75,6 +86,6 @@ impl CallOtherContractImport {
             .write_memory(&store, result_length_ptr as u64, result_length_bytes)
             .map_err(|_e| RuntimeError::new("Error writing call result to memory"))?;
 
-        Ok(())
+        Ok(exit_status)
     }
 }
