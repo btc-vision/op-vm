@@ -15,6 +15,11 @@ impl DeployFromAddressImport {
         result_address_ptr: u32,
     ) -> Result<u32, RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
+        
+        if env.is_running_start_function {
+            return Err(RuntimeError::new("Cannot deploy contract in start function"));
+        }
+        
         let instance = env
             .instance
             .clone()

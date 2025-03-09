@@ -27,6 +27,7 @@ pub struct CustomEnv {
     pub calldata: Calldata,
     pub environment_variables: Option<EnvironmentVariables>,
     pub last_call_result: CallResult,
+    pub is_running_start_function: bool,
 }
 
 impl CustomEnv {
@@ -59,6 +60,7 @@ impl CustomEnv {
             calldata: Calldata::default(),
             environment_variables: None,
             last_call_result: CallResult::default(),
+            is_running_start_function: false,
         })
     }
 }

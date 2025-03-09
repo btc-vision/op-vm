@@ -16,6 +16,10 @@ impl GetEnvironmentVariablesImport {
     ) -> Result<(), RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
 
+        if env.is_running_start_function {
+            return Err(RuntimeError::new("Cannot get environment variables in start function"));
+        }
+        
         let instance = env
             .instance
             .clone()
