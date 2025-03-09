@@ -10,6 +10,10 @@ impl GetInputsSizeImport {
     pub fn execute(mut context: FunctionEnvMut<CustomEnv>) -> Result<u32, RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
 
+        if env.is_running_start_function {
+            return Err(RuntimeError::new("Cannot get inputs size in start function"));
+        }
+        
         let instance = env
             .instance
             .clone()

@@ -167,7 +167,12 @@ impl WasmerRunner {
             .get_function("start")
             .map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
 
+        let env = imp.env.as_mut(&mut imp.store);
+        env.is_running_start_function = true;
         let result_start = start_function.call(&mut imp.store, &[]);
+        let env = imp.env.as_mut(&mut imp.store);
+        env.is_running_start_function = false;
+        
         if let Err(e) = result_start {
             if e.to_string().contains("unreachable") {
                 return Err(anyhow::anyhow!(
