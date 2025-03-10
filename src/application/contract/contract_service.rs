@@ -30,15 +30,6 @@ impl ContractService {
         Ok(())
     }
 
-    pub fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<ExitData> {
-        let mut runner = self
-            .runner
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
-
-        runner.execute(calldata, self.max_gas)
-    }
-
     pub fn on_deploy(&mut self, calldata: &[u8]) -> anyhow::Result<ExitData> {
         let mut runner = self
             .runner
@@ -48,12 +39,21 @@ impl ContractService {
         runner.on_deploy(calldata, self.max_gas)
     }
 
-    pub fn call(&mut self, function: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+    pub fn execute(&mut self, calldata: &[u8]) -> anyhow::Result<ExitData> {
         let mut runner = self
             .runner
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
-        let response = runner.call(function, params, self.max_gas).map_err(|e| {
+
+        runner.execute(calldata, self.max_gas)
+    }
+
+    pub fn call_export_by_name(&mut self, function_name: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+        let mut runner = self
+            .runner
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
+        let response = runner.call_export_by_name(function_name, params, self.max_gas).map_err(|e| {
             if e.to_string().contains("unreachable") {
                 let gas_used = runner.get_remaining_gas();
                 if gas_used == 0 {

@@ -148,26 +148,6 @@ impl JsContract {
         Ok(())
     }
 
-    pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
-        let time = Local::now();
-        // Lock the contract and call
-        let mut contract = self
-            .contract
-            .lock()
-            .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
-
-        let call_result = contract.execute(&calldata);
-
-        let result = match call_result {
-            Ok(values) => Ok(values),
-            Err(e) => Err(Error::from_reason(format!("{:?}", e))),
-        };
-        
-        log_time_diff(&time, "JsContract::execute");
-        
-        result
-    }
-
     pub fn on_deploy(&self, calldata: Buffer) -> Result<ExitData> {
         // Lock the contract and call
         let mut contract = self
@@ -183,7 +163,27 @@ impl JsContract {
         }
     }
 
-    pub fn call_sync(&self, func_name: &str, int_params: &[i32]) -> Result<Box<[Value]>> {
+    pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
+        let time = Local::now();
+        // Lock the contract and call
+        let mut contract = self
+            .contract
+            .lock()
+            .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
+
+        let call_result = contract.execute(&calldata);
+
+        let result = match call_result {
+            Ok(values) => Ok(values),
+            Err(e) => Err(Error::from_reason(format!("{:?}", e))),
+        };
+
+        log_time_diff(&time, "JsContract::execute");
+
+        result
+    }
+
+    pub fn call_export_by_name(&self, function_name: &str, int_params: &[i32]) -> Result<Box<[Value]>> {
         // Convert the i32s to Wasmer `Value`
         let wasm_params: Vec<Value> = int_params.iter().map(|i| Value::I32(*i)).collect();
 
@@ -193,7 +193,7 @@ impl JsContract {
             .lock()
             .map_err(|_| Error::from_reason("ContractService mutex poisoned"))?;
 
-        let call_result = svc.call(func_name, &wasm_params);
+        let call_result = svc.call_export_by_name(function_name, &wasm_params);
 
         // Return the raw Values for later JS conversion
         match call_result {

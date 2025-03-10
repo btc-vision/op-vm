@@ -4,9 +4,9 @@ use crate::domain::runner::{EnvironmentVariables, ExitData, ExtendedMemoryAccess
 
 pub trait ContractRunner: Send + Sync {
     fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables);
-    fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData>;
     fn on_deploy(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData>;
-    fn call(
+    fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData>;
+    fn call_export_by_name(
         &mut self,
         function: &str,
         params: &[Value],
