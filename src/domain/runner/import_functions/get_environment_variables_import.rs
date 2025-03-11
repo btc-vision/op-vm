@@ -2,7 +2,7 @@ use crate::domain::runner::import_functions::common::DataSliceWriter;
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 100_000;
+const STATIC_GAS_COST: u64 = 100_000;
 
 #[derive(Default)]
 pub struct GetEnvironmentVariablesImport;
@@ -19,7 +19,7 @@ impl GetEnvironmentVariablesImport {
         if env.is_running_start_function {
             return Err(RuntimeError::new("Cannot get environment variables in start function"));
         }
-        
+
         let instance = env
             .instance
             .clone()

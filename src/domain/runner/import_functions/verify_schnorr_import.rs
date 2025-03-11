@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 100_000_000;
+const STATIC_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
 pub struct VerifySchnorrImport;

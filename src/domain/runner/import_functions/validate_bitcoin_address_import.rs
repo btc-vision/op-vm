@@ -3,8 +3,8 @@ use bitcoin::{Address, Network};
 use std::str::FromStr;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 1_000_000;
-pub const GAS_COST_PER_WORD: u64 = 120_000;
+const STATIC_GAS_COST: u64 = 1_000_000;
+const GAS_COST_PER_WORD: u64 = 120_000;
 
 #[derive(Default)]
 pub struct ValidateBitcoinAddressImport;

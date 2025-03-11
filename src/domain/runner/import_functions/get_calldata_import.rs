@@ -2,7 +2,7 @@ use crate::domain::runner::import_functions::common::DataSliceWriter;
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 30_000;
+const STATIC_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
 pub struct GetCalldataImport;
@@ -19,7 +19,7 @@ impl GetCalldataImport {
         if env.is_running_start_function {
             return Err(RuntimeError::new("Cannot get calldata in start function"));
         }
-        
+
         let instance = env
             .instance
             .clone()

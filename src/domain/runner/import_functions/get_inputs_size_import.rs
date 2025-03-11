@@ -1,7 +1,7 @@
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 20_000;
+const STATIC_GAS_COST: u64 = 5_000_000;
 
 #[derive(Default)]
 pub struct GetInputsSizeImport;
@@ -13,7 +13,7 @@ impl GetInputsSizeImport {
         if env.is_running_start_function {
             return Err(RuntimeError::new("Cannot get inputs size in start function"));
         }
-        
+
         let instance = env
             .instance
             .clone()

@@ -3,8 +3,8 @@ use ripemd::Ripemd160;
 use sha2::Digest;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 300_000;
-pub const GAS_COST_PER_WORD: u64 = 60_000;
+const STATIC_GAS_COST: u64 = 300_000;
+const GAS_COST_PER_WORD: u64 = 60_000;
 
 #[derive(Default)]
 pub struct Ripemd160Import;

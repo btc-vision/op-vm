@@ -3,7 +3,7 @@ use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 343_000_000;
+const STATIC_GAS_COST: u64 = 343_000_000;
 
 #[derive(Default)]
 pub struct CallOtherContractImport;

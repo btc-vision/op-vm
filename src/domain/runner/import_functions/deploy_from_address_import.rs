@@ -2,7 +2,7 @@ use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-pub const STATIC_GAS_COST: u64 = 2_500_000_000;
+const STATIC_GAS_COST: u64 = 2_500_000_000;
 
 #[derive(Default)]
 pub struct DeployFromAddressImport;
@@ -15,11 +15,11 @@ impl DeployFromAddressImport {
         result_address_ptr: u32,
     ) -> Result<u32, RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
-        
+
         if env.is_running_start_function {
             return Err(RuntimeError::new("Cannot deploy contract in start function"));
         }
-        
+
         let instance = env
             .instance
             .clone()
