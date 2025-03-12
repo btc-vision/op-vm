@@ -13,7 +13,7 @@ use wasmer_types::SerializeError;
 
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
-use crate::domain::runner::constants::{MAX_GAS_CONSTRUCTOR, MAX_PAGES, STACK_SIZE};
+use crate::domain::runner::constants::{MAX_PAGES, STACK_SIZE};
 use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
     DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
@@ -61,7 +61,7 @@ impl WasmerRunner {
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let store = Self::create_engine()?;
+        let store = Self::create_engine(max_gas)?;
         let module = Module::from_binary(&store, &bytecode)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
 
@@ -159,7 +159,7 @@ impl WasmerRunner {
             env,
         };
 
-        imp.set_remaining_gas(MAX_GAS_CONSTRUCTOR);
+        imp.set_remaining_gas(max_gas);
 
         // Start explicitly
         let start_function = instance
@@ -172,7 +172,7 @@ impl WasmerRunner {
         let result_start = start_function.call(&mut imp.store, &[]);
         let env = imp.env.as_mut(&mut imp.store);
         env.is_running_start_function = false;
-        
+
         if let Err(e) = result_start {
             if e.to_string().contains("unreachable") {
                 return Err(anyhow::anyhow!(
@@ -191,12 +191,6 @@ impl WasmerRunner {
             return Err(anyhow::anyhow!("Failed to call start function: {}", e));
         }
 
-        let remaining_gas = imp.get_remaining_gas();
-        let constructor_used_gas = MAX_GAS_CONSTRUCTOR - remaining_gas;
-
-        let true_max_gas = max_gas - constructor_used_gas;
-        imp.set_remaining_gas(true_max_gas);
-
         Ok(imp)
     }
 
@@ -209,8 +203,8 @@ impl WasmerRunner {
         engine
     }
 
-    fn create_engine() -> anyhow::Result<Store> {
-        let meter = Metering::new(MAX_GAS_CONSTRUCTOR, get_gas_cost);
+    fn create_engine(max_gas: u64) -> anyhow::Result<Store> {
+        let meter = Metering::new(max_gas, get_gas_cost);
         let metering = Arc::new(meter);
 
         let mut compiler = Singlepass::default();
