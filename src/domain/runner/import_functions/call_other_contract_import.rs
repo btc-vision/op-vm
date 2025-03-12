@@ -3,7 +3,7 @@ use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 343_000_000;
+const ADDRESS_ACCESS_GAS_COST: u64 = 26_000_000;
 
 #[derive(Default)]
 pub struct CallOtherContractImport;
@@ -27,14 +27,13 @@ impl CallOtherContractImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        instance.use_gas(&mut store, ADDRESS_ACCESS_GAS_COST);
 
         let gas_used = instance.get_gas_used(&mut store);
 
         let address = instance
             .read_memory(&store, address_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading address from memory"))?;
-
         let calldata = instance
             .read_memory(&store, calldata_ptr as u64, calldata_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading calldata from memory"))?;
@@ -51,31 +50,20 @@ impl CallOtherContractImport {
             .call_other_contract_external
             .execute(&data, &env.runtime)?;
 
-        let call_execution_cost_bytes = result
-            .get(0..8)
-            .ok_or(RuntimeError::new("Invalid buffer"))?;
+        let (call_execution_cost_bytes, result_remainder) = result
+            .split_first_chunk::<8>()
+            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+        let (exit_status_bytes, result_remainder) = result_remainder
+            .split_first_chunk::<4>()
+            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+        let response = result_remainder
+            .get(0..result_remainder.len())
+            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
 
-        let exit_status_bytes = result
-            .get(8..12)
-            .ok_or(RuntimeError::new("Invalid buffer"))?;
-
-        let response = result
-            .get(12..result.len())
-            .ok_or(RuntimeError::new("Invalid buffer"))?;
-
-        let call_execution_cost = u64::from_be_bytes(
-            call_execution_cost_bytes
-                .try_into()
-                .map_err(|_e| RuntimeError::new("Error converting bytes"))?,
-        );
+        let call_execution_cost = u64::from_be_bytes(*call_execution_cost_bytes);
+        let exit_status = u32::from_be_bytes(*exit_status_bytes);
 
         instance.use_gas(&mut store, call_execution_cost);
-
-        let exit_status = u32::from_be_bytes(
-            exit_status_bytes
-                .try_into()
-                .map_err(|_e| RuntimeError::new("Error converting bytes"))?,
-        );
 
         env.last_call_result = CallResult::new(response);
 
