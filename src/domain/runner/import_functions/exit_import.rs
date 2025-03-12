@@ -18,7 +18,12 @@ impl ExitImport {
         })
     }
 
-    fn get_exit_data(context: &mut FunctionEnvMut<CustomEnv>, status: u32, data_ptr: u32, data_length: u32) -> Result<ExitData, RuntimeError> {
+    fn get_exit_data(
+        context: &mut FunctionEnvMut<CustomEnv>,
+        status: u32,
+        data_ptr: u32,
+        data_length: u32,
+    ) -> Result<ExitData, RuntimeError> {
         let (env, store) = context.data_and_store_mut();
 
         let instance = env
