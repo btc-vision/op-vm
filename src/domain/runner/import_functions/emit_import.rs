@@ -1,7 +1,8 @@
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 1_000_000;
+const STATIC_GAS_COST: u64 = 3_750_000;
+const GAS_COST_PER_BYTES: u64 = 80_000;
 
 #[derive(Default)]
 pub struct EmitImport;
@@ -28,6 +29,8 @@ impl EmitImport {
         let data = instance
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
+        
+        instance.use_gas(&mut store, data.len() as u64 * GAS_COST_PER_BYTES);
 
         env.emit_external.execute(&data, &env.runtime)
     }

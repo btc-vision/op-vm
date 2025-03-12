@@ -24,18 +24,18 @@ impl VerifySchnorrImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+
         let public_key_bytes: [u8; 32] = instance
             .read_memory(&store, public_key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading Schnorr public key from memory"))?
             .try_into()
             .map_err(|_e| RuntimeError::new("Error reading Schnorr public key from memory"))?;
-
         let signature_bytes: [u8; 64] = instance
             .read_memory(&store, signature_ptr as u64, 64)
             .map_err(|_e| RuntimeError::new("Error reading Schnorr signature from memory"))?
             .try_into()
             .map_err(|_e| RuntimeError::new("Error reading Schnorr signature from memory"))?;
-
         let message_bytes = instance
             .read_memory(&store, message_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading Schnorr message from memory"))?;
@@ -46,9 +46,7 @@ impl VerifySchnorrImport {
         let signature = schnorr::Signature::from_byte_array(signature_bytes);
         let result = SECP.verify_schnorr(&signature, &message_bytes, &xonly_public_key);
         let result = result.is_ok() as u32;
-
-        instance.use_gas(&mut store, STATIC_GAS_COST);
-
+        
         Ok(result)
     }
 }

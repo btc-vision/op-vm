@@ -17,7 +17,9 @@ impl GetEnvironmentVariablesImport {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
-            return Err(RuntimeError::new("Cannot get environment variables in start function"));
+            return Err(RuntimeError::new(
+                "Cannot get environment variables in start function",
+            ));
         }
 
         let instance = env
@@ -25,13 +27,13 @@ impl GetEnvironmentVariablesImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+
         let environment_variables = &env
             .environment_variables
             .clone()
             .ok_or(RuntimeError::new("Environment not found"))?
             .serialize_for_contract();
-
-        instance.use_gas(&mut store, STATIC_GAS_COST);
 
         DataSliceWriter::write_data_and_padding_to_memory(
             &mut store,

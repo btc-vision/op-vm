@@ -22,20 +22,22 @@ impl Sha256Import {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+
         let data = instance
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
+
+        instance.use_gas(
+            &mut store,
+            ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
+        );
 
         let result = Self::sha256(&data)?;
 
         instance
             .write_memory(&store, result_ptr as u64, &result)
             .map_err(|_e| RuntimeError::new("Error writing result to memory"))?;
-
-        instance.use_gas(
-            &mut store,
-            STATIC_GAS_COST + ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
-        );
 
         Ok(())
     }

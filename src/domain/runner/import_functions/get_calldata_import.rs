@@ -3,6 +3,7 @@ use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 1_000_000;
+const GAS_COST_PER_WORD: u64 = 30_000;
 
 #[derive(Default)]
 pub struct GetCalldataImport;
@@ -24,10 +25,13 @@ impl GetCalldataImport {
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
-
-        instance.use_gas(&mut store, STATIC_GAS_COST);
-
+        
         let calldata = &env.calldata.to_bytes();
+
+        instance.use_gas(
+            &mut store,
+            STATIC_GAS_COST + ((calldata.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
+        );
 
         DataSliceWriter::write_data_and_padding_to_memory(
             &mut store,
