@@ -18,8 +18,8 @@ use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
     DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
     ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
-    GetEnvironmentVariablesImport, GetInputsSizeImport, GetOutputsSizeImport, InputsImport,
-    InstanceWrapper, OutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
+    GetEnvironmentVariablesImport, GetInputsSizeImport, GetOutputsSizeImport, GetInputsImport,
+    InstanceWrapper, GetOutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
     StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
 };
 
@@ -120,9 +120,9 @@ impl WasmerRunner {
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
                 "emit" => import!(EmitImport),
-                "inputs" => import!(InputsImport),
+                "inputs" => import!(GetInputsImport),
                 "inputsSize" => import!(GetInputsSizeImport),
-                "outputs" => import!(OutputsImport),
+                "outputs" => import!(GetOutputsImport),
                 "outputsSize" => import!(GetOutputsSizeImport),
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),

@@ -4,9 +4,9 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 const STATIC_GAS_COST: u64 = 5_000_000;
 
 #[derive(Default)]
-pub struct OutputsImport;
+pub struct GetOutputsImport;
 
-impl OutputsImport {
+impl GetOutputsImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         result_ptr: u32,
