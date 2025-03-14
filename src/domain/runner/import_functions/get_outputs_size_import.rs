@@ -1,7 +1,7 @@
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 5_000_000;
+const STATIC_GAS_COST: u64 = 20_000;
 
 #[derive(Default)]
 pub struct GetOutputsSizeImport;

@@ -2,7 +2,7 @@ use crate::domain::runner::import_functions::common::DataSliceWriter;
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 1_000_000;
+const STATIC_GAS_COST: u64 = 30_000;
 const GAS_COST_PER_WORD: u64 = 30_000;
 
 #[derive(Default)]
@@ -25,7 +25,7 @@ impl GetCalldataImport {
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
-        
+
         let calldata = &env.calldata.to_bytes();
 
         instance.use_gas(

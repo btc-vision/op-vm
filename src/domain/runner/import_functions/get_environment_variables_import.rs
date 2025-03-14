@@ -2,7 +2,7 @@ use crate::domain::runner::import_functions::common::DataSliceWriter;
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 100_000;
+const STATIC_GAS_COST: u64 = 200_000;
 
 #[derive(Default)]
 pub struct GetEnvironmentVariablesImport;
