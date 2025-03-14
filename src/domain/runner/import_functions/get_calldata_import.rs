@@ -3,7 +3,7 @@ use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 30_000;
-const GAS_COST_PER_WORD: u64 = 30_000;
+const GAS_COST_PER_BYTE: u64 = 1_000;
 
 #[derive(Default)]
 pub struct GetCalldataImport;
@@ -30,7 +30,7 @@ impl GetCalldataImport {
 
         instance.use_gas(
             &mut store,
-            STATIC_GAS_COST + ((calldata.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
+            STATIC_GAS_COST + calldata.len() as u64 * GAS_COST_PER_BYTE,
         );
 
         DataSliceWriter::write_data_and_padding_to_memory(

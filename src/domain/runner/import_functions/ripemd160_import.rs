@@ -4,7 +4,7 @@ use sha2::Digest;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 300_000;
-const GAS_COST_PER_WORD: u64 = 60_000;
+const GAS_COST_PER_BYTE: u64 = 1_000;
 
 #[derive(Default)]
 pub struct Ripemd160Import;
@@ -29,10 +29,7 @@ impl Ripemd160Import {
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
-        instance.use_gas(
-            &mut store,
-            ((data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
-        );
+        instance.use_gas(&mut store, data.len() as u64 * GAS_COST_PER_BYTE);
 
         let result = Self::ripemd160(&data)?;
 

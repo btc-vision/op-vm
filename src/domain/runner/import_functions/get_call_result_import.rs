@@ -3,7 +3,7 @@ use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 30_000;
-const GAS_COST_PER_WORD: u64 = 30_000;
+const GAS_COST_PER_BYTE: u64 = 1_000;
 
 #[derive(Default)]
 pub struct GetCallResultImport;
@@ -18,7 +18,9 @@ impl GetCallResultImport {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
-            return Err(RuntimeError::new("Cannot get call result in start function"));
+            return Err(RuntimeError::new(
+                "Cannot get call result in start function",
+            ));
         }
 
         let instance = env
@@ -30,7 +32,7 @@ impl GetCallResultImport {
 
         instance.use_gas(
             &mut store,
-            STATIC_GAS_COST + ((result_data.len() + 31) / 32) as u64 * GAS_COST_PER_WORD,
+            STATIC_GAS_COST + result_data.len() as u64 * GAS_COST_PER_BYTE,
         );
 
         DataSliceWriter::write_data_and_padding_to_memory(

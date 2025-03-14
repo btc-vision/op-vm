@@ -4,7 +4,7 @@ use std::str::FromStr;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 1_000_000;
-const GAS_COST_PER_WORD: u64 = 120_000;
+const GAS_COST_PER_BYTE: u64 = 1_000;
 
 #[derive(Default)]
 pub struct ValidateBitcoinAddressImport;
@@ -29,10 +29,7 @@ impl ValidateBitcoinAddressImport {
             .read_memory(&store, address_ptr as u64, address_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        instance.use_gas(
-            &mut store,
-            ((address_length as u64 + 31) / 32) * GAS_COST_PER_WORD,
-        );
+        instance.use_gas(&mut store, address_length as u64 * GAS_COST_PER_BYTE);
 
         let address_str = String::from_utf8(address_bytes)
             .map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;
