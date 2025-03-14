@@ -1,7 +1,8 @@
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 5_000_000;
+const STATIC_GAS_COST: u64 = 30_000;
+const GAS_COST_PER_BYTE: u64 = 1_000;
 
 #[derive(Default)]
 pub struct GetOutputsImport;
@@ -26,9 +27,11 @@ impl GetOutputsImport {
 
         let result = &env.outputs_external.execute(&env.runtime)?;
 
+        instance.use_gas(&mut store, result.len() as u64 * GAS_COST_PER_BYTE);
+
         instance
             .write_memory(&store, result_ptr as u64, result)
-            .map_err(|_e| RuntimeError::new("Error writing call result to memory"))?;
+            .map_err(|_e| RuntimeError::new("Error writing outputs to memory"))?;
 
         Ok(())
     }
