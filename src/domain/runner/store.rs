@@ -24,7 +24,7 @@ pub struct CacheResponse {
 #[derive(Debug, Clone)]
 pub struct CacheValue {
     original: StorageValue,
-    current: StorageValue,
+    pub current: StorageValue,
 }
 
 impl CacheValue {
