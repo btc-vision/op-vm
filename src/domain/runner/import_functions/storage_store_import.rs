@@ -14,7 +14,9 @@ impl StorageStoreImport {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
-            return Err(RuntimeError::new("Cannot save to storage in start function"));
+            return Err(RuntimeError::new(
+                "Cannot save to storage in start function",
+            ));
         }
 
         let instance = env
@@ -33,24 +35,12 @@ impl StorageStoreImport {
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
 
-        let data = [key.as_slice(), value.as_slice()].concat();
-
-        let pointer = data
-            .get(0..32)
-            .ok_or(RuntimeError::new("Invalid buffer"))?
-            .to_vec();
-        let value = data
-            .get(32..64)
-            .ok_or(RuntimeError::new("Invalid buffer"))?
-            .to_vec();
-
         let result = cache.set(
-            pointer
-                .try_into()
+            key.try_into()
                 .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
             value
                 .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
+                .map_err(|e| RuntimeError::new(format!("Cannot convert the data: {:?}", e)))?,
             |key| {
                 Ok(env
                     .storage_load_external
@@ -62,10 +52,7 @@ impl StorageStoreImport {
             },
             |key, value| {
                 env.storage_store_external
-                    .execute(
-                        &key.iter().chain(value.iter()).cloned().collect::<Vec<u8>>(),
-                        &env.runtime,
-                    )
+                    .execute(&[key, value].concat(), &env.runtime)
                     .map_err(|e| {
                         RuntimeError::new(format!("Cannot map result to data: {:?}", e))
                     })?;
