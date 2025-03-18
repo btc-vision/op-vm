@@ -7,6 +7,7 @@ use crate::interfaces::{
     DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
     OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
@@ -28,6 +29,7 @@ pub struct CustomEnv {
     pub environment_variables: Option<EnvironmentVariables>,
     pub last_call_result: CallResult,
     pub is_running_start_function: bool,
+    pub transient_storage: Mutex<BTreeMap<Vec<u8>, super::StorageValue>>,
 }
 
 impl CustomEnv {
@@ -61,6 +63,7 @@ impl CustomEnv {
             environment_variables: None,
             last_call_result: CallResult::default(),
             is_running_start_function: false,
+            transient_storage: Mutex::new(BTreeMap::new()),
         })
     }
 }
