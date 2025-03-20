@@ -15,12 +15,13 @@ use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_PAGES, STACK_SIZE};
 use crate::domain::runner::{
-    CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
-    DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
-    ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
-    GetEnvironmentVariablesImport, GetInputsSizeImport, GetOutputsSizeImport, GetInputsImport,
-    InstanceWrapper, GetOutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
-    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
+    AddressTypeImport, BlockHashImport, CallOtherContractImport, Calldata, ConsoleLogImport,
+    ContractRunner, CustomEnv, DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData,
+    ExitImport, ExitResult, ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
+    GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport, GetOutputsImport,
+    GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import, StorageLoadImport,
+    StorageStoreImport, TransientStorageLoadImport, TransientStorageStoreImport,
+    ValidateBitcoinAddressImport, VerifySchnorrImport,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
@@ -116,6 +117,8 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
+                "tload" => import!(TransientStorageLoadImport),
+                "tstore" => import!(TransientStorageStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -126,6 +129,8 @@ impl WasmerRunner {
                 "outputsSize" => import!(GetOutputsSizeImport),
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),
+                "address_type" => import!(AddressTypeImport),
+                "block_hash" => import!(BlockHashImport),
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
                 "verifySchnorrSignature" => import!(VerifySchnorrImport),
             },

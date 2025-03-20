@@ -1,11 +1,12 @@
 use crate::domain::runner::CustomEnv;
-use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 #[derive(Default)]
-pub struct StorageLoadImport;
+pub struct TransientStorageLoadImport;
 
-impl StorageLoadImport {
+const TLOAD_GAS_COST: u64 = 1_000_000;
+
+impl TransientStorageLoadImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         key_ptr: u32,
@@ -28,26 +29,14 @@ impl StorageLoadImport {
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
+        instance.use_gas(&mut store, TLOAD_GAS_COST);
         // Get method
-        let result = env.store_cache.get(
-            &data
-                .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-            |key| {
-                Ok(env
-                    .storage_load_external
-                    .execute(&key, &env.runtime)?
-                    .try_into()
-                    .map_err(|e| {
-                        RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-                    })?)
-            },
-        )?;
-
-        instance.use_gas(&mut store, result.gas_cost);
+        let result = env
+            .transient_storage
+            .get(data.as_slice().try_into().unwrap());
 
         instance
-            .write_memory(&store, result_ptr as u64, &result.value)
+            .write_memory(&store, result_ptr as u64, &result)
             .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
 
         Ok(())

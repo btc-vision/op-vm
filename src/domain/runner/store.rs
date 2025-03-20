@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use wasmer::RuntimeError;
 
 pub const LOAD_COLD_GAS_COST: u64 = 21_000_000;
@@ -11,8 +11,10 @@ pub const STORE_REFUND_GAS_COST: u64 = 48_000_000;
 
 pub const STORAGE_POINTER_SIZE: usize = 32;
 pub const STORAGE_VALUE_SIZE: usize = 32;
+
 pub type StoragePointer = [u8; STORAGE_POINTER_SIZE];
 pub type StorageValue = [u8; STORAGE_VALUE_SIZE];
+
 pub const STORAGE_VALUE_ZERO: [u8; STORAGE_VALUE_SIZE] = [0; STORAGE_VALUE_SIZE];
 
 pub struct CacheResponse {
@@ -49,7 +51,7 @@ impl CacheResponse {
 
 #[derive(Debug, Clone)]
 pub struct Cache {
-    values: HashMap<[u8; STORAGE_POINTER_SIZE], CacheValue>,
+    values: BTreeMap<[u8; STORAGE_POINTER_SIZE], CacheValue>,
     reads: usize,
     writes: usize,
 }
@@ -57,7 +59,7 @@ pub struct Cache {
 impl Cache {
     pub fn new() -> Self {
         Self {
-            values: HashMap::new(),
+            values: BTreeMap::new(),
             reads: 0,
             writes: 0,
         }
@@ -172,11 +174,29 @@ impl Cache {
     }
 }
 
+pub struct TStore(BTreeMap<StoragePointer, StorageValue>);
+impl TStore {
+    pub fn new() -> Self {
+        Self(BTreeMap::new())
+    }
+
+    pub fn get(&self, key: &StoragePointer) -> StorageValue {
+        self.0
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| STORAGE_VALUE_ZERO)
+    }
+
+    pub fn set(&mut self, key: StoragePointer, value: StorageValue) {
+        self.0.insert(key, value);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Cache, CacheValue, StoragePointer, StorageValue};
     use std::{
-        collections::HashMap,
+        collections::BTreeMap,
         sync::{Arc, Mutex},
     };
 
@@ -189,22 +209,23 @@ mod tests {
         pointer: Option<StoragePointer>,
         original_value: Option<StorageValue>,
         current_value: Option<StorageValue>,
-    ) -> (Cache, Arc<Mutex<HashMap<StoragePointer, StorageValue>>>) {
+    ) -> (Cache, Arc<Mutex<BTreeMap<StoragePointer, StorageValue>>>) {
         let pointer = pointer.unwrap_or([1; super::STORAGE_POINTER_SIZE]);
-        let store: Arc<Mutex<HashMap<StoragePointer, StorageValue>>> = if original_value.is_some() {
-            Arc::new(Mutex::new(HashMap::from_iter([(
+        let store: Arc<Mutex<BTreeMap<StoragePointer, StorageValue>>> = if original_value.is_some()
+        {
+            Arc::new(Mutex::new(BTreeMap::from_iter([(
                 pointer,
                 original_value.unwrap(),
             )])))
         } else {
-            Arc::new(Mutex::new(HashMap::new()))
+            Arc::new(Mutex::new(BTreeMap::new()))
         };
 
         let cache = if current_value.is_some() {
             Cache {
                 reads: 0,
                 writes: 0,
-                values: HashMap::from_iter([(
+                values: BTreeMap::from_iter([(
                     pointer,
                     CacheValue {
                         original: original_value.unwrap_or(super::STORAGE_VALUE_ZERO),
