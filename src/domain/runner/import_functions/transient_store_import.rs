@@ -24,9 +24,6 @@ impl TransientStorageStoreImport {
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
-        let mut tstore = env.transient_storage.lock().map_err(|e| {
-            RuntimeError::new(format!("Error claiming transient store cache: {}", e))
-        })?;
 
         let key = instance
             .read_memory(&store, key_ptr as u64, 32)
@@ -37,9 +34,12 @@ impl TransientStorageStoreImport {
 
         instance.use_gas(&mut store, TSTORE_GAS_COST);
 
-        tstore.insert(
-            key,
+        env.transient_storage.set(
+            key.as_slice()
+                .try_into()
+                .map_err(|_| RuntimeError::new(&format!("Cannot convert the key")))?,
             value
+                .as_slice()
                 .try_into()
                 .map_err(|_| RuntimeError::new(&format!("Cannot convert the data")))?,
         );

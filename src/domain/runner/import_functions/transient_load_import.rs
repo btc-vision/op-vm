@@ -29,22 +29,15 @@ impl TransientStorageLoadImport {
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        let tstore = env
-            .transient_storage
-            .lock()
-            .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
-
         instance.use_gas(&mut store, TLOAD_GAS_COST);
         // Get method
-        if let Some(result) = tstore.get(&data) {
-            instance
-                .write_memory(&store, result_ptr as u64, result)
-                .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
-        } else {
-            instance
-                .write_memory(&store, result_ptr as u64, &[0; 32])
-                .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
-        }
+        let result = env
+            .transient_storage
+            .get(data.as_slice().try_into().unwrap());
+
+        instance
+            .write_memory(&store, result_ptr as u64, &result)
+            .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
 
         Ok(())
     }

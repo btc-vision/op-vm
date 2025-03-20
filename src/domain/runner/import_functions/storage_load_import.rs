@@ -14,9 +14,11 @@ impl StorageLoadImport {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
-            return Err(RuntimeError::new("Cannot load from storage in start function"));
+            return Err(RuntimeError::new(
+                "Cannot load from storage in start function",
+            ));
         }
-        
+
         let instance = env
             .instance
             .clone()
@@ -26,13 +28,8 @@ impl StorageLoadImport {
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        let mut cache = env
-            .store_cache
-            .lock()
-            .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
-
         // Get method
-        let result = cache.get(
+        let result = env.store_cache.get(
             &data
                 .try_into()
                 .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,

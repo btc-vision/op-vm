@@ -3,13 +3,15 @@ use crate::domain::runner::{
     BitcoinNetwork, Cache, CallResult, Calldata, ExitData, InstanceWrapper,
 };
 use crate::interfaces::{
-    CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    DeployFromAddressExternalFunction, EmitExternalFunction, InputsExternalFunction,
-    OutputsExternalFunction, StorageLoadExternalFunction, StorageStoreExternalFunction,
+    AddressTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
+    ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
+    InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
+    StorageStoreExternalFunction,
 };
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
+
+use super::TStore;
 
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
@@ -23,13 +25,15 @@ pub struct CustomEnv {
     pub emit_external: EmitExternalFunction,
     pub inputs_external: InputsExternalFunction,
     pub outputs_external: OutputsExternalFunction,
+    pub address_type_external: AddressTypeExternalFunction,
+    pub block_hash_external: BlockHashExternalFunction,
     pub runtime: Arc<Runtime>,
-    pub store_cache: Mutex<Cache>,
+    pub store_cache: Cache,
     pub calldata: Calldata,
     pub environment_variables: Option<EnvironmentVariables>,
     pub last_call_result: CallResult,
     pub is_running_start_function: bool,
-    pub transient_storage: Mutex<BTreeMap<Vec<u8>, super::StorageValue>>,
+    pub transient_storage: TStore,
 }
 
 impl CustomEnv {
@@ -43,6 +47,8 @@ impl CustomEnv {
         emit_external: EmitExternalFunction,
         inputs_external: InputsExternalFunction,
         outputs_external: OutputsExternalFunction,
+        address_type_external: AddressTypeExternalFunction,
+        block_hash_external: BlockHashExternalFunction,
         runtime: Arc<Runtime>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -57,13 +63,15 @@ impl CustomEnv {
             emit_external,
             inputs_external,
             outputs_external,
+            address_type_external,
+            block_hash_external,
             runtime,
-            store_cache: Mutex::new(Cache::new()),
+            store_cache: Cache::new(),
             calldata: Calldata::default(),
             environment_variables: None,
             last_call_result: CallResult::default(),
             is_running_start_function: false,
-            transient_storage: Mutex::new(BTreeMap::new()),
+            transient_storage: TStore::new(),
         })
     }
 }

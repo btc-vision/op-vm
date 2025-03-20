@@ -23,10 +23,6 @@ impl StorageStoreImport {
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
-        let mut cache = env
-            .store_cache
-            .lock()
-            .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
 
         let key = instance
             .read_memory(&store, key_ptr as u64, 32)
@@ -35,7 +31,7 @@ impl StorageStoreImport {
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
 
-        let result = cache.set(
+        let result = env.store_cache.set(
             key.try_into()
                 .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
             value
