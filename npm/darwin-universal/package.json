@@ -1,6 +1,6 @@
 {
   "name": "@btc-vision/op-vm-darwin-universal",
-  "version": "0.3.5",
+  "version": "0.3.4",
   "os": [
     "darwin"
   ],
