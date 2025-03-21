@@ -47,7 +47,7 @@ The project is organized into the following directories:
 
 ### Prerequisites
 
-- **Node.js**: Version 16 or higher is required.
+- **Node.js**: Version 22 or higher is required.
 - **Rust**: You must have Rust installed to compile and develop this project.
 - **wasm-pack**: To work with Wasmer, ensure that `wasm-pack` is installed.
 - **@napi-rs/cli**: This is a required dependency for managing N-API bindings.
