@@ -231,6 +231,7 @@ impl JsContract {
                 Error::from_reason("Runner mutex is already locked".to_string())
             }
         })?;
+
         let serialized = runner
             .serialize()
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
