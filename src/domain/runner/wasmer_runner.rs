@@ -18,9 +18,9 @@ use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
     DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
     ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
-    GetEnvironmentVariablesImport, GetInputsSizeImport, GetOutputsSizeImport, GetInputsImport,
-    InstanceWrapper, GetOutputsImport, Ripemd160Import, Sha256Import, StorageLoadImport,
-    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport,
+    GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport, GetOutputsImport,
+    GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import, StorageLoadImport,
+    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_CONSTRUCTOR,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
@@ -61,7 +61,7 @@ impl WasmerRunner {
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let store = Self::create_engine(max_gas)?;
+        let store = Self::create_engine(MAX_GAS_CONSTRUCTOR)?;
         let module = Module::from_binary(&store, &bytecode)?;
         let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
 
@@ -169,6 +169,7 @@ impl WasmerRunner {
 
         let env = imp.env.as_mut(&mut imp.store);
         env.is_running_start_function = true;
+
         let result_start = start_function.call(&mut imp.store, &[]);
         let env = imp.env.as_mut(&mut imp.store);
         env.is_running_start_function = false;
