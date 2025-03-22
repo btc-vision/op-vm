@@ -487,15 +487,15 @@ jobs:
         id: npm_version
         uses: martinbeentjes/npm-get-version-action@v1.3.1
       - name: Publish
-        #if [ "${{ steps.rust_version.outputs.app_version }}" != "${{ steps.npm_version.outputs.current-version }}" ];
-        #then
-        #  >&2 echo "cargo.toml version does not match package.json version"
-        #  exit 1
-        #fi
         run: |
           npm config set provenance true
           if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
           then
+            #if [ "${{ steps.rust_version.outputs.app_version }}" != "${{ steps.npm_version.outputs.current-version }}" ];
+            #then
+            #  >&2 echo "cargo.toml version does not match package.json version"
+            #  exit 1
+            #fi
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
             npm publish --access public
           else
