@@ -22,6 +22,11 @@ impl ExitData {
 
 impl Display for ExitData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "status: {}, data: {}", self.status, self.data.to_lower_hex_string())
+        write!(
+            f,
+            "status: {}, data: {}",
+            self.status,
+            self.data.to_lower_hex_string()
+        )
     }
 }

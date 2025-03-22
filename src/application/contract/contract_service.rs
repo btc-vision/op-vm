@@ -48,29 +48,35 @@ impl ContractService {
         runner.execute(calldata, self.max_gas)
     }
 
-    pub fn call_export_by_name(&mut self, function_name: &str, params: &[Value]) -> anyhow::Result<Box<[Value]>> {
+    pub fn call_export_by_name(
+        &mut self,
+        function_name: &str,
+        params: &[Value],
+    ) -> anyhow::Result<Box<[Value]>> {
         let mut runner = self
             .runner
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock runner"))?;
-        let response = runner.call_export_by_name(function_name, params, self.max_gas).map_err(|e| {
-            if e.to_string().contains("unreachable") {
-                let gas_used = runner.get_remaining_gas();
-                if gas_used == 0 {
-                    anyhow::anyhow!("out of gas (consumed: {})", self.max_gas)
-                } else {
-                    let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
-
-                    if out_of_memory {
-                        anyhow::anyhow!("out of memory")
+        let response = runner
+            .call_export_by_name(function_name, params, self.max_gas)
+            .map_err(|e| {
+                if e.to_string().contains("unreachable") {
+                    let gas_used = runner.get_remaining_gas();
+                    if gas_used == 0 {
+                        anyhow::anyhow!("out of gas (consumed: {})", self.max_gas)
                     } else {
-                        anyhow::anyhow!(e)
+                        let out_of_memory = runner.is_out_of_memory().unwrap_or(false);
+
+                        if out_of_memory {
+                            anyhow::anyhow!("out of memory")
+                        } else {
+                            anyhow::anyhow!(e)
+                        }
                     }
+                } else {
+                    anyhow::anyhow!(e)
                 }
-            } else {
-                anyhow::anyhow!(e)
-            }
-        });
+            });
 
         response
     }

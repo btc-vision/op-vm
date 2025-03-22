@@ -22,7 +22,14 @@ impl DataSliceWriter {
             length,
             result_ptr,
         )?;
-        Self::write_data_padding_to_memory(store, &instance, result_data, offset, length, result_ptr)
+        Self::write_data_padding_to_memory(
+            store,
+            &instance,
+            result_data,
+            offset,
+            length,
+            result_ptr,
+        )
     }
 
     fn write_data_slice_to_memory(

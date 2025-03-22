@@ -29,7 +29,7 @@ impl DeployFromAddressImport {
             .ok_or(RuntimeError::new("Instance not found"))?;
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
-        
+
         let origin_address = instance
             .read_memory(&store, origin_address_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading address from memory"))?;
@@ -37,17 +37,20 @@ impl DeployFromAddressImport {
             .read_memory(&store, salt_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading salt from memory"))?;
         let data = [origin_address.as_slice(), salt.as_slice()].concat();
-        
+
         let result = &env
             .deploy_from_address_external
             .execute(&data, &env.runtime)?;
 
-        let (result_address, result_remainder) = result.split_first_chunk::<32>().ok_or(RuntimeError::new(
-            "Invalid data received for 'Deploy from address'",
-        ))?;
-        let bytecode_length_bytes = result_remainder.first_chunk::<4>().ok_or(RuntimeError::new(
-            "Invalid data received for 'Deploy from address'",
-        ))?;
+        let (result_address, result_remainder) = result.split_first_chunk::<32>().ok_or(
+            RuntimeError::new("Invalid data received for 'Deploy from address'"),
+        )?;
+        let bytecode_length_bytes =
+            result_remainder
+                .first_chunk::<4>()
+                .ok_or(RuntimeError::new(
+                    "Invalid data received for 'Deploy from address'",
+                ))?;
 
         let bytecode_length = u32::from_be_bytes(*bytecode_length_bytes);
 

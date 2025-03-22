@@ -183,7 +183,11 @@ impl JsContract {
         result
     }
 
-    pub fn call_export_by_name(&self, function_name: &str, int_params: &[i32]) -> Result<Box<[Value]>> {
+    pub fn call_export_by_name(
+        &self,
+        function_name: &str,
+        int_params: &[i32],
+    ) -> Result<Box<[Value]>> {
         // Convert the i32s to Wasmer `Value`
         let wasm_params: Vec<Value> = int_params.iter().map(|i| Value::I32(*i)).collect();
 

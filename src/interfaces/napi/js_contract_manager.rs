@@ -417,10 +417,10 @@ impl ContractManager {
                 // The heavy-lifting synchronous call
                 arc_for_bg.execute(calldata_for_bg)
             })
-                .await
-                .map_err(|join_err| {
-                    Error::from_reason(format!("Tokio join error: {:?}", join_err))
-                })??;
+            .await
+            .map_err(|join_err| {
+                Error::from_reason(format!("Tokio join error: {:?}", join_err))
+            })??;
 
             // Return the result to the next closure
             Ok(exit_data)
@@ -480,10 +480,10 @@ impl ContractManager {
                 // The heavy-lifting synchronous call
                 arc_for_bg.call_export_by_name(&function_name_for_bg, &int_params)
             })
-                .await
-                .map_err(|join_err| {
-                    Error::from_reason(format!("Tokio join error: {:?}", join_err))
-                })??;
+            .await
+            .map_err(|join_err| {
+                Error::from_reason(format!("Tokio join error: {:?}", join_err))
+            })??;
 
             // Return the raw values to the next closure
             Ok(values_boxed)

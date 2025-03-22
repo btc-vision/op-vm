@@ -6,7 +6,7 @@ use wasmer::RuntimeError;
 #[derive(Clone, Debug)]
 pub enum ExitResult {
     Ok(ExitData),
-    Err(RuntimeError)
+    Err(RuntimeError),
 }
 
 impl Error for ExitResult {}

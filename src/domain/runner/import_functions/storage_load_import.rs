@@ -14,9 +14,11 @@ impl StorageLoadImport {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
-            return Err(RuntimeError::new("Cannot load from storage in start function"));
+            return Err(RuntimeError::new(
+                "Cannot load from storage in start function",
+            ));
         }
-        
+
         let instance = env
             .instance
             .clone()

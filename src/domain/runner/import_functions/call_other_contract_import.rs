@@ -49,18 +49,24 @@ impl CallOtherContractImport {
             .call_other_contract_external
             .execute(&data, &env.runtime)?;
 
-        let (is_address_warm_byte, result_remainder) = result
-            .split_first()
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+        let (is_address_warm_byte, result_remainder) = result.split_first().ok_or(
+            RuntimeError::new("Invalid data received for 'Call contract'"),
+        )?;
         let (call_execution_cost_bytes, result_remainder) = result_remainder
             .split_first_chunk::<8>()
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+            .ok_or(RuntimeError::new(
+                "Invalid data received for 'Call contract'",
+            ))?;
         let (exit_status_bytes, result_remainder) = result_remainder
             .split_first_chunk::<4>()
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+            .ok_or(RuntimeError::new(
+                "Invalid data received for 'Call contract'",
+            ))?;
         let response = result_remainder
             .get(0..result_remainder.len())
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+            .ok_or(RuntimeError::new(
+                "Invalid data received for 'Call contract'",
+            ))?;
 
         let is_address_warm = *is_address_warm_byte != 0;
         let call_execution_cost = u64::from_be_bytes(*call_execution_cost_bytes);

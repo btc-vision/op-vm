@@ -46,7 +46,7 @@ impl VerifySchnorrImport {
         let signature = schnorr::Signature::from_byte_array(signature_bytes);
         let result = SECP.verify_schnorr(&signature, &message_bytes, &xonly_public_key);
         let result = result.is_ok() as u32;
-        
+
         Ok(result)
     }
 }
