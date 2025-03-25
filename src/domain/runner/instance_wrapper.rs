@@ -97,10 +97,12 @@ impl InstanceWrapper {
     }
 
     pub fn get_gas_used(&self, store: &mut impl AsStoreMut) -> u64 {
-        let remaining_points = get_remaining_points(store, &self.instance);
-        match remaining_points {
-            MeteringPoints::Remaining(remaining) => self.max_gas - remaining,
-            MeteringPoints::Exhausted => self.max_gas,
+        let remaining_points = self.get_remaining_gas(store);
+
+        if remaining_points == 0 {
+            self.max_gas
+        } else {
+            self.max_gas - remaining_points
         }
     }
 
@@ -109,7 +111,6 @@ impl InstanceWrapper {
     }
 
     fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
-        // TODO: Restore error state?
         instance
             .exports
             .get_memory("memory")

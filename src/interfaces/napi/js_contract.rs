@@ -32,19 +32,6 @@ pub struct JsContract {
 }
 
 impl JsContract {
-    pub fn validate_bytecode(bytecode: Buffer, max_gas: BigInt) -> Result<bool> {
-        let time = Local::now();
-        let bytecode_vec = bytecode.to_vec();
-        let max_gas = max_gas.get_u64().1;
-
-        WasmerRunner::validate_bytecode(&bytecode_vec, max_gas)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
-        log_time_diff(&time, "JsContract::validate");
-
-        Ok(true)
-    }
-
     pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
         catch_unwind(|| {
             let time = Local::now();
@@ -95,6 +82,7 @@ impl JsContract {
             if let Some(bytecode) = params.bytecode {
                 runner = WasmerRunner::from_bytecode(
                     &bytecode,
+                    params.used_gas,
                     params.max_gas,
                     custom_env,
                     params.is_debug_mode,
@@ -104,6 +92,7 @@ impl JsContract {
                 unsafe {
                     runner = WasmerRunner::from_serialized(
                         serialized,
+                        params.used_gas,
                         params.max_gas,
                         custom_env,
                         params.is_debug_mode,
@@ -116,10 +105,12 @@ impl JsContract {
 
             let contract = JsContract::from_runner(
                 runner,
+                params.used_gas,
                 params.max_gas,
                 runtime.clone(),
                 manager.runtime_pool.clone(),
-            )?; //, storage_load_tsfn, storage_store_tsfn, call_other_contract_tsfn, deploy_from_address_tsfn, console_log_tsfn
+            )?;
+
             log_time_diff(&time, "JsContract::from");
 
             Ok(contract)
@@ -208,6 +199,7 @@ impl JsContract {
 
     fn from_runner(
         runner: WasmerRunner,
+        used_gas: u64,
         max_gas: u64,
         runtime: Arc<Runtime>,
         runtime_pool: Arc<RuntimePool>,
@@ -215,7 +207,7 @@ impl JsContract {
         let time = Local::now();
 
         let runner = Arc::new(Mutex::new(runner));
-        let contract = ContractService::new(max_gas, runner.clone());
+        let contract = ContractService::new(used_gas, max_gas, runner.clone());
 
         log_time_diff(&time, "JsContract::from_runner");
 
@@ -300,55 +292,6 @@ impl JsContract {
         };
 
         Ok(BigInt::from(gas))
-    }
-
-    pub fn set_used_gas(&self, gas: BigInt) -> Result<()> {
-        let gas = gas.get_u64().1;
-        let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
-        contract.set_used_gas(gas);
-
-        Ok(())
-    }
-
-    pub fn get_remaining_gas(&self) -> Result<BigInt> {
-        let contract = self.contract.clone();
-        let gas = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
-            contract.get_remaining_gas()
-        };
-
-        Ok(BigInt::from(gas))
-    }
-
-    pub fn set_remaining_gas(&self, gas: BigInt) -> Result<()> {
-        let gas = gas.get_u64().1;
-        let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
-        contract.set_remaining_gas(gas);
-
-        Ok(())
     }
 
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
