@@ -28,7 +28,7 @@ impl CallOtherContractImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        let gas_used = instance.get_gas_used(&mut store);
+        let gas_used = instance.get_used_gas(&mut store);
 
         let address = instance
             .read_memory(&store, address_ptr as u64, 32)

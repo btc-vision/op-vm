@@ -136,16 +136,19 @@ impl ContractManager {
         reserved_id: BigInt,
         address: String,
         bytecode: Option<Buffer>,
+        used_gas: BigInt,
         max_gas: BigInt,
         network: BitcoinNetworkRequest,
         is_debug_mode: bool,
     ) -> Result<(), Error> {
+        let used_gas = used_gas.get_u64().1;
         let max_gas = max_gas.get_u64().1;
         let id = reserved_id.get_u64().1;
 
         let mut params = JsContractParameter {
             bytecode: None,
             serialized: None,
+            used_gas: used_gas,
             max_gas,
             network,
             is_debug_mode,
@@ -173,11 +176,6 @@ impl ContractManager {
         self.add_contract(id, contract_arc)?;
 
         Ok(())
-    }
-
-    #[napi]
-    pub fn validate_bytecode(&self, bytecode: Buffer, max_gas: BigInt) -> Result<bool, Error> {
-        JsContract::validate_bytecode(bytecode, max_gas)
     }
 
     #[napi]
@@ -257,39 +255,6 @@ impl ContractManager {
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.get_exit_data()
-    }
-
-    #[napi]
-    pub fn set_remaining_gas(&self, id: BigInt, gas: BigInt) -> Result<(), Error> {
-        let id = id.get_u64().1;
-
-        let contract = self
-            .contracts
-            .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.set_remaining_gas(gas)
-    }
-
-    #[napi]
-    pub fn get_remaining_gas(&self, id: BigInt) -> Result<BigInt, Error> {
-        let id = id.get_u64().1;
-
-        let contract = self
-            .contracts
-            .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.get_remaining_gas()
-    }
-
-    #[napi]
-    pub fn set_used_gas(&self, id: BigInt, gas: BigInt) -> Result<(), Error> {
-        let id = id.get_u64().1;
-
-        let contract = self
-            .contracts
-            .get(&id)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.set_used_gas(gas)
     }
 
     #[napi]
@@ -389,6 +354,11 @@ impl ContractManager {
                     env.create_buffer_with_data(exit_data.data.to_vec())?
                         .into_raw(),
                 )?;
+                js_object.set_named_property(
+                    "gasUsed",
+                    env.create_bigint_from_u64(exit_data.gas_used),
+                )?;
+
                 Ok(js_object)
             },
         )?;
@@ -438,6 +408,10 @@ impl ContractManager {
                     "data",
                     env.create_buffer_with_data(exit_data.data.to_vec())?
                         .into_raw(),
+                )?;
+                js_object.set_named_property(
+                    "gasUsed",
+                    env.create_bigint_from_u64(exit_data.gas_used),
                 )?;
                 Ok(js_object)
             },
