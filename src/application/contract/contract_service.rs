@@ -13,10 +13,7 @@ pub struct ContractService {
 
 impl ContractService {
     pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
-        Self {
-            max_gas,
-            runner,
-        }
+        Self { max_gas, runner }
     }
 
     pub fn set_environment_variables(
