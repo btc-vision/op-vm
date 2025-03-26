@@ -317,7 +317,7 @@ impl ContractRunner for WasmerRunner {
             .ok_or(RuntimeError::new("Invalid value returned from contract"))?
             as u32;
 
-        let gas_used = self.get_gas_used();
+        let gas_used = self.get_used_gas();
         let env = self.env.as_mut(&mut self.store);
 
         env.exit_data = ExitData::new(status, gas_used, &[]);
@@ -357,7 +357,7 @@ impl ContractRunner for WasmerRunner {
             .ok_or(RuntimeError::new("Invalid value returned from contract"))?
             as u32;
 
-        let gas_used = self.get_gas_used();
+        let gas_used = self.get_used_gas();
         let env = self.env.as_mut(&mut self.store);
         env.exit_data = ExitData::new(status, gas_used, &[]);
 
@@ -388,7 +388,7 @@ impl ContractRunner for WasmerRunner {
         self.instance.get_remaining_gas(&mut self.store)
     }
 
-    fn get_gas_used(&mut self) -> u64 {
+    fn get_used_gas(&mut self) -> u64 {
         self.instance.get_used_gas(&mut self.store)
     }
 

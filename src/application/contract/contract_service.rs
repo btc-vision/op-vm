@@ -88,7 +88,7 @@ impl ContractService {
 
     pub fn get_used_gas(&mut self) -> u64 {
         let mut runner = self.runner.lock().unwrap();
-        runner.get_gas_used()
+        runner.get_used_gas()
     }
 
     pub fn use_gas(&mut self, gas: u64) {
