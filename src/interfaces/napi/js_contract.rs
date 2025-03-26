@@ -105,7 +105,6 @@ impl JsContract {
 
             let contract = JsContract::from_runner(
                 runner,
-                params.used_gas,
                 params.max_gas,
                 runtime.clone(),
                 manager.runtime_pool.clone(),
@@ -199,7 +198,6 @@ impl JsContract {
 
     fn from_runner(
         runner: WasmerRunner,
-        used_gas: u64,
         max_gas: u64,
         runtime: Arc<Runtime>,
         runtime_pool: Arc<RuntimePool>,
@@ -207,7 +205,7 @@ impl JsContract {
         let time = Local::now();
 
         let runner = Arc::new(Mutex::new(runner));
-        let contract = ContractService::new(used_gas, max_gas, runner.clone());
+        let contract = ContractService::new(max_gas, runner.clone());
 
         log_time_diff(&time, "JsContract::from_runner");
 

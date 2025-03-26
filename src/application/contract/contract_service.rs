@@ -8,14 +8,12 @@ use crate::domain::runner::{
 
 pub struct ContractService {
     max_gas: u64,
-    used_gas: u64,
     runner: Arc<Mutex<dyn ContractRunner>>,
 }
 
 impl ContractService {
-    pub fn new(used_gas: u64, max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
+    pub fn new(max_gas: u64, runner: Arc<Mutex<dyn ContractRunner>>) -> Self {
         Self {
-            used_gas,
             max_gas,
             runner,
         }
@@ -132,8 +130,7 @@ impl ContractService {
         }
 
         let max_gas = self.max_gas;
-        let already_used_gas = self.used_gas;
         let gas_used = max_gas - remaining_gas;
-        println!("Gas used: {gas_used}/{already_used_gas}/{max_gas}");
+        println!("Gas used: {gas_used}/{max_gas}");
     }
 }
