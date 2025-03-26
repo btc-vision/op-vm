@@ -389,7 +389,7 @@ impl ContractRunner for WasmerRunner {
     }
 
     fn get_gas_used(&mut self) -> u64 {
-        self.instance.get_gas_used(&mut self.store)
+        self.instance.get_used_gas(&mut self.store)
     }
 
     fn is_out_of_memory(&self) -> Result<bool, ExtendedMemoryAccessError> {

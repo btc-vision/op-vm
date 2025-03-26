@@ -35,7 +35,7 @@ impl ExitImport {
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading exit data from memory"))?;
 
-        let gas_used = instance.get_gas_used(&mut store);
+        let gas_used = instance.get_used_gas(&mut store);
 
         env.exit_data = ExitData::new(status, gas_used, data.as_slice());
 
