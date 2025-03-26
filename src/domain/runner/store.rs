@@ -69,7 +69,7 @@ impl Cache {
         get_fn: GetFun,
     ) -> Result<CacheResponse, RuntimeError>
     where
-        GetFun: Fn(StoragePointer) -> Result<StorageValue, RuntimeError>,
+        GetFun: Fn(StoragePointer) -> Result<(StorageValue, bool), RuntimeError>,
     {
         self.reads += 1;
 
@@ -81,9 +81,14 @@ impl Cache {
         else {
             let original_value = get_fn(*pointer)?;
             self.values
-                .insert(*pointer, CacheValue::new(original_value));
+                .insert(*pointer, CacheValue::new(original_value.0));
 
-            Ok(CacheResponse::new(original_value, LOAD_COLD_GAS_COST, 0))
+            let is_cold = original_value.1;
+            if is_cold {
+                Ok(CacheResponse::new(original_value.0, LOAD_COLD_GAS_COST, 0))
+            } else {
+                Ok(CacheResponse::new(original_value.0, LOAD_WARM_GAS_COST, 0))
+            }
         }
     }
 
