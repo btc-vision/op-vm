@@ -100,7 +100,7 @@ impl Cache {
         set_value: SetFun,
     ) -> Result<CacheResponse, RuntimeError>
     where
-        GetFun: Fn(StoragePointer) -> Result<StorageValue, RuntimeError>,
+        GetFun: Fn(StoragePointer) -> Result<(StorageValue, bool), RuntimeError>,
         SetFun: Fn(StoragePointer, StorageValue) -> Result<(), RuntimeError>,
     {
         // increase number of writes
@@ -114,8 +114,15 @@ impl Cache {
             value.clone()
         } else {
             // Cold access
-            gas_cost += LOAD_COLD_GAS_COST;
-            CacheValue::new(get_value(pointer)?)
+            let data = get_value(pointer)?;
+
+            if data.1 {
+                gas_cost += LOAD_COLD_GAS_COST;
+            } else {
+                gas_cost += LOAD_WARM_GAS_COST;
+            }
+
+            CacheValue::new(data.0)
         };
 
         if value == cache_value.current {
