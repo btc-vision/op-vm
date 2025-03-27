@@ -26,10 +26,10 @@ impl Display for ExitData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "status: {}, data: {}, gas_used: {}",
+            "status: {}, gas_used: {}, data: {}",
             self.status,
+            self.gas_used,
             self.data.to_lower_hex_string(),
-            self.gas_used
         )
     }
 }

@@ -169,7 +169,9 @@ impl WasmerRunner {
             .map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
 
         // Call the "start" function and handle the result
+        imp.set_is_running_start(true);
         let result_start = start_function.call(&mut imp.store, &[]);
+        imp.set_is_running_start(false);
 
         // Handle the result of the "start" function
         if let Err(e) = result_start {
@@ -191,13 +193,12 @@ impl WasmerRunner {
             return Err(anyhow::anyhow!("Failed to call start function: {}", e));
         }
 
-        // We only allow the contract to call imports after the start function, on success
-        let env = imp.env.as_mut(&mut imp.store);
-
-        // Allow the contract to call imports
-        env.is_running_start_function = false;
-
         Ok(imp)
+    }
+
+    fn set_is_running_start(&mut self, value: bool) {
+        let env = self.env.as_mut(&mut self.store);
+        env.is_running_start_function = value;
     }
 
     fn create_tunable(mut engine: Engine) -> Engine {

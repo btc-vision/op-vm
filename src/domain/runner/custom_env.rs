@@ -60,9 +60,7 @@ impl CustomEnv {
             calldata: Calldata::default(),
             environment_variables: None,
             last_call_result: CallResult::default(),
-
-            // This is true by default, an instance can not call anything during initialization
-            is_running_start_function: true,
+            is_running_start_function: false,
         })
     }
 }

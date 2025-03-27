@@ -98,12 +98,7 @@ impl InstanceWrapper {
 
     pub fn get_used_gas(&self, store: &mut impl AsStoreMut) -> u64 {
         let remaining_points = self.get_remaining_gas(store);
-
-        if remaining_points == 0 {
-            self.max_gas
-        } else {
-            self.max_gas - remaining_points
-        }
+        self.max_gas - remaining_points
     }
 
     pub fn set_remaining_gas(&self, store: &mut impl AsStoreMut, gas: u64) {
