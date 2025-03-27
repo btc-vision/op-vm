@@ -20,7 +20,7 @@ use crate::domain::runner::{
     ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
     GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport, GetOutputsImport,
     GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import, StorageLoadImport,
-    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_CONSTRUCTOR,
+    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_WASM_INIT,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
@@ -34,36 +34,19 @@ pub struct WasmerRunner {
 }
 
 impl WasmerRunner {
-    pub fn validate_bytecode(bytecode: &[u8], max_gas: u64) -> anyhow::Result<bool> {
-        let time = Local::now();
-        let metering = Arc::new(Metering::new(max_gas, get_gas_cost));
-
-        let mut compiler = Singlepass::default();
-        compiler.canonicalize_nans(true);
-        compiler.push_middleware(metering);
-        compiler.enable_verifier();
-
-        let engine = EngineBuilder::new(compiler).set_features(None).engine();
-        let store = Store::new(engine);
-
-        Module::validate(&store, &bytecode)?;
-
-        log_time_diff(&time, "WasmerRunner::validate_bytecode");
-
-        Ok(true)
-    }
-
     pub fn from_bytecode(
         bytecode: &[u8],
+        used_gas: u64,
         max_gas: u64,
         custom_env: CustomEnv,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let store = Self::create_engine(MAX_GAS_CONSTRUCTOR)?;
+        let store = Self::create_engine()?;
         let module = Module::from_binary(&store, &bytecode)?;
-        let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
+        let instance =
+            Self::create_instance(used_gas, max_gas, custom_env, store, module, is_debug_mode)?;
 
         log_time_diff(&time, "WasmerRunner::from_bytecode");
 
@@ -78,6 +61,7 @@ impl WasmerRunner {
 
     pub unsafe fn from_serialized(
         serialized: Bytes,
+        used_gas: u64,
         max_gas: u64,
         custom_env: CustomEnv,
         is_debug_mode: bool,
@@ -87,7 +71,8 @@ impl WasmerRunner {
         let engine = EngineBuilder::headless().set_features(None).engine();
         let store = Store::new(Self::create_tunable(engine));
         let module = Module::deserialize(&store, serialized)?;
-        let instance = Self::create_instance(max_gas, custom_env, store, module, is_debug_mode)?;
+        let instance =
+            Self::create_instance(used_gas, max_gas, custom_env, store, module, is_debug_mode)?;
 
         log_time_diff(&time, "WasmerRunner::from_serialized");
 
@@ -95,12 +80,17 @@ impl WasmerRunner {
     }
 
     fn create_instance(
+        used_gas: u64,
         max_gas: u64,
         custom_env: CustomEnv,
         mut store: Store,
         module: Module,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
+        // verify and calculate remaining gas
+        let remaining_gas = Self::calculate_remaining_gas(used_gas, max_gas)?;
+
+        // Load environment
         let env = FunctionEnv::new(&mut store, custom_env);
 
         macro_rules! import {
@@ -141,7 +131,8 @@ impl WasmerRunner {
             Err(e) => {
                 if e.to_string().contains("unreachable") {
                     return Err(anyhow::anyhow!(
-                        "constructor reached an unreachable opcode (out of gas?)"
+                        "out of gas during initialization (consumed: {})",
+                        MAX_GAS_WASM_INIT
                     ));
                 }
 
@@ -159,25 +150,35 @@ impl WasmerRunner {
             env,
         };
 
-        imp.set_remaining_gas(max_gas);
+        // We must verify that the gas we do not track yet is not greater than the remaining gas
+        let gas_used_by_start_function = imp.get_remaining_gas();
+        if gas_used_by_start_function > remaining_gas {
+            return Err(anyhow::anyhow!("out of gas (consumed: {})", max_gas));
+        }
 
-        // Start explicitly
+        // Get the remaining gas after initializing the contract
+        let remaining_gas = remaining_gas - gas_used_by_start_function;
+
+        // Now, we override the default remaining gas with the actual remaining gas
+        imp.set_remaining_gas(remaining_gas);
+
+        // Start explicitly the contract "start" function
         let start_function = instance
             .exports
             .get_function("start")
             .map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
 
-        let env = imp.env.as_mut(&mut imp.store);
-        env.is_running_start_function = true;
-
+        // Call the "start" function and handle the result
+        imp.set_is_running_start(true);
         let result_start = start_function.call(&mut imp.store, &[]);
-        let env = imp.env.as_mut(&mut imp.store);
-        env.is_running_start_function = false;
+        imp.set_is_running_start(false);
 
+        // Handle the result of the "start" function
         if let Err(e) = result_start {
             if e.to_string().contains("unreachable") {
                 return Err(anyhow::anyhow!(
-                    "start function reached an unreachable opcode (out of gas?)"
+                    "out of gas during start function (consumed: {})",
+                    max_gas
                 ));
             }
 
@@ -195,6 +196,11 @@ impl WasmerRunner {
         Ok(imp)
     }
 
+    fn set_is_running_start(&mut self, value: bool) {
+        let env = self.env.as_mut(&mut self.store);
+        env.is_running_start_function = value;
+    }
+
     fn create_tunable(mut engine: Engine) -> Engine {
         let base = BaseTunables::for_target(&Target::default());
         let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
@@ -204,8 +210,8 @@ impl WasmerRunner {
         engine
     }
 
-    fn create_engine(max_gas: u64) -> anyhow::Result<Store> {
-        let meter = Metering::new(max_gas, get_gas_cost);
+    fn create_engine() -> anyhow::Result<Store> {
+        let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost);
         let metering = Arc::new(meter);
 
         let mut compiler = Singlepass::default();
@@ -242,6 +248,37 @@ impl WasmerRunner {
             }
         })
     }
+
+    fn calculate_remaining_gas(used_gas: u64, max_gas: u64) -> anyhow::Result<u64> {
+        if MAX_GAS_WASM_INIT > max_gas {
+            return Err(anyhow::anyhow!(
+                "too little gas, minimum is {}",
+                MAX_GAS_WASM_INIT
+            ));
+        }
+
+        if used_gas > max_gas {
+            return Err(anyhow::anyhow!(
+                "too little gas remaining (used: {}, max: {})",
+                used_gas,
+                max_gas
+            ));
+        }
+
+        let remaining_gas = max_gas - used_gas;
+        if remaining_gas < MAX_GAS_WASM_INIT {
+            return Err(anyhow::anyhow!(
+                "too little gas remaining, minimum is {}",
+                MAX_GAS_WASM_INIT
+            ));
+        }
+
+        // Always charge the maximum gas for the initialization, we have no way of calculating the
+        // actual gas used since this is done in internal wasmer functions and this is used to inject
+        // metering. This is a safe operation since we have already checked that the remaining gas
+        // is enough.
+        Ok(remaining_gas)
+    }
 }
 
 impl ContractRunner for WasmerRunner {
@@ -257,6 +294,7 @@ impl ContractRunner for WasmerRunner {
         let export = self
             .instance
             .get_function(CONTRACT_ON_DEPLOY_FUNCTION_NAME)?;
+
         let params = &[Value::I32(calldata.len() as i32)];
         let response = export.call(&mut self.store, params);
 
@@ -280,8 +318,10 @@ impl ContractRunner for WasmerRunner {
             .ok_or(RuntimeError::new("Invalid value returned from contract"))?
             as u32;
 
+        let gas_used = self.get_used_gas();
         let env = self.env.as_mut(&mut self.store);
-        env.exit_data = ExitData::new(status, &[]);
+
+        env.exit_data = ExitData::new(status, gas_used, &[]);
 
         Ok(env.exit_data.clone())
     }
@@ -294,6 +334,7 @@ impl ContractRunner for WasmerRunner {
         let export = self
             .instance
             .get_function(CONTRACT_ENTRYPOINT_FUNCTION_NAME)?;
+
         let params = &[Value::I32(calldata.len() as i32)];
         let response = export.call(&mut self.store, params);
 
@@ -317,13 +358,12 @@ impl ContractRunner for WasmerRunner {
             .ok_or(RuntimeError::new("Invalid value returned from contract"))?
             as u32;
 
+        let gas_used = self.get_used_gas();
         let env = self.env.as_mut(&mut self.store);
-        env.exit_data = ExitData::new(status, &[]);
-
-        let result = env.exit_data.clone();
+        env.exit_data = ExitData::new(status, gas_used, &[]);
 
         log_time_diff(&time, "WasmerRunner::execute");
-        Ok(result)
+        Ok(env.exit_data.clone())
     }
 
     fn call_export_by_name(
@@ -347,6 +387,10 @@ impl ContractRunner for WasmerRunner {
 
     fn get_remaining_gas(&mut self) -> u64 {
         self.instance.get_remaining_gas(&mut self.store)
+    }
+
+    fn get_used_gas(&mut self) -> u64 {
+        self.instance.get_used_gas(&mut self.store)
     }
 
     fn is_out_of_memory(&self) -> Result<bool, ExtendedMemoryAccessError> {
