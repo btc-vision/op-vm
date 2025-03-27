@@ -54,13 +54,14 @@ impl StorageStoreImport {
                 .try_into()
                 .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
             |key| {
-                Ok(env
-                    .storage_load_external
-                    .execute(&key, &env.runtime)?
-                    .try_into()
-                    .map_err(|e| {
-                        RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-                    })?)
+                let resp = env.storage_load_external.execute(&key, &env.runtime)?;
+
+                let is_cold = resp[32] == 1;
+                let pointer_value = resp[0..32].try_into().map_err(|e| {
+                    RuntimeError::new(format!("Cannot map result to data: {:?}", e))
+                })?;
+
+                Ok((pointer_value, is_cold))
             },
             |key, value| {
                 env.storage_store_external
