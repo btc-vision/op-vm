@@ -236,12 +236,15 @@ mod tests {
 
         let (mut cache, store) = create_store(Some(POINTER), Some(value), None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
 
         // Cold value
@@ -259,12 +262,15 @@ mod tests {
     pub fn test_store_new_cold_value() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -282,12 +288,15 @@ mod tests {
     pub fn test_store_warm_not_changed_value() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -305,12 +314,15 @@ mod tests {
     pub fn test_store_cold_changed() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -329,12 +341,15 @@ mod tests {
     pub fn test_store_warm_changed_after_change() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -352,12 +367,15 @@ mod tests {
     pub fn test_store_warm_changed() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -378,12 +396,15 @@ mod tests {
     pub fn test_store_cold_reset() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -402,12 +423,15 @@ mod tests {
     pub fn test_store_warm_reset() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -430,12 +454,15 @@ mod tests {
     pub fn test_store_default_change_default() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -454,12 +481,15 @@ mod tests {
     pub fn test_store_zero_same_value() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
@@ -480,12 +510,15 @@ mod tests {
     pub fn test_store_zero_different_value() {
         let (mut cache, store) = create_store(Some(POINTER), None, None);
         let get_fn = |pointer: StoragePointer| {
-            Ok(store
-                .lock()
-                .unwrap()
-                .get(&pointer)
-                .unwrap_or(&super::STORAGE_VALUE_ZERO)
-                .clone())
+            Ok((
+                store
+                    .lock()
+                    .unwrap()
+                    .get(&pointer)
+                    .unwrap_or(&super::STORAGE_VALUE_ZERO)
+                    .clone(),
+                true,
+            ))
         };
         let set_fn = |pointer: StoragePointer, value: StorageValue| {
             store.lock().unwrap().insert(pointer, value);
