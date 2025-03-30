@@ -50,16 +50,12 @@ impl CacheResponse {
 #[derive(Debug, Clone)]
 pub struct Cache {
     values: HashMap<[u8; STORAGE_POINTER_SIZE], CacheValue>,
-    reads: usize,
-    writes: usize,
 }
 
 impl Cache {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
-            reads: 0,
-            writes: 0,
         }
     }
 
@@ -71,8 +67,6 @@ impl Cache {
     where
         GetFun: Fn(StoragePointer) -> Result<(StorageValue, bool), RuntimeError>,
     {
-        self.reads += 1;
-
         // If object exists in the cache
         if let Some(value) = self.values.get(pointer) {
             Ok(CacheResponse::new(value.current, LOAD_WARM_GAS_COST, 0))
@@ -103,9 +97,6 @@ impl Cache {
         GetFun: Fn(StoragePointer) -> Result<(StorageValue, bool), RuntimeError>,
         SetFun: Fn(StoragePointer, StorageValue) -> Result<(), RuntimeError>,
     {
-        // increase number of writes
-        self.writes += 1;
-
         let mut gas_cost = 0;
         let mut gas_refund: i64 = 0;
 
@@ -213,8 +204,6 @@ mod tests {
 
         let cache = if current_value.is_some() {
             Cache {
-                reads: 0,
-                writes: 0,
                 values: HashMap::from_iter([(
                     pointer,
                     CacheValue {
