@@ -4,9 +4,9 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 const STATIC_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
-pub struct BlockHashImport;
+pub struct GetBlockHashImport;
 
-impl BlockHashImport {
+impl GetBlockHashImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         block_id: u64,

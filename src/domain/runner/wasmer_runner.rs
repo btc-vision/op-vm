@@ -15,7 +15,7 @@ use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_PAGES, STACK_SIZE};
 use crate::domain::runner::{
-    BlockHashImport, CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner,
+    GetBlockHashImport, CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner,
     CustomEnv, DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport,
     ExitResult, ExtendedMemoryAccessError, GetAccountTypeImport, GetCallResultImport,
     GetCalldataImport, GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport,
@@ -130,7 +130,7 @@ impl WasmerRunner {
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),
                 "accountType" => import!(GetAccountTypeImport),
-                "block_hash" => import!(BlockHashImport),
+                "blockHash" => import!(GetBlockHashImport),
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
                 "verifySchnorrSignature" => import!(VerifySchnorrImport),
             },
