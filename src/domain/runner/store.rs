@@ -174,8 +174,9 @@ impl Cache {
     }
 }
 
-pub struct TStore(BTreeMap<StoragePointer, StorageValue>);
-impl TStore {
+pub struct TransientStorage(BTreeMap<StoragePointer, StorageValue>);
+
+impl TransientStorage {
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }

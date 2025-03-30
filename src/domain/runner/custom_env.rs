@@ -11,7 +11,7 @@ use crate::interfaces::{
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use super::TStore;
+use super::TransientStorage;
 
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
@@ -33,7 +33,7 @@ pub struct CustomEnv {
     pub environment_variables: Option<EnvironmentVariables>,
     pub last_call_result: CallResult,
     pub is_running_start_function: bool,
-    pub transient_storage: TStore,
+    pub transient_storage: TransientStorage,
 }
 
 impl CustomEnv {
@@ -71,7 +71,7 @@ impl CustomEnv {
             environment_variables: None,
             last_call_result: CallResult::default(),
             is_running_start_function: false,
-            transient_storage: TStore::new(),
+            transient_storage: TransientStorage::new(),
         })
     }
 }
