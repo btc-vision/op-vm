@@ -16,11 +16,13 @@ impl GetAccountTypeImport {
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
+
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+
         let address_hash = instance
             .read_memory(&store, address_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading address hash from memory"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
         env.account_type_external
             .execute(&address_hash, &env.runtime)
     }

@@ -4,7 +4,7 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 #[derive(Default)]
 pub struct TransientStorageStoreImport;
 
-const TSTORE_GAS_COST: u64 = 1_000_000;
+const STATIC_GAS_COST: u64 = 1_000_000;
 
 impl TransientStorageStoreImport {
     pub fn execute(
@@ -25,15 +25,15 @@ impl TransientStorageStoreImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+
         let key = instance
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
         let value = instance
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
-
-        instance.use_gas(&mut store, TSTORE_GAS_COST);
-
+        
         env.transient_storage.set(
             key.as_slice()
                 .try_into()

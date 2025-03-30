@@ -18,13 +18,14 @@ impl GetBlockHashImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+        
         let result = env.block_hash_external.execute(block_id, &env.runtime)?;
 
         instance
             .write_memory(&store, result_ptr as u64, &result)
             .map_err(|_e| RuntimeError::new("Error writing block hash to memory"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
 
         Ok(())
     }
