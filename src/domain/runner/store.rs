@@ -150,7 +150,6 @@ impl Cache {
             } else {
                 if cache_value.original != STORAGE_VALUE_ZERO {
                     if cache_value.current == STORAGE_VALUE_ZERO {
-                        // TODO: Add to gas???
                         if value != cache_value.original {
                             gas_refund -= STORE_REFUND_GAS_COST as i64;
                         } else {
@@ -474,9 +473,6 @@ mod tests {
 
         let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         assert_eq!(result.gas_cost, 1_000_000);
-
-        // TODO: This values is not in formula: https://www.evm.codes/?fork=cancun#55
-        // but dialog calculation give this result
         assert_eq!(result.gas_refund, -20_000_000);
     }
 
