@@ -2,11 +2,11 @@ use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 #[derive(Default)]
-pub struct TransientStorageLoadImport;
+pub struct TransientLoadImport;
 
 const STATIC_GAS_COST: u64 = 1_000_000;
 
-impl TransientStorageLoadImport {
+impl TransientLoadImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         key_ptr: u32,

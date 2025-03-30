@@ -20,7 +20,7 @@ use crate::domain::runner::{
     ExitResult, ExtendedMemoryAccessError, GetAccountTypeImport, GetCallResultImport,
     GetCalldataImport, GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport,
     GetOutputsImport, GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import,
-    StorageLoadImport, StorageStoreImport, TransientStorageLoadImport, TransientStorageStoreImport,
+    StorageLoadImport, StorageStoreImport, TransientLoadImport, TransientStoreImport,
     ValidateBitcoinAddressImport, VerifySchnorrImport,
 };
 
@@ -117,8 +117,8 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
-                "tload" => import!(TransientStorageLoadImport),
-                "tstore" => import!(TransientStorageStoreImport),
+                "tload" => import!(TransientLoadImport),
+                "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
