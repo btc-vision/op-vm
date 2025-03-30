@@ -71,8 +71,8 @@ impl JsContract {
             let emit_external = EmitExternalFunction::new(emit_tsfn, id);
             let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
             let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
-            let account_type = AccountTypeExternalFunction::new(account_type_tsfn, id);
-            let block_hash = BlockHashExternalFunction::new(block_hash_tsfn, id);
+            let account_type_external = AccountTypeExternalFunction::new(account_type_tsfn, id);
+            let block_hash_external = BlockHashExternalFunction::new(block_hash_tsfn, id);
 
             // Obtain a Runtime from the pool
             let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
@@ -90,8 +90,8 @@ impl JsContract {
                 emit_external,
                 inputs_external,
                 outputs_external,
-                account_type,
-                block_hash,
+                account_type_external,
+                block_hash_external,
                 runtime.clone(),
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;

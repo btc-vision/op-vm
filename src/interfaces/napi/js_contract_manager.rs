@@ -135,7 +135,7 @@ impl ContractManager {
             emit_tsfn,
             inputs_tsfn,
             outputs_tsfn,
-            account_type_tsfn: account_type_tsfn,
+            account_type_tsfn,
             block_hash_tsfn,
         })
     }
