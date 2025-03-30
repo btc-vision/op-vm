@@ -61,7 +61,7 @@ pub struct ContractManager {
     pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
 }
 
-#[napi]
+#[napi] //noinspection RsCompileErrorMacro
 impl ContractManager {
     #[napi(constructor)]
     pub fn new(
