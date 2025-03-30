@@ -102,7 +102,6 @@ impl ContractManager {
         outputs_js_function: JsFunction,
         #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Int>")]
         account_type_js_function: JsFunction,
-
         #[napi(
             ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<Buffer | Uint8Array>"
         )]
