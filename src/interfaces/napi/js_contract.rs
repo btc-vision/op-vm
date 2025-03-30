@@ -18,7 +18,7 @@ use crate::interfaces::napi::environment_variables_request::EnvironmentVariables
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
-    AddressTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
+    AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
     ExitDataResponse, InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
@@ -57,7 +57,7 @@ impl JsContract {
             let emit_tsfn = manager.emit_tsfn.clone();
             let inputs_tsfn = manager.inputs_tsfn.clone();
             let outputs_tsfn = manager.outputs_tsfn.clone();
-            let address_type_tsfn = manager.address_type_tsfn.clone();
+            let account_type_tsfn = manager.account_type_tsfn.clone();
             let block_hash_tsfn = manager.block_hash_tsfn.clone();
 
             // Create ExternalFunction instances with contract_id
@@ -71,7 +71,7 @@ impl JsContract {
             let emit_external = EmitExternalFunction::new(emit_tsfn, id);
             let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
             let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
-            let address_type = AddressTypeExternalFunction::new(address_type_tsfn, id);
+            let account_type = AccountTypeExternalFunction::new(account_type_tsfn, id);
             let block_hash = BlockHashExternalFunction::new(block_hash_tsfn, id);
 
             // Obtain a Runtime from the pool
@@ -90,7 +90,7 @@ impl JsContract {
                 emit_external,
                 inputs_external,
                 outputs_external,
-                address_type,
+                account_type,
                 block_hash,
                 runtime.clone(),
             )

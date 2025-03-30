@@ -1,4 +1,4 @@
-mod address_type_import;
+mod account_type_import;
 mod block_hash_import;
 mod call_other_contract_import;
 mod common;
@@ -23,7 +23,7 @@ mod validate_bitcoin_address_import;
 mod verify_schnorr_import;
 
 pub use self::{
-    address_type_import::*, block_hash_import::*, call_other_contract_import::*,
+    account_type_import::*, block_hash_import::*, call_other_contract_import::*,
     console_log_import::*, deploy_from_address_import::*, emit_import::*, exit_import::*,
     get_call_result_import::*, get_calldata_import::*, get_environment_variables_import::*,
     get_inputs_import::*, get_inputs_size_import::*, get_outputs_import::*,

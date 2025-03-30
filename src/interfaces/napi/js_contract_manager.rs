@@ -61,7 +61,7 @@ pub struct ContractManager {
     #[napi(skip)]
     pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
-    pub address_type_tsfn:
+    pub account_type_tsfn:
         ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
     pub block_hash_tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
@@ -101,7 +101,7 @@ impl ContractManager {
         )]
         outputs_js_function: JsFunction,
         #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Int>")]
-        address_type_js_function: JsFunction,
+        account_type_js_function: JsFunction,
 
         #[napi(
             ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<Buffer | Uint8Array>"
@@ -116,7 +116,7 @@ impl ContractManager {
         let emit_tsfn = create_tsfn!(emit_js_function);
         let inputs_tsfn = create_tsfn!(inputs_js_function);
         let outputs_tsfn = create_tsfn!(outputs_js_function);
-        let address_type_tsfn = create_tsfn!(address_type_js_function);
+        let account_type_tsfn = create_tsfn!(account_type_js_function);
         let block_hash_tsfn = create_tsfn!(block_hash_js_function);
 
         let max_idling_runtimes = max_idling_runtimes as usize;
@@ -135,7 +135,7 @@ impl ContractManager {
             emit_tsfn,
             inputs_tsfn,
             outputs_tsfn,
-            address_type_tsfn,
+            account_type_tsfn: account_type_tsfn,
             block_hash_tsfn,
         })
     }

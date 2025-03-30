@@ -3,7 +3,7 @@ use crate::domain::runner::{
     BitcoinNetwork, Cache, CallResult, Calldata, ExitData, InstanceWrapper,
 };
 use crate::interfaces::{
-    AddressTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
+    AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
     InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
@@ -25,7 +25,7 @@ pub struct CustomEnv {
     pub emit_external: EmitExternalFunction,
     pub inputs_external: InputsExternalFunction,
     pub outputs_external: OutputsExternalFunction,
-    pub address_type_external: AddressTypeExternalFunction,
+    pub account_type_external: AccountTypeExternalFunction,
     pub block_hash_external: BlockHashExternalFunction,
     pub runtime: Arc<Runtime>,
     pub store_cache: Cache,
@@ -47,7 +47,7 @@ impl CustomEnv {
         emit_external: EmitExternalFunction,
         inputs_external: InputsExternalFunction,
         outputs_external: OutputsExternalFunction,
-        address_type_external: AddressTypeExternalFunction,
+        account_type_external: AccountTypeExternalFunction,
         block_hash_external: BlockHashExternalFunction,
         runtime: Arc<Runtime>,
     ) -> anyhow::Result<Self> {
@@ -63,7 +63,7 @@ impl CustomEnv {
             emit_external,
             inputs_external,
             outputs_external,
-            address_type_external,
+            account_type_external,
             block_hash_external,
             runtime,
             store_cache: Cache::new(),

@@ -4,9 +4,9 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 const STATIC_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
-pub struct AddressTypeImport;
+pub struct GetAccountTypeImport;
 
-impl AddressTypeImport {
+impl GetAccountTypeImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         address_ptr: u32,
@@ -21,7 +21,7 @@ impl AddressTypeImport {
             .map_err(|_e| RuntimeError::new("Error reading address hash from memory"))?;
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
-        env.address_type_external
+        env.account_type_external
             .execute(&address_hash, &env.runtime)
     }
 }

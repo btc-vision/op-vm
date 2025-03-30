@@ -5,12 +5,12 @@ use wasmer::RuntimeError;
 
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
-pub struct AddressTypeExternalFunction {
+pub struct AccountTypeExternalFunction {
     tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     contract_id: u64,
 }
 
-impl AddressTypeExternalFunction {
+impl AccountTypeExternalFunction {
     pub fn new(
         tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
         id: u64,
@@ -22,7 +22,7 @@ impl AddressTypeExternalFunction {
     }
 }
 
-impl AddressTypeExternalFunction {
+impl AccountTypeExternalFunction {
     pub fn execute(&self, address_hash: &[u8], runtime: &Runtime) -> Result<u32, RuntimeError> {
         let request = ThreadSafeJsImportResponse {
             buffer: address_hash.to_vec(),
