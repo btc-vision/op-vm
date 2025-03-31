@@ -9,9 +9,9 @@ pub const STORE_NEW_GAS_COST: u64 = 200_000_000;
 pub const STORE_UPDATE_GAS_COST: u64 = 29_000_000;
 pub const STORE_REFUND_GAS_COST: u64 = 48_000_000;
 
-pub const STORAGE_POINTER_SIZE: usize = 32;
+pub const STORAGE_KEY_SIZE: usize = 32;
 pub const STORAGE_VALUE_SIZE: usize = 32;
-pub type StoragePointer = [u8; STORAGE_POINTER_SIZE];
+pub type StorageKey = [u8; STORAGE_KEY_SIZE];
 pub type StorageValue = [u8; STORAGE_VALUE_SIZE];
 pub const STORAGE_VALUE_ZERO: [u8; STORAGE_VALUE_SIZE] = [0; STORAGE_VALUE_SIZE];
 
@@ -49,7 +49,7 @@ impl CacheResponse {
 
 #[derive(Debug, Clone)]
 pub struct Cache {
-    values: HashMap<[u8; STORAGE_POINTER_SIZE], CacheValue>,
+    values: HashMap<[u8; STORAGE_KEY_SIZE], CacheValue>,
 }
 
 impl Cache {
@@ -61,21 +61,20 @@ impl Cache {
 
     pub fn get<GetFun>(
         &mut self,
-        pointer: &[u8; STORAGE_POINTER_SIZE],
+        key: &[u8; STORAGE_KEY_SIZE],
         get_fn: GetFun,
     ) -> Result<CacheResponse, RuntimeError>
     where
-        GetFun: Fn(StoragePointer) -> Result<(StorageValue, bool), RuntimeError>,
+        GetFun: Fn(StorageKey) -> Result<(StorageValue, bool), RuntimeError>,
     {
         // If object exists in the cache
-        if let Some(value) = self.values.get(pointer) {
+        if let Some(value) = self.values.get(key) {
             Ok(CacheResponse::new(value.current, LOAD_WARM_GAS_COST, 0))
         }
-        // first access of pointer
+        // First access of key
         else {
-            let original_value = get_fn(*pointer)?;
-            self.values
-                .insert(*pointer, CacheValue::new(original_value.0));
+            let original_value = get_fn(*key)?;
+            self.values.insert(*key, CacheValue::new(original_value.0));
 
             let is_cold = original_value.1;
             if is_cold {
@@ -88,24 +87,24 @@ impl Cache {
 
     pub fn set<GetFun, SetFun>(
         &mut self,
-        pointer: [u8; STORAGE_POINTER_SIZE],
+        key: [u8; STORAGE_KEY_SIZE],
         value: [u8; STORAGE_VALUE_SIZE],
         get_value: GetFun,
         set_value: SetFun,
     ) -> Result<CacheResponse, RuntimeError>
     where
-        GetFun: Fn(StoragePointer) -> Result<(StorageValue, bool), RuntimeError>,
-        SetFun: Fn(StoragePointer, StorageValue) -> Result<(), RuntimeError>,
+        GetFun: Fn(StorageKey) -> Result<(StorageValue, bool), RuntimeError>,
+        SetFun: Fn(StorageKey, StorageValue) -> Result<(), RuntimeError>,
     {
         let mut gas_cost = 0;
         let mut gas_refund: i64 = 0;
 
-        let mut cache_value = if let Some(value) = self.values.get(&pointer) {
+        let mut cache_value = if let Some(value) = self.values.get(&key) {
             // Warm access
             value.clone()
         } else {
             // Cold access
-            let data = get_value(pointer)?;
+            let data = get_value(key)?;
 
             if data.1 {
                 gas_cost += LOAD_COLD_GAS_COST;
@@ -161,8 +160,8 @@ impl Cache {
 
             // Set value to store
             cache_value.current = value;
-            set_value(pointer, value)?;
-            self.values.insert(pointer, cache_value);
+            set_value(key, value)?;
+            self.values.insert(key, cache_value);
         }
 
         Ok(CacheResponse::new(value, gas_cost, gas_refund))
@@ -171,20 +170,20 @@ impl Cache {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cache, StoragePointer, StorageValue};
+    use super::{Cache, StorageKey, StorageValue};
     use crate::domain::runner::STORAGE_VALUE_ZERO;
     use std::cell::RefCell;
     use wasmer::RuntimeError;
 
-    const POINTER: StoragePointer = [
+    const A_STORAGE_KEY: StorageKey = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
         25, 26, 27, 28, 29, 30, 31,
     ];
 
     macro_rules! create_getter_setter_mocks {
         ($getter_value:expr) => {{
-            let get_fn = |_: StoragePointer| Ok(($getter_value, true));
-            let set_fn = |_: StoragePointer, _: StorageValue| Ok::<(), RuntimeError>(());
+            let get_fn = |_: StorageKey| Ok(($getter_value, true));
+            let set_fn = |_: StorageKey, _: StorageValue| Ok::<(), RuntimeError>(());
             (get_fn, set_fn)
         }};
     }
@@ -195,7 +194,7 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, _) = create_getter_setter_mocks!(STORE_VALUE);
 
-        let result = cache.get(&POINTER, get_fn).unwrap();
+        let result = cache.get(&A_STORAGE_KEY, get_fn).unwrap();
 
         assert_eq!(result.gas_cost, 21_000_000);
         assert_eq!(result.value, STORE_VALUE);
@@ -207,8 +206,8 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, _) = create_getter_setter_mocks!(STORE_VALUE);
 
-        cache.get(&POINTER, get_fn).unwrap();
-        let result = cache.get(&POINTER, get_fn).unwrap();
+        cache.get(&A_STORAGE_KEY, get_fn).unwrap();
+        let result = cache.get(&A_STORAGE_KEY, get_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.value, STORE_VALUE);
@@ -218,13 +217,13 @@ mod tests {
     pub fn given_a_cold_slot_with_empty_original_value_store_new_value() {
         let mut cache = Cache::new();
         let value_in_store: RefCell<StorageValue> = RefCell::from(STORAGE_VALUE_ZERO);
-        let get_fn = |_: StoragePointer| Ok((STORAGE_VALUE_ZERO, true));
-        let set_fn = |_: StoragePointer, value: StorageValue| {
+        let get_fn = |_: StorageKey| Ok((STORAGE_VALUE_ZERO, true));
+        let set_fn = |_: StorageKey, value: StorageValue| {
             *value_in_store.borrow_mut() = value;
             Ok(())
         };
 
-        let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [1; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(*value_in_store.borrow(), [1; 32]);
         assert_eq!(result.gas_cost, 221_000_000);
@@ -236,8 +235,8 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORAGE_VALUE_ZERO);
 
-        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
-        let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        cache.set(A_STORAGE_KEY, [1; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [1; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
@@ -249,7 +248,7 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
-        let result = cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [2; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 50_000_000);
         assert_eq!(result.gas_refund, 0);
@@ -261,9 +260,9 @@ mod tests {
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORAGE_VALUE_ZERO);
 
         // warm changed - after change
-        cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
-        let result = cache.set(POINTER, [3; 32], get_fn, set_fn).unwrap();
-        
+        cache.set(A_STORAGE_KEY, [2; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [3; 32], get_fn, set_fn).unwrap();
+
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
     }
@@ -274,8 +273,8 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
-        cache.get(&POINTER, get_fn).unwrap();
-        let result = cache.set(POINTER, [4; 32], get_fn, set_fn).unwrap();
+        cache.get(&A_STORAGE_KEY, get_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [4; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 29_000_000);
         assert_eq!(result.gas_refund, 0);
@@ -288,7 +287,7 @@ mod tests {
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
         let result = cache
-            .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
+            .set(A_STORAGE_KEY, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
 
         assert_eq!(result.gas_cost, 50_000_000);
@@ -301,9 +300,9 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
-        cache.get(&POINTER, get_fn).unwrap();
+        cache.get(&A_STORAGE_KEY, get_fn).unwrap();
         let result = cache
-            .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
+            .set(A_STORAGE_KEY, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
 
         assert_eq!(result.gas_cost, 29_000_000);
@@ -315,9 +314,9 @@ mod tests {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORAGE_VALUE_ZERO);
 
-        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        cache.set(A_STORAGE_KEY, [1; 32], get_fn, set_fn).unwrap();
         let result = cache
-            .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
+            .set(A_STORAGE_KEY, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
@@ -331,9 +330,9 @@ mod tests {
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
         cache
-            .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
+            .set(A_STORAGE_KEY, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
-        let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [1; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, -20_000_000);
@@ -346,9 +345,9 @@ mod tests {
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
         cache
-            .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
+            .set(A_STORAGE_KEY, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
-        let result = cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
+        let result = cache.set(A_STORAGE_KEY, [2; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, -48_000_000);
