@@ -190,24 +190,32 @@ mod tests {
     }
 
     #[test]
-    pub fn test_load_value() {
+    pub fn load_cold_value() {
         const STORE_VALUE: StorageValue = [10; 32];
         let mut cache = Cache::new();
         let (get_fn, _) = create_getter_setter_mocks!(STORE_VALUE);
 
-        // Cold value
         let result = cache.get(&POINTER, get_fn).unwrap();
+
         assert_eq!(result.gas_cost, 21_000_000);
         assert_eq!(result.value, STORE_VALUE);
+    }
 
-        // Warm value
+    #[test]
+    pub fn load_warm_value() {
+        const STORE_VALUE: StorageValue = [10; 32];
+        let mut cache = Cache::new();
+        let (get_fn, _) = create_getter_setter_mocks!(STORE_VALUE);
+
+        cache.get(&POINTER, get_fn).unwrap();
         let result = cache.get(&POINTER, get_fn).unwrap();
+
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.value, STORE_VALUE);
     }
 
     #[test]
-    pub fn test_store_new_cold_value() {
+    pub fn given_a_cold_slot_with_empty_original_value_store_new_value() {
         let mut cache = Cache::new();
         let value_in_store: RefCell<StorageValue> = RefCell::from(STORAGE_VALUE_ZERO);
         let get_fn = |_: StoragePointer| Ok((STORAGE_VALUE_ZERO, true));
@@ -224,11 +232,11 @@ mod tests {
     }
 
     #[test]
-    pub fn test_store_warm_not_changed_value() {
+    pub fn given_a_warm_slot_with_empty_original_value_and_a_current_value_store_same_value() {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORAGE_VALUE_ZERO);
 
-        let _result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+        cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
         let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
 
         assert_eq!(result.gas_cost, 1_000_000);
@@ -236,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_store_cold_changed() {
+    pub fn given_a_cold_slot_with_non_empty_original_value_store_new_value() {
         const STORE_VALUE: [u8; 32] = [3; 32];
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
@@ -248,33 +256,33 @@ mod tests {
     }
 
     #[test]
-    pub fn test_store_warm_changed_after_change() {
+    pub fn given_a_warm_slot_with_empty_original_value_and_a_current_value_store_new_value() {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORAGE_VALUE_ZERO);
 
         // warm changed - after change
         cache.set(POINTER, [2; 32], get_fn, set_fn).unwrap();
         let result = cache.set(POINTER, [3; 32], get_fn, set_fn).unwrap();
+        
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, 0);
     }
 
     #[test]
-    pub fn test_store_warm_changed() {
+    pub fn given_a_warm_slot_with_an_original_value_store_new_value() {
         const STORE_VALUE: [u8; 32] = [3; 32];
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
-        let result = cache.get(&POINTER, get_fn).unwrap();
-        assert_eq!(result.value, [3; 32]);
-
+        cache.get(&POINTER, get_fn).unwrap();
         let result = cache.set(POINTER, [4; 32], get_fn, set_fn).unwrap();
+
         assert_eq!(result.gas_cost, 29_000_000);
         assert_eq!(result.gas_refund, 0);
     }
 
     #[test]
-    pub fn test_store_cold_reset() {
+    pub fn given_a_cold_slot_with_an_original_value_store_empty_value() {
         const STORE_VALUE: [u8; 32] = [4; 32];
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
@@ -282,28 +290,28 @@ mod tests {
         let result = cache
             .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
+
         assert_eq!(result.gas_cost, 50_000_000);
         assert_eq!(result.gas_refund, 48_000_000);
     }
 
     #[test]
-    pub fn test_store_warm_reset() {
+    pub fn given_a_warm_slot_with_an_original_value_store_empty_value() {
         const STORE_VALUE: [u8; 32] = [1; 32];
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
 
-        let result = cache.get(&POINTER, get_fn).unwrap();
-        assert_eq!(result.value, [1; 32]);
-
+        cache.get(&POINTER, get_fn).unwrap();
         let result = cache
             .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
+
         assert_eq!(result.gas_cost, 29_000_000);
         assert_eq!(result.gas_refund, 48_000_000);
     }
 
     #[test]
-    pub fn test_store_default_change_default() {
+    pub fn given_a_warm_slot_with_empty_original_value_and_a_current_value_store_empty_value() {
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORAGE_VALUE_ZERO);
 
@@ -317,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_store_zero_same_value() {
+    pub fn given_a_warm_slot_with_an_original_value_and_empty_current_value_store_original_value() {
         const STORE_VALUE: [u8; 32] = [1; 32];
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
@@ -325,14 +333,14 @@ mod tests {
         cache
             .set(POINTER, STORAGE_VALUE_ZERO, get_fn, set_fn)
             .unwrap();
-
         let result = cache.set(POINTER, [1; 32], get_fn, set_fn).unwrap();
+
         assert_eq!(result.gas_cost, 1_000_000);
         assert_eq!(result.gas_refund, -20_000_000);
     }
 
     #[test]
-    pub fn test_store_zero_different_value() {
+    pub fn given_a_warm_slot_with_an_original_value_and_empty_current_value_store_new_value() {
         const STORE_VALUE: [u8; 32] = [1; 32];
         let mut cache = Cache::new();
         let (get_fn, set_fn) = create_getter_setter_mocks!(STORE_VALUE);
