@@ -9,7 +9,7 @@ pub struct GetBlockHashImport;
 impl GetBlockHashImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
-        block_id: u64,
+        block_number: u64,
         result_ptr: u32,
     ) -> Result<(), RuntimeError> {
         let (env, mut store) = context.data_and_store_mut();
@@ -20,7 +20,7 @@ impl GetBlockHashImport {
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
         
-        let result = env.block_hash_external.execute(block_id, &env.runtime)?;
+        let result = env.block_hash_external.execute(block_number, &env.runtime)?;
 
         instance
             .write_memory(&store, result_ptr as u64, &result)

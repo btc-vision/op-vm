@@ -7,7 +7,7 @@ use wasmer::RuntimeError;
 
 #[napi(object)]
 pub struct BlockHashRequest {
-    pub block_id: BigInt,
+    pub block_number: BigInt,
     pub contract_id: BigInt,
 }
 
@@ -24,9 +24,9 @@ impl BlockHashExternalFunction {
         Self { tsfn, contract_id }
     }
 
-    pub fn execute(&self, block_id: u64, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
+    pub fn execute(&self, block_number: u64, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         let request = BlockHashRequest {
-            block_id: block_id.into(),
+            block_number: block_number.into(),
             contract_id: BigInt::from(self.contract_id),
         };
 
