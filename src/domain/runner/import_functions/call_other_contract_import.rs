@@ -3,7 +3,8 @@ use crate::domain::runner::CustomEnv;
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const ADDRESS_ACCESS_GAS_COST: u64 = 26_000_000;
+const COLD_ADDRESS_ACCESS_GAS_COST: u64 = 26_000_000;
+const WARM_ADDRESS_ACCESS_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
 pub struct CallOtherContractImport;
@@ -27,9 +28,7 @@ impl CallOtherContractImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, ADDRESS_ACCESS_GAS_COST);
-
-        let gas_used = instance.get_gas_used(&mut store);
+        let gas_used = instance.get_used_gas(&mut store);
 
         let address = instance
             .read_memory(&store, address_ptr as u64, 32)
@@ -50,20 +49,36 @@ impl CallOtherContractImport {
             .call_other_contract_external
             .execute(&data, &env.runtime)?;
 
-        let (call_execution_cost_bytes, result_remainder) = result
+        let (is_address_warm_byte, result_remainder) = result.split_first().ok_or(
+            RuntimeError::new("Invalid data received for 'Call contract'"),
+        )?;
+        let (call_execution_cost_bytes, result_remainder) = result_remainder
             .split_first_chunk::<8>()
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+            .ok_or(RuntimeError::new(
+                "Invalid data received for 'Call contract'",
+            ))?;
         let (exit_status_bytes, result_remainder) = result_remainder
             .split_first_chunk::<4>()
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+            .ok_or(RuntimeError::new(
+                "Invalid data received for 'Call contract'",
+            ))?;
         let response = result_remainder
             .get(0..result_remainder.len())
-            .ok_or(RuntimeError::new("Invalid data received for 'Call contract'"))?;
+            .ok_or(RuntimeError::new(
+                "Invalid data received for 'Call contract'",
+            ))?;
 
+        let is_address_warm = *is_address_warm_byte != 0;
         let call_execution_cost = u64::from_be_bytes(*call_execution_cost_bytes);
         let exit_status = u32::from_be_bytes(*exit_status_bytes);
 
-        instance.use_gas(&mut store, call_execution_cost);
+        let address_access_cost = if is_address_warm {
+            WARM_ADDRESS_ACCESS_GAS_COST
+        } else {
+            COLD_ADDRESS_ACCESS_GAS_COST
+        };
+
+        instance.use_gas(&mut store, address_access_cost + call_execution_cost);
 
         env.last_call_result = CallResult::new(response);
 

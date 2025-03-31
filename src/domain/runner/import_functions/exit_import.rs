@@ -24,7 +24,7 @@ impl ExitImport {
         data_ptr: u32,
         data_length: u32,
     ) -> Result<ExitData, RuntimeError> {
-        let (env, store) = context.data_and_store_mut();
+        let (env, mut store) = context.data_and_store_mut();
 
         let instance = env
             .instance
@@ -35,8 +35,10 @@ impl ExitImport {
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading exit data from memory"))?;
 
-        env.exit_data = ExitData::new(status, data.as_slice());
+        let gas_used = instance.get_used_gas(&mut store);
 
-        Ok(ExitData::new(status, data.as_slice()))
+        env.exit_data = ExitData::new(status, gas_used, data.as_slice());
+
+        Ok(env.exit_data.clone())
     }
 }

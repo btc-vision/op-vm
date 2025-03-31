@@ -1,7 +1,7 @@
 {
   "name": "@btc-vision/op-vm",
   "description": "OP-VM executable for Bitcoin Smart Contracts",
-  "version": "0.3.4",
+  "version": "0.3.8",
   "license": "LICENSE.MD",
   "main": "index.js",
   "types": "index.d.ts",
@@ -46,5 +46,8 @@
     "universal": "napi universal",
     "version": "napi version",
     "postinstall": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.13"
   }
 }

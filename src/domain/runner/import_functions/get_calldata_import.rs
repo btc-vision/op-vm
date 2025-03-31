@@ -34,12 +34,7 @@ impl GetCalldataImport {
         );
 
         DataSliceWriter::write_data_and_padding_to_memory(
-            &mut store,
-            &instance,
-            calldata,
-            offset,
-            length,
-            result_ptr,
+            &mut store, &instance, calldata, offset, length, result_ptr,
         )
     }
 }

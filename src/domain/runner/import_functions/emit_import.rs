@@ -29,7 +29,7 @@ impl EmitImport {
         let data = instance
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
-        
+
         instance.use_gas(&mut store, data.len() as u64 * GAS_COST_PER_BYTES);
 
         env.emit_external.execute(&data, &env.runtime)

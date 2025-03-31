@@ -15,7 +15,7 @@ impl ConsoleLogImport {
         if env.is_running_start_function {
             return Err(RuntimeError::new("Cannot log in start function"));
         }
-        
+
         let instance = &env
             .instance
             .clone()

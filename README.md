@@ -15,7 +15,7 @@
 
 ## Overview
 
-Welcome to the OP_NET Rust VM, an experimental virtual machine designed for evaluating smart contracts on the Bitcoin
+OP_NET Rust VM, an experimental virtual machine designed for evaluating smart contracts on the Bitcoin
 network using Rust and Wasmer. This VM is part of the broader OP_NET initiative, which aims to bring smart contract
 functionality to Bitcoin. However, please note that this code is currently in an experimental stage and is subject to
 frequent breaking changes. Nothing is final, and you should expect ongoing development and instability.
@@ -47,7 +47,7 @@ The project is organized into the following directories:
 
 ### Prerequisites
 
-- **Node.js**: Version 16 or higher is required.
+- **Node.js**: Version 22 or higher is required.
 - **Rust**: You must have Rust installed to compile and develop this project.
 - **wasm-pack**: To work with Wasmer, ensure that `wasm-pack` is installed.
 - **@napi-rs/cli**: This is a required dependency for managing N-API bindings.
