@@ -26,7 +26,6 @@ impl GetBlockHashImport {
             .write_memory(&store, result_ptr as u64, &result)
             .map_err(|_e| RuntimeError::new("Error writing block hash to memory"))?;
 
-
         Ok(())
     }
 }
