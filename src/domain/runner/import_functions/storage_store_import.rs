@@ -15,7 +15,7 @@ impl StorageStoreImport {
 
         if env.is_running_start_function {
             return Err(RuntimeError::new(
-                "Cannot save to storage in start function",
+                "Cannot save to transient storage in start function",
             ));
         }
 

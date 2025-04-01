@@ -16,7 +16,7 @@ impl TransientLoadImport {
 
         if env.is_running_start_function {
             return Err(RuntimeError::new(
-                "Cannot load from storage in start function",
+                "Cannot load from transient storage in start function",
             ));
         }
 
