@@ -1,4 +1,4 @@
-use crate::domain::runner::CustomEnv;
+use crate::domain::runner::{CustomEnv, COLD_STORAGE_GAS_COST, WARM_STORAGE_GAS_COST};
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -24,31 +24,27 @@ impl StorageLoadImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        let data = instance
+        let key = instance
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        // Get method
-        let result = env.store_cache.get(
-            &data
-                .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-            |key| {
-                let resp = env.storage_load_external.execute(&key, &env.runtime)?;
+        let response = env.storage_load_external.execute(&key, &env.runtime)?;
 
-                let is_cold = resp[32] == 1;
-                let pointer_value = resp[0..32].try_into().map_err(|e| {
-                    RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-                })?;
+        let value = response[0..32].try_into().map_err(|e| {
+            RuntimeError::new(format!("Cannot map result to data: {:?}", e))
+        })?;
+        let is_slot_warm = response[32] == 1;
 
-                Ok((pointer_value, is_cold))
-            },
-        )?;
+        let gas_cost = if is_slot_warm {
+            WARM_STORAGE_GAS_COST
+        } else {
+            COLD_STORAGE_GAS_COST
+        };
 
-        instance.use_gas(&mut store, result.gas_cost);
+        instance.use_gas(&mut store, gas_cost);
 
         instance
-            .write_memory(&store, result_ptr as u64, &result.value)
+            .write_memory(&store, result_ptr as u64, value)
             .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
 
         Ok(())
