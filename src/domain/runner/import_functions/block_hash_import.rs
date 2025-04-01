@@ -1,7 +1,8 @@
 use crate::domain::runner::CustomEnv;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 21_000_000;
+const COLD_BLOCK_ACCESS_GAS_COST: u64 = 26_000_000;
+const WARM_BLOCK_ACCESS_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
 pub struct GetBlockHashImport;
@@ -18,12 +19,20 @@ impl GetBlockHashImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
-        
-        let result = env.block_hash_external.execute(block_number, &env.runtime)?;
+        let result = env
+            .block_hash_external
+            .execute(block_number, &env.runtime)?;
+
+        let block_access_cost = if result.is_block_warm {
+            WARM_BLOCK_ACCESS_GAS_COST
+        } else {
+            COLD_BLOCK_ACCESS_GAS_COST
+        };
+
+        instance.use_gas(&mut store, block_access_cost);
 
         instance
-            .write_memory(&store, result_ptr as u64, &result)
+            .write_memory(&store, result_ptr as u64, &result.block_hash)
             .map_err(|_e| RuntimeError::new("Error writing block hash to memory"))?;
 
         Ok(())
