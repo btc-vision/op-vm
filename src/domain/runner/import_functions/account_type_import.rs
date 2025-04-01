@@ -1,7 +1,7 @@
-use crate::domain::runner::CustomEnv;
+use crate::domain::runner::{
+    CustomEnv, COLD_ADDRESS_ACCESS_GAS_COST, WARM_ADDRESS_ACCESS_GAS_COST,
+};
 use wasmer::{FunctionEnvMut, RuntimeError};
-
-const STATIC_GAS_COST: u64 = 26_000_000;
 
 #[derive(Default)]
 pub struct GetAccountTypeImport;
@@ -17,13 +17,22 @@ impl GetAccountTypeImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
-
         let address_hash = instance
             .read_memory(&store, address_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading address hash from memory"))?;
 
-        env.account_type_external
-            .execute(&address_hash, &env.runtime)
+        let result = env
+            .account_type_external
+            .execute(&address_hash, &env.runtime)?;
+
+        let address_access_cost = if result.is_address_warm {
+            WARM_ADDRESS_ACCESS_GAS_COST
+        } else {
+            COLD_ADDRESS_ACCESS_GAS_COST
+        };
+
+        instance.use_gas(&mut store, address_access_cost);
+
+        Ok(result.account_type)
     }
 }

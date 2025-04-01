@@ -30,7 +30,7 @@ impl BlockHashExternalFunction {
             contract_id: BigInt::from(self.contract_id),
         };
 
-        let deploy = async move {
+        let result = async move {
             let response: Result<Promise<Buffer>, RuntimeError> = self
                 .tsfn
                 .call_async(Ok(request))
@@ -43,7 +43,7 @@ impl BlockHashExternalFunction {
             Ok(data.to_vec().into())
         };
 
-        let response = runtime.block_on(deploy);
+        let response = runtime.block_on(result);
 
         response
     }
