@@ -14,6 +14,7 @@ use wasmer_types::SerializeError;
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
 use crate::domain::runner::constants::{MAX_PAGES, STACK_SIZE};
+#[allow(unused_imports)]
 use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
     DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
@@ -107,8 +108,8 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
-                "tload" => import!(TransientLoadImport),
-                "tstore" => import!(TransientStoreImport),
+                // "tload" => import!(TransientLoadImport),
+                // "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -119,8 +120,8 @@ impl WasmerRunner {
                 "outputsSize" => import!(GetOutputsSizeImport),
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),
-                "accountType" => import!(GetAccountTypeImport),
-                "blockHash" => import!(GetBlockHashImport),
+                // "accountType" => import!(GetAccountTypeImport),
+                // "blockHash" => import!(GetBlockHashImport),
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
                 "verifySchnorrSignature" => import!(VerifySchnorrImport),
             },

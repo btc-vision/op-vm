@@ -6,6 +6,7 @@ pub struct TransientLoadImport;
 
 const STATIC_GAS_COST: u64 = 1_000_000;
 
+#[allow(dead_code)]
 impl TransientLoadImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,

@@ -6,6 +6,7 @@ pub struct TransientStoreImport;
 
 const STATIC_GAS_COST: u64 = 1_000_000;
 
+#[allow(dead_code)]
 impl TransientStoreImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
@@ -33,7 +34,7 @@ impl TransientStoreImport {
         let value = instance
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
-        
+
         env.transient_storage.set(
             key.as_slice()
                 .try_into()

@@ -6,6 +6,7 @@ use wasmer::{FunctionEnvMut, RuntimeError};
 #[derive(Default)]
 pub struct GetAccountTypeImport;
 
+#[allow(dead_code)]
 impl GetAccountTypeImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
@@ -18,7 +19,7 @@ impl GetAccountTypeImport {
                 "Cannot get account type in start function",
             ));
         }
-        
+
         let instance = &env
             .instance
             .clone()

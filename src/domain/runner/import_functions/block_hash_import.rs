@@ -7,6 +7,7 @@ const WARM_BLOCK_ACCESS_GAS_COST: u64 = 1_000_000;
 #[derive(Default)]
 pub struct GetBlockHashImport;
 
+#[allow(dead_code)]
 impl GetBlockHashImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
@@ -20,7 +21,7 @@ impl GetBlockHashImport {
                 "Cannot get block hash in start function",
             ));
         }
-        
+
         let instance = &env
             .instance
             .clone()
