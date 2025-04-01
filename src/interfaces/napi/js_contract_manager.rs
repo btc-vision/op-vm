@@ -1,6 +1,7 @@
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
+use crate::interfaces::napi::external_functions::BlockHashRequest;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
@@ -59,6 +60,11 @@ pub struct ContractManager {
     pub inputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
     #[napi(skip)]
     pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    #[napi(skip)]
+    pub account_type_tsfn:
+        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    #[napi(skip)]
+    pub block_hash_tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
 }
 
 #[napi] //noinspection RsCompileErrorMacro
@@ -94,6 +100,14 @@ impl ContractManager {
             ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
         )]
         outputs_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
+        )]
+        account_type_js_function: JsFunction,
+        #[napi(
+            ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<Buffer | Uint8Array>"
+        )]
+        block_hash_js_function: JsFunction,
     ) -> Result<Self, Error> {
         let storage_load_tsfn = create_tsfn!(storage_load_js_function);
         let storage_store_tsfn = create_tsfn!(storage_store_js_function);
@@ -103,6 +117,8 @@ impl ContractManager {
         let emit_tsfn = create_tsfn!(emit_js_function);
         let inputs_tsfn = create_tsfn!(inputs_js_function);
         let outputs_tsfn = create_tsfn!(outputs_js_function);
+        let account_type_tsfn = create_tsfn!(account_type_js_function);
+        let block_hash_tsfn = create_tsfn!(block_hash_js_function);
 
         let max_idling_runtimes = max_idling_runtimes as usize;
         let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
@@ -120,6 +136,8 @@ impl ContractManager {
             emit_tsfn,
             inputs_tsfn,
             outputs_tsfn,
+            account_type_tsfn,
+            block_hash_tsfn,
         })
     }
 

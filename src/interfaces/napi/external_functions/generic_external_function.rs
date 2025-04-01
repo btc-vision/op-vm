@@ -23,7 +23,7 @@ impl GenericExternalFunction {
 impl ExternalFunction for GenericExternalFunction {
     fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         let request = ThreadSafeJsImportResponse {
-            buffer: Vec::from(data),
+            buffer: data.to_vec(),
             contract_id: BigInt::from(self.contract_id),
         };
 

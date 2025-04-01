@@ -1,11 +1,12 @@
 use crate::domain::runner::CustomEnv;
-use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 #[derive(Default)]
-pub struct StorageLoadImport;
+pub struct TransientLoadImport;
 
-impl StorageLoadImport {
+const STATIC_GAS_COST: u64 = 1_000_000;
+
+impl TransientLoadImport {
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         key_ptr: u32,
@@ -15,7 +16,7 @@ impl StorageLoadImport {
 
         if env.is_running_start_function {
             return Err(RuntimeError::new(
-                "Cannot load from storage in start function",
+                "Cannot load from transient storage in start function",
             ));
         }
 
@@ -24,31 +25,19 @@ impl StorageLoadImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        instance.use_gas(&mut store, STATIC_GAS_COST);
+        
         let data = instance
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
         // Get method
-        let result = env.store_cache.get(
-            &data
-                .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-            |key| {
-                let resp = env.storage_load_external.execute(&key, &env.runtime)?;
-
-                let is_cold = resp[32] == 1;
-                let pointer_value = resp[0..32].try_into().map_err(|e| {
-                    RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-                })?;
-
-                Ok((pointer_value, is_cold))
-            },
-        )?;
-
-        instance.use_gas(&mut store, result.gas_cost);
+        let result = env
+            .transient_storage
+            .get(data.as_slice().try_into().unwrap());
 
         instance
-            .write_memory(&store, result_ptr as u64, &result.value)
+            .write_memory(&store, result_ptr as u64, &result)
             .map_err(|_e| RuntimeError::new("Error writing storage value to memory"))?;
 
         Ok(())

@@ -15,7 +15,7 @@ impl StorageStoreImport {
 
         if env.is_running_start_function {
             return Err(RuntimeError::new(
-                "Cannot save to storage in start function",
+                "Cannot save to transient storage in start function",
             ));
         }
 
@@ -23,10 +23,6 @@ impl StorageStoreImport {
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
-        let mut cache = env
-            .store_cache
-            .lock()
-            .map_err(|e| RuntimeError::new(format!("Error claiming store cache: {}", e)))?;
 
         let key = instance
             .read_memory(&store, key_ptr as u64, 32)
@@ -35,24 +31,12 @@ impl StorageStoreImport {
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
 
-        let data = [key.as_slice(), value.as_slice()].concat();
-
-        let pointer = data
-            .get(0..32)
-            .ok_or(RuntimeError::new("Invalid buffer"))?
-            .to_vec();
-        let value = data
-            .get(32..64)
-            .ok_or(RuntimeError::new("Invalid buffer"))?
-            .to_vec();
-
-        let result = cache.set(
-            pointer
-                .try_into()
+        let result = env.store_cache.set(
+            key.try_into()
                 .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
             value
                 .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
+                .map_err(|e| RuntimeError::new(format!("Cannot convert the data: {:?}", e)))?,
             |key| {
                 let resp = env.storage_load_external.execute(&key, &env.runtime)?;
 
@@ -65,10 +49,7 @@ impl StorageStoreImport {
             },
             |key, value| {
                 env.storage_store_external
-                    .execute(
-                        &key.iter().chain(value.iter()).cloned().collect::<Vec<u8>>(),
-                        &env.runtime,
-                    )
+                    .execute(&[key, value].concat(), &env.runtime)
                     .map_err(|e| {
                         RuntimeError::new(format!("Cannot map result to data: {:?}", e))
                     })?;

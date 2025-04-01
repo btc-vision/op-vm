@@ -18,9 +18,9 @@ use crate::interfaces::napi::environment_variables_request::EnvironmentVariables
 use crate::interfaces::napi::js_contract_manager::ContractManager;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
-    CallOtherContractExternalFunction, ConsoleLogExternalFunction,
-    DeployFromAddressExternalFunction, EmitExternalFunction, ExitDataResponse,
-    InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
+    AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
+    ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
+    ExitDataResponse, InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
 
@@ -44,6 +44,8 @@ impl JsContract {
             let emit_tsfn = manager.emit_tsfn.clone();
             let inputs_tsfn = manager.inputs_tsfn.clone();
             let outputs_tsfn = manager.outputs_tsfn.clone();
+            let account_type_tsfn = manager.account_type_tsfn.clone();
+            let block_hash_tsfn = manager.block_hash_tsfn.clone();
 
             // Create ExternalFunction instances with contract_id
             let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
@@ -56,6 +58,8 @@ impl JsContract {
             let emit_external = EmitExternalFunction::new(emit_tsfn, id);
             let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
             let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
+            let account_type_external = AccountTypeExternalFunction::new(account_type_tsfn, id);
+            let block_hash_external = BlockHashExternalFunction::new(block_hash_tsfn, id);
 
             // Obtain a Runtime from the pool
             let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
@@ -73,6 +77,8 @@ impl JsContract {
                 emit_external,
                 inputs_external,
                 outputs_external,
+                account_type_external,
+                block_hash_external,
                 runtime.clone(),
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;

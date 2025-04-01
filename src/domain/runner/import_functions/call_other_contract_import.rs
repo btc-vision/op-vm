@@ -1,10 +1,9 @@
 use crate::domain::runner::call_result::CallResult;
-use crate::domain::runner::CustomEnv;
+use crate::domain::runner::{
+    CustomEnv, COLD_ADDRESS_ACCESS_GAS_COST, WARM_ADDRESS_ACCESS_GAS_COST,
+};
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
-
-const COLD_ADDRESS_ACCESS_GAS_COST: u64 = 26_000_000;
-const WARM_ADDRESS_ACCESS_GAS_COST: u64 = 1_000_000;
 
 #[derive(Default)]
 pub struct CallOtherContractImport;

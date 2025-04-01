@@ -17,10 +17,11 @@ use crate::domain::runner::constants::{MAX_PAGES, STACK_SIZE};
 use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
     DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
-    ExtendedMemoryAccessError, GetCallResultImport, GetCalldataImport,
-    GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport, GetOutputsImport,
-    GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import, StorageLoadImport,
-    StorageStoreImport, ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_WASM_INIT,
+    ExtendedMemoryAccessError, GetAccountTypeImport, GetBlockHashImport, GetCallResultImport,
+    GetCalldataImport, GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport,
+    GetOutputsImport, GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import,
+    StorageLoadImport, StorageStoreImport, TransientLoadImport, TransientStoreImport,
+    ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_WASM_INIT,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
@@ -106,6 +107,8 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
+                "tload" => import!(TransientLoadImport),
+                "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -116,6 +119,8 @@ impl WasmerRunner {
                 "outputsSize" => import!(GetOutputsSizeImport),
                 "sha256" => import!(Sha256Import),
                 "ripemd160" => import!(Ripemd160Import),
+                "accountType" => import!(GetAccountTypeImport),
+                "blockHash" => import!(GetBlockHashImport),
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
                 "verifySchnorrSignature" => import!(VerifySchnorrImport),
             },
