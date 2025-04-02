@@ -1,4 +1,4 @@
-use crate::domain::runner::CustomEnv;
+use crate::domain::runner::{CustomEnv, COLD_STORAGE_GAS_COST, WARM_STORAGE_GAS_COST};
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -31,40 +31,17 @@ impl StorageStoreImport {
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
 
-        let result = env.store_cache.set(
-            key.try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the pointer: {:?}", e)))?,
-            value
-                .try_into()
-                .map_err(|e| RuntimeError::new(format!("Cannot convert the data: {:?}", e)))?,
-            |key| {
-                let resp = env.storage_load_external.execute(&key, &env.runtime)?;
+        let resp = env.storage_store_external.execute(&[key, value].concat(), &env.runtime)?;
 
-                let is_cold = resp[32] == 1;
-                let pointer_value = resp[0..32].try_into().map_err(|e| {
-                    RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-                })?;
+        let is_slot_warm = resp[0] == 1;
 
-                Ok((pointer_value, is_cold))
-            },
-            |key, value| {
-                env.storage_store_external
-                    .execute(&[key, value].concat(), &env.runtime)
-                    .map_err(|e| {
-                        RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-                    })?;
-                Ok(())
-            },
-        )?;
+        let gas_cost = if is_slot_warm {
+            WARM_STORAGE_GAS_COST
+        } else {
+            COLD_STORAGE_GAS_COST
+        };
 
-        instance.use_gas(&mut store, result.gas_cost);
-        if result.gas_refund > 0 {
-            instance.refund_gas(&mut store, result.gas_refund as u64);
-        } else if result.gas_refund < 0 && result.gas_refund > i64::MIN {
-            instance.use_gas(&mut store, (-result.gas_refund) as u64);
-        } else if result.gas_refund == i64::MIN {
-            instance.use_gas(&mut store, u64::MAX);
-        }
+        instance.use_gas(&mut store, gas_cost);
 
         Ok(())
     }
