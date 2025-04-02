@@ -14,6 +14,14 @@ use napi::Env;
 use napi::{Error, JsFunction, JsNumber};
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::domain::runner;
+
+#[napi]
+#[allow(dead_code)]
+pub const NEW_STORAGE_SLOT_GAS_COST: u64 = runner::NEW_STORAGE_SLOT_GAS_COST;
+#[napi]
+#[allow(dead_code)]
+pub const UPDATED_STORAGE_SLOT_GAS_COST: u64 = runner::UPDATED_STORAGE_SLOT_GAS_COST;
 
 macro_rules! create_tsfn {
     ($id:ident) => {
