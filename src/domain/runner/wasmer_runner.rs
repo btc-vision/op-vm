@@ -55,6 +55,20 @@ impl WasmerRunner {
         Ok(instance)
     }
 
+    fn create_engine() -> anyhow::Result<Store> {
+        let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost);
+        let metering = Arc::new(meter);
+
+        let mut compiler = Singlepass::default();
+        compiler.canonicalize_nans(true);
+        compiler.push_middleware(metering);
+        compiler.enable_verifier();
+
+        let engine = EngineBuilder::new(compiler).set_features(None).engine();
+        let store = Store::new(Self::create_tunable(engine));
+        Ok(store)
+    }
+
     pub fn serialize(&self) -> anyhow::Result<Bytes, SerializeError> {
         let serialized = self.module.serialize()?;
 
@@ -81,6 +95,15 @@ impl WasmerRunner {
         Ok(instance)
     }
 
+    fn create_tunable(mut engine: Engine) -> Engine {
+        let base = BaseTunables::for_target(&Target::default());
+        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
+
+        engine.set_tunables(tunables);
+
+        engine
+    }
+
     fn create_instance(
         used_gas: u64,
         max_gas: u64,
@@ -89,7 +112,7 @@ impl WasmerRunner {
         module: Module,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
-        // verify and calculate remaining gas
+        // Verify and calculate remaining gas
         let remaining_gas = Self::calculate_remaining_gas(used_gas, max_gas)?;
 
         // Load environment
@@ -202,59 +225,6 @@ impl WasmerRunner {
         Ok(imp)
     }
 
-    fn set_is_running_start(&mut self, value: bool) {
-        let env = self.env.as_mut(&mut self.store);
-        env.is_running_start_function = value;
-    }
-
-    fn create_tunable(mut engine: Engine) -> Engine {
-        let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
-
-        engine.set_tunables(tunables);
-
-        engine
-    }
-
-    fn create_engine() -> anyhow::Result<Store> {
-        let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost);
-        let metering = Arc::new(meter);
-
-        let mut compiler = Singlepass::default();
-        compiler.canonicalize_nans(true);
-        compiler.push_middleware(metering);
-        compiler.enable_verifier();
-
-        let engine = EngineBuilder::new(compiler).set_features(None).engine();
-        let store = Store::new(Self::create_tunable(engine));
-        Ok(store)
-    }
-
-    fn handle_errors(
-        &mut self,
-        response: Result<Box<[Value]>, RuntimeError>,
-        max_gas: u64,
-    ) -> anyhow::Result<Box<[Value]>> {
-        response.map_err(|e| {
-            if e.to_string().contains("unreachable") {
-                let gas_used = self.get_remaining_gas();
-                if gas_used == 0 {
-                    anyhow::anyhow!("out of gas (consumed: {})", max_gas)
-                } else {
-                    let out_of_memory = self.is_out_of_memory().unwrap_or(false);
-
-                    if out_of_memory {
-                        anyhow::anyhow!("out of memory")
-                    } else {
-                        anyhow::anyhow!(e)
-                    }
-                }
-            } else {
-                anyhow::anyhow!(e)
-            }
-        })
-    }
-
     fn calculate_remaining_gas(used_gas: u64, max_gas: u64) -> anyhow::Result<u64> {
         if MAX_GAS_WASM_INIT > max_gas {
             return Err(anyhow::anyhow!(
@@ -284,6 +254,36 @@ impl WasmerRunner {
         // metering. This is a safe operation since we have already checked that the remaining gas
         // is enough.
         Ok(remaining_gas)
+    }
+
+    fn set_is_running_start(&mut self, value: bool) {
+        let env = self.env.as_mut(&mut self.store);
+        env.is_running_start_function = value;
+    }
+
+    fn handle_errors(
+        &mut self,
+        response: Result<Box<[Value]>, RuntimeError>,
+        max_gas: u64,
+    ) -> anyhow::Result<Box<[Value]>> {
+        response.map_err(|e| {
+            if e.to_string().contains("unreachable") {
+                let gas_used = self.get_remaining_gas();
+                if gas_used == 0 {
+                    anyhow::anyhow!("out of gas (consumed: {})", max_gas)
+                } else {
+                    let out_of_memory = self.is_out_of_memory().unwrap_or(false);
+
+                    if out_of_memory {
+                        anyhow::anyhow!("out of memory")
+                    } else {
+                        anyhow::anyhow!(e)
+                    }
+                }
+            } else {
+                anyhow::anyhow!(e)
+            }
+        })
     }
 }
 
