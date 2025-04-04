@@ -6,6 +6,7 @@ pub struct JsContractParameter {
     pub(crate) serialized: Option<Bytes>,
     pub(crate) used_gas: u64,
     pub(crate) max_gas: u64,
+    pub(crate) memory_pages_used: u32,
     pub(crate) network: BitcoinNetworkRequest,
     pub(crate) is_debug_mode: bool,
 }

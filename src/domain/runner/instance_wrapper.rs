@@ -2,6 +2,7 @@ use crate::domain::runner::MAX_MEMORY_SIZE;
 use thiserror::Error;
 use wasmer::{AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError};
 use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, MeteringPoints};
+use wasmer_types::Pages;
 
 #[derive(Clone)]
 pub struct InstanceWrapper {
@@ -63,6 +64,19 @@ impl InstanceWrapper {
             .map_err(|e| ExtendedMemoryAccessError::Base(e))
     }
 
+    pub fn get_memory_size(&self, store: &(impl AsStoreRef + ?Sized)) -> Result<Pages, ExtendedMemoryAccessError> {
+        let memory = Self::get_memory(&self.instance)?;
+        let view = memory.view(store);
+        Ok(view.size())
+    }
+
+    fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
+        instance
+            .exports
+            .get_memory("memory")
+            .map_err(|_| ExtendedMemoryAccessError::UnableToGetMemory)
+    }
+
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
         let gas_before = self.get_remaining_gas(store);
 
@@ -90,13 +104,6 @@ impl InstanceWrapper {
 
     pub fn set_remaining_gas(&self, store: &mut impl AsStoreMut, gas: u64) {
         set_remaining_points(store, &self.instance, gas);
-    }
-
-    fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
-        instance
-            .exports
-            .get_memory("memory")
-            .map_err(|_| ExtendedMemoryAccessError::UnableToGetMemory)
     }
 
     pub fn get_function(&self, function: &str) -> Result<&Function, ExportError> {

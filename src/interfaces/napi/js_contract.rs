@@ -1,17 +1,5 @@
-use bytes::Bytes;
-use chrono::Local;
-use napi::bindgen_prelude::*;
-use napi::bindgen_prelude::{Array, BigInt, Buffer};
-use napi::Env;
-use napi::Error;
-use napi::JsUnknown;
-use std::panic::catch_unwind;
-use std::sync::{Arc, Mutex, TryLockError};
-use tokio::runtime::Runtime;
-use wasmer::Value;
-
 use crate::application::contract::ContractService;
-use crate::domain::runner::{CustomEnv, ExitData, WasmerRunner};
+use crate::domain::runner::{CustomEnv, ExitData, WasmerRunner, MAX_PAGES};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -23,6 +11,17 @@ use crate::interfaces::{
     ExitDataResponse, InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
     StorageStoreExternalFunction,
 };
+use bytes::Bytes;
+use chrono::Local;
+use napi::bindgen_prelude::*;
+use napi::bindgen_prelude::{Array, BigInt, Buffer};
+use napi::Env;
+use napi::Error;
+use napi::JsUnknown;
+use std::panic::catch_unwind;
+use std::sync::{Arc, Mutex, TryLockError};
+use tokio::runtime::Runtime;
+use wasmer::Value;
 
 pub struct JsContract {
     runner: Arc<Mutex<WasmerRunner>>,
@@ -66,6 +65,11 @@ impl JsContract {
                 Error::from_reason("No available runtimes in the pool".to_string())
             })?;
 
+            if params.memory_pages_used >= MAX_PAGES {
+                return Err(Error::from_reason("No more memory pages available"));
+            }
+            let max_pages = MAX_PAGES - params.memory_pages_used;
+
             //let runtime = Arc::new(Runtime::new()?);
             let custom_env: CustomEnv = CustomEnv::new(
                 params.network.into(),
@@ -80,6 +84,7 @@ impl JsContract {
                 account_type_external,
                 block_hash_external,
                 runtime.clone(),
+                max_pages,
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
@@ -90,6 +95,7 @@ impl JsContract {
                     &bytecode,
                     params.used_gas,
                     params.max_gas,
+                    max_pages,
                     custom_env,
                     params.is_debug_mode,
                 )
@@ -100,6 +106,7 @@ impl JsContract {
                         serialized,
                         params.used_gas,
                         params.max_gas,
+                        max_pages,
                         custom_env,
                         params.is_debug_mode,
                     )
