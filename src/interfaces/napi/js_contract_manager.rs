@@ -1,3 +1,4 @@
+use crate::domain::runner;
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -14,7 +15,6 @@ use napi::Env;
 use napi::{Error, JsFunction, JsNumber};
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::domain::runner;
 
 #[napi]
 #[allow(dead_code)]
