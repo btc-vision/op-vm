@@ -164,6 +164,7 @@ impl ContractManager {
         bytecode: Option<Buffer>,
         used_gas: BigInt,
         max_gas: BigInt,
+        memory_pages_used: BigInt,
         network: BitcoinNetworkRequest,
         is_debug_mode: bool,
     ) -> Result<(), Error> {
@@ -174,8 +175,9 @@ impl ContractManager {
         let mut params = JsContractParameter {
             bytecode: None,
             serialized: None,
-            used_gas: used_gas,
+            used_gas,
             max_gas,
+            memory_pages_used: memory_pages_used.get_u64().1 as u32,
             network,
             is_debug_mode,
         };

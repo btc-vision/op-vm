@@ -1,7 +1,5 @@
 use crate::domain::runner::call_result::CallResult;
-use crate::domain::runner::{
-    CustomEnv, COLD_ADDRESS_ACCESS_GAS_COST, WARM_ADDRESS_ACCESS_GAS_COST,
-};
+use crate::domain::runner::{CustomEnv, COLD_ADDRESS_ACCESS_GAS_COST, MAX_PAGES, WARM_ADDRESS_ACCESS_GAS_COST};
 use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -36,8 +34,16 @@ impl CallOtherContractImport {
             .read_memory(&store, calldata_ptr as u64, calldata_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading calldata from memory"))?;
 
+        let memory_size = instance
+            .get_memory_size(&store)
+            .map_err(|_e| RuntimeError::new("Error getting memory size"))?;
+
+        let previous_calls_memory_size = MAX_PAGES - env.max_pages;
+        let total_memory_size = memory_size + previous_calls_memory_size;
+
         let data = [
             gas_used.to_be_bytes().as_slice(),
+            total_memory_size.0.to_be_bytes().as_slice(),
             address.as_slice(),
             calldata_length.to_be_bytes().as_slice(),
             calldata.as_slice(),

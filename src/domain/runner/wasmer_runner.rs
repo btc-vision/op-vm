@@ -13,7 +13,7 @@ use wasmer_types::SerializeError;
 
 use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
 
-use crate::domain::runner::constants::{MAX_PAGES, STACK_SIZE};
+use crate::domain::runner::constants::STACK_SIZE;
 #[allow(unused_imports)]
 use crate::domain::runner::{
     CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
@@ -40,12 +40,13 @@ impl WasmerRunner {
         bytecode: &[u8],
         used_gas: u64,
         max_gas: u64,
+        max_pages: u32,
         custom_env: CustomEnv,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let store = Self::create_engine()?;
+        let store = Self::create_engine(max_pages)?;
         let module = Module::from_binary(&store, &bytecode)?;
         let instance =
             Self::create_instance(used_gas, max_gas, custom_env, store, module, is_debug_mode)?;
@@ -55,7 +56,7 @@ impl WasmerRunner {
         Ok(instance)
     }
 
-    fn create_engine() -> anyhow::Result<Store> {
+    fn create_engine(max_pages: u32) -> anyhow::Result<Store> {
         let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost);
         let metering = Arc::new(meter);
 
@@ -65,7 +66,7 @@ impl WasmerRunner {
         compiler.enable_verifier();
 
         let engine = EngineBuilder::new(compiler).set_features(None).engine();
-        let store = Store::new(Self::create_tunable(engine));
+        let store = Store::new(Self::create_tunable(engine, max_pages));
         Ok(store)
     }
 
@@ -79,13 +80,14 @@ impl WasmerRunner {
         serialized: Bytes,
         used_gas: u64,
         max_gas: u64,
+        max_pages: u32,
         custom_env: CustomEnv,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
         let engine = EngineBuilder::headless().set_features(None).engine();
-        let store = Store::new(Self::create_tunable(engine));
+        let store = Store::new(Self::create_tunable(engine, max_pages));
         let module = Module::deserialize(&store, serialized)?;
         let instance =
             Self::create_instance(used_gas, max_gas, custom_env, store, module, is_debug_mode)?;
@@ -95,9 +97,9 @@ impl WasmerRunner {
         Ok(instance)
     }
 
-    fn create_tunable(mut engine: Engine) -> Engine {
+    fn create_tunable(mut engine: Engine, max_pages: u32) -> Engine {
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, MAX_PAGES, STACK_SIZE);
+        let tunables = LimitingTunables::new(base, max_pages, STACK_SIZE);
 
         engine.set_tunables(tunables);
 
@@ -170,6 +172,7 @@ impl WasmerRunner {
         };
 
         let instance_wrapper = InstanceWrapper::new(instance.clone(), max_gas);
+        env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
 
         let mut imp = Self {
