@@ -178,7 +178,7 @@ impl JsContract {
 
         let result = match call_result {
             Ok(values) => Ok(values),
-            Err(e) => Err(Error::from_reason(format!("{:?}", e))),
+            Err(_) => Err(Error::from_reason("Execution failed")),
         };
 
         log_time_diff(&time, "JsContract::execute");
