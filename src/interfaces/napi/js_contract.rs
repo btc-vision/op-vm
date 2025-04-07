@@ -178,7 +178,10 @@ impl JsContract {
 
         let result = match call_result {
             Ok(values) => Ok(values),
-            Err(_) => Err(Error::from_reason("Execution failed")),
+
+            // TODO: LEAVE LIKE THIS FOR NOW, SEE IF WE CAN STOP THE ERROR: ERROR: ERROR EVENTUALLY
+            // FIXED THE MASSIVE ERROR OVERFLOW OF ERROR USING ROOT_CAUSE
+            Err(e) => Err(Error::from_reason(e.root_cause().to_string())),
         };
 
         log_time_diff(&time, "JsContract::execute");
