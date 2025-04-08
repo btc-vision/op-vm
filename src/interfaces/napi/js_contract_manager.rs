@@ -113,7 +113,7 @@ impl ContractManager {
         )]
         account_type_js_function: JsFunction,
         #[napi(
-            ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
         )]
         block_hash_js_function: JsFunction,
     ) -> Result<Self, Error> {
