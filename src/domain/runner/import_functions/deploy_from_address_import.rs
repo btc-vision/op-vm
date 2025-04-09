@@ -52,7 +52,7 @@ impl DeployFromAddressImport {
             salt.as_slice(),
             calldata.as_slice(),
         ]
-        .concat();
+            .concat();
 
         let result = &env
             .deploy_from_address_external
@@ -65,8 +65,8 @@ impl DeployFromAddressImport {
         let (bytecode_length_bytes, result_remainder) = result_remainder
             .split_first_chunk::<4>()
             .ok_or(RuntimeError::new(
-            "Invalid data received for 'Deploy from address'",
-        ))?;
+                "Invalid data received for 'Deploy from address'",
+            ))?;
 
         // Use deployment gas for bytecode
         let bytecode_length = u32::from_be_bytes(*bytecode_length_bytes);
@@ -80,7 +80,7 @@ impl DeployFromAddressImport {
                 "Invalid data received for 'Deploy from address'",
             ))?;
 
-        let (exit_status_bytes, exit_data) =
+        let (exit_status_bytes, result_remainder) =
             result_remainder
                 .split_first_chunk::<4>()
                 .ok_or(RuntimeError::new(
@@ -93,11 +93,10 @@ impl DeployFromAddressImport {
         instance.use_gas(&mut store, call_execution_cost);
 
         // Result from onDeploy
-        let _response = exit_data.get(0..exit_data.len()).ok_or(RuntimeError::new(
+        let _exit_data = result_remainder.get(0..result_remainder.len()).ok_or(RuntimeError::new(
             "Invalid data received for 'Deploy from address'",
         ))?;
 
-        // TODO: DO SOMETHING WITH THE RESPONSE?
         instance
             .write_memory(&store, result_address_ptr as u64, result_address)
             .map_err(|_e| RuntimeError::new("Error writing contract address to memory"))?;
