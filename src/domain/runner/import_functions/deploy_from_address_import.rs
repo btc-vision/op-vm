@@ -66,10 +66,9 @@ impl DeployFromAddressImport {
 
         // Use deployment gas for bytecode
         let bytecode_length = u32::from_be_bytes(*bytecode_length_bytes);
-        instance.use_gas(
-            &mut store,
-            bytecode_length as u64 * GAS_COST_PER_CONTRACT_BYTES,
-        );
+        let gas_for_bytecode = bytecode_length as u64 * GAS_COST_PER_CONTRACT_BYTES;
+
+        instance.use_gas(&mut store, gas_for_bytecode);
 
         let (call_execution_cost_bytes, result_remainder) = result_remainder
             .split_first_chunk::<8>()
