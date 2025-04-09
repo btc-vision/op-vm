@@ -94,7 +94,7 @@ impl DeployFromAddressImport {
             "Invalid data received for 'Deploy from address'",
         ))?;
 
-        // TODO: ADD EXIT DATA HERE, AFTER BYTECODE LENGTH & RESULT ADDRESS.
+        // TODO: DO SOMETHING WITH THE RESPONSE?
         instance
             .write_memory(&store, result_address_ptr as u64, result_address)
             .map_err(|_e| RuntimeError::new("Error writing contract address to memory"))?;
