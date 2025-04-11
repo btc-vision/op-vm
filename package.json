@@ -34,5 +34,8 @@
     },
     "devDependencies": {
         "@types/node": "^22.14.0"
+    },
+    "dependencies": {
+        "@neon-rs/cli": "^0.1.82"
     }
 }

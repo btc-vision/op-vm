@@ -1,3 +1,6 @@
-pub use self::napi::*;
-
 mod napi;
+
+
+pub use self::{
+    napi::*,
+};

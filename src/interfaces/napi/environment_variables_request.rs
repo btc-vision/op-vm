@@ -1,7 +1,9 @@
 use crate::domain::common::Address;
 use crate::domain::runner::EnvironmentVariables;
+use neon::object::PropOptions;
 use neon::prelude::*;
-use neon::types::buffer::TypedArray;
+use neon::types::bigint::RangeError;
+use neon::types::JsBigInt;
 
 /// Plain Rust struct to hold the request data
 pub struct EnvironmentVariablesRequest {
@@ -20,53 +22,98 @@ impl EnvironmentVariablesRequest {
     /// Construct from a JavaScript object using Neon’s APIs.
     pub fn from_js_object(cx: &mut FunctionContext, obj: Handle<JsObject>) -> NeonResult<Self> {
         // block_hash -> JsBuffer -> Vec<u8>
-        let block_hash = obj.get(cx, "block_hash")?;
-        let mut block_hash = block_hash.downcast_or_throw::<JsBuffer, _>(cx)?;
+        let mut block_hash: PropOptions<JsObject, &str> = obj.prop(cx, "blockHash");
+        let mut block_hash_value = block_hash.get::<Vec<u8>>();
 
-        let test = block_hash.as_mut_slice(cx).to_vec();
+        // block_number -> JsBigInt -> u64
+        let mut block_number: PropOptions<JsObject, &str> = obj.prop(cx, "blockNumber");
+        let block_number_val: u128 = block_number.get::<u128>()?;
 
-        println!("test: {:?}", test);
-
-        panic!("test");
-
-        // block_number -> JsBigInt -> (u64, bool)
-        // JsBigInt::u64(cx) returns (u64_value, sign_bit)
-        /*let block_number_js = obj.get(cx, "block_number")?;
-        let block_number_js = block_number_js.downcast_or_throw::<JsBigInt, _>(cx)?;
-        let (block_number_val, _block_number_sign) = block_number_js.to_u64(cx)?;
-
-        // block_median_time -> JsBigInt
-        let block_median_time_js = obj.get(cx, "block_median_time")?;
-        let block_median_time_js = block_median_time_js.downcast_or_throw::<JsBigInt, _>(cx)?;
-        let (block_median_time_val, _block_median_time_sign) = block_median_time_js.to_u64(cx)?;
+        // block_median_time -> JsBigInt -> u64
+        let mut block_median_time: PropOptions<JsObject, &str> = obj.prop(cx, "blockMedianTime");
+        let block_median_time_val = block_median_time.get::<u64>()?;
 
         // tx_id -> JsBuffer -> Vec<u8>
-        let tx_id = obj.get(cx, "tx_id")?;
-        let tx_id = tx_id.downcast_or_throw::<JsBuffer, _>(cx)?.to_vec(cx)?;
+        let mut tx_id: PropOptions<JsObject, &str> = obj.prop(cx, "txId");
+        let mut tx_id_value = tx_id.get::<Vec<u8>>();
 
         // tx_hash -> JsBuffer -> Vec<u8>
-        let tx_hash = obj.get(cx, "tx_hash")?;
-        let tx_hash = tx_hash.downcast_or_throw::<JsBuffer, _>(cx)?.to_vec(cx)?;
+        let mut tx_hash: PropOptions<JsObject, &str> = obj.prop(cx, "txHash");
+        let mut tx_hash_value = tx_hash.get::<Vec<u8>>();
 
         // contract_address -> JsBuffer -> Vec<u8>
-        let contract_address = obj.get(cx, "contract_address")?;
-        let contract_address = contract_address
-            .downcast_or_throw::<JsBuffer, _>(cx)?
-            .to_vec(cx)?;
+        let mut contract_address: PropOptions<JsObject, &str> = obj.prop(cx, "contractAddress");
+        let mut contract_address_value = contract_address.get::<Vec<u8>>();
 
         // contract_deployer -> JsBuffer -> Vec<u8>
-        let contract_deployer = obj.get(cx, "contract_deployer")?;
-        let contract_deployer = contract_deployer
-            .downcast_or_throw::<JsBuffer, _>(cx)?
-            .to_vec(cx)?;
+        let mut contract_deployer: PropOptions<JsObject, &str> = obj.prop(cx, "contractDeployer");
+        let mut contract_deployer_value = contract_deployer.get::<Vec<u8>>();
 
         // caller -> JsBuffer -> Vec<u8>
-        let caller = obj.get(cx, "caller")?;
-        let caller = caller.downcast_or_throw::<JsBuffer, _>(cx)?.to_vec(cx)?;
+        let mut caller: PropOptions<JsObject, &str> = obj.prop(cx, "caller");
+        let mut caller_value = caller.get::<Vec<u8>>();
 
         // origin -> JsBuffer -> Vec<u8>
-        let origin = obj.get(cx, "origin")?;
-        let origin = origin.downcast_or_throw::<JsBuffer, _>(cx)?.to_vec(cx)?;
+        let mut origin: PropOptions<JsObject, &str> = obj.prop(cx, "origin");
+        let mut origin_value = origin.get::<Vec<u8>>();
+
+        // Convert JsBuffer to Vec<u8>
+        let block_hash = block_hash_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("block_hash is required").unwrap();
+                vec![]
+            });
+
+        let tx_id = tx_id_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("tx_id is required").unwrap();
+                vec![]
+            });
+
+        let tx_hash = tx_hash_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("tx_hash is required").unwrap();
+                vec![]
+            });
+
+        let contract_address = contract_address_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("contract_address is required").unwrap();
+                vec![]
+            });
+
+        let contract_deployer = contract_deployer_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("contract_deployer is required")
+                    .unwrap();
+                vec![]
+            });
+
+        let caller = caller_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("caller is required").unwrap();
+                vec![]
+            });
+
+        let origin = origin_value
+            .as_ref()
+            .map(|buffer| buffer.to_vec())
+            .unwrap_or_else(|_| {
+                cx.throw_type_error("origin is required").unwrap();
+                vec![]
+            });
 
         Ok(EnvironmentVariablesRequest {
             block_hash,
@@ -78,7 +125,7 @@ impl EnvironmentVariablesRequest {
             contract_deployer,
             caller,
             origin,
-        })*/
+        })
     }
 }
 
@@ -103,8 +150,16 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
 /// Example Neon function that expects one argument (an object) and returns undefined.
 /// In real usage, you might return some computed result or store `env_vars` somewhere.
 pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    // 1. Get the first argument as an object
-    let obj = cx.argument::<JsObject>(0)?;
+    let id = cx
+        .argument::<JsBigInt>(0)?
+        .to_u64(&mut cx)
+        .unwrap_or_else(|e| {
+            cx.throw_range_error::<String, RangeError<u64>>(format!("{:?}", e))
+                .unwrap();
+            0
+        });
+
+    let obj = cx.argument::<JsObject>(1)?;
 
     // 2. Parse it into our Rust struct
     let req = EnvironmentVariablesRequest::from_js_object(&mut cx, obj)?;
@@ -115,11 +170,4 @@ pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndef
 
     // Return `undefined` (or something else) to JavaScript
     Ok(cx.undefined())
-}
-
-/// Register the Neon module and export the function
-#[neon::main]
-fn main(mut cx: ModuleContext) -> NeonResult<()> {
-    cx.export_function("", create_environment_variables)?;
-    Ok(())
 }
