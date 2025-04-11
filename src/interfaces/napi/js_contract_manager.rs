@@ -275,7 +275,7 @@ impl ContractManager {
         contract.use_gas(gas)
     }
 
-    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    #[napi(ts_return_type = "ExitDataResponse")]
     pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<napi::JsObject, Error> {
         let id = contract_id.get_u64().1;
 
