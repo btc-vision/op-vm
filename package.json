@@ -48,15 +48,5 @@
     },
     "devDependencies": {
         "@types/node": "^22.14.0"
-    },
-    "optionalDependencies": {
-        "@btc-vision/op-vm-win32-x64-msvc": "0.3.11",
-        "@btc-vision/op-vm-darwin-x64": "0.3.11",
-        "@btc-vision/op-vm-linux-x64-gnu": "0.3.11",
-        "@btc-vision/op-vm-darwin-arm64": "0.3.11",
-        "@btc-vision/op-vm-android-arm64": "0.3.11",
-        "@btc-vision/op-vm-linux-arm64-gnu": "0.3.11",
-        "@btc-vision/op-vm-win32-arm64-msvc": "0.3.11",
-        "@btc-vision/op-vm-darwin-universal": "0.3.11"
     }
 }
