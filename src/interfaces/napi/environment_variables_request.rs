@@ -1,5 +1,6 @@
 use crate::domain::common::Address;
 use crate::domain::runner::EnvironmentVariables;
+use anyhow::Error;
 use neon::object::PropOptions;
 use neon::prelude::*;
 use neon::types::bigint::RangeError;
@@ -27,11 +28,11 @@ impl EnvironmentVariablesRequest {
 
         // block_number -> JsBigInt -> u64
         let mut block_number: PropOptions<JsObject, &str> = obj.prop(cx, "blockNumber");
-        let block_number_val: u128 = block_number.get::<u128>()?;
+        let block_number_val: u64 = block_number.get::<f64>()? as u64;
 
         // block_median_time -> JsBigInt -> u64
         let mut block_median_time: PropOptions<JsObject, &str> = obj.prop(cx, "blockMedianTime");
-        let block_median_time_val = block_median_time.get::<u64>()?;
+        let block_median_time_val = block_median_time.get::<f64>()? as u64;
 
         // tx_id -> JsBuffer -> Vec<u8>
         let mut tx_id: PropOptions<JsObject, &str> = obj.prop(cx, "txId");
@@ -62,7 +63,10 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("block_hash is required").unwrap();
+                cx.throw_error::<String, Error>(
+                    anyhow::anyhow!("block_hash is required").to_string(),
+                )
+                .unwrap();
                 vec![]
             });
 
@@ -70,7 +74,8 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("tx_id is required").unwrap();
+                cx.throw_error::<String, Error>(anyhow::anyhow!("tx_id is required").to_string())
+                    .unwrap();
                 vec![]
             });
 
@@ -78,7 +83,8 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("tx_hash is required").unwrap();
+                cx.throw_error::<String, Error>(anyhow::anyhow!("tx_hash is required").to_string())
+                    .unwrap();
                 vec![]
             });
 
@@ -86,7 +92,10 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("contract_address is required").unwrap();
+                cx.throw_error::<String, Error>(
+                    anyhow::anyhow!("contract_address is required").to_string(),
+                )
+                .unwrap();
                 vec![]
             });
 
@@ -94,8 +103,10 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("contract_deployer is required")
-                    .unwrap();
+                cx.throw_error::<String, Error>(
+                    anyhow::anyhow!("contract_deployer is required").to_string(),
+                )
+                .unwrap();
                 vec![]
             });
 
@@ -103,7 +114,8 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("caller is required").unwrap();
+                cx.throw_error::<String, Error>(anyhow::anyhow!("caller is required").to_string())
+                    .unwrap();
                 vec![]
             });
 
@@ -111,7 +123,8 @@ impl EnvironmentVariablesRequest {
             .as_ref()
             .map(|buffer| buffer.to_vec())
             .unwrap_or_else(|_| {
-                cx.throw_type_error("origin is required").unwrap();
+                cx.throw_error::<String, Error>(anyhow::anyhow!("origin is required").to_string())
+                    .unwrap();
                 vec![]
             });
 
