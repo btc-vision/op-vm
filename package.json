@@ -1,53 +1,62 @@
 {
-  "name": "@btc-vision/op-vm",
-  "description": "OP-VM executable for Bitcoin Smart Contracts",
-  "version": "0.3.11",
-  "license": "LICENSE.MD",
-  "main": "index.js",
-  "types": "index.d.ts",
-  "typings": "index.d.ts",
-  "homepage": "https://opnet.org/",
-  "keywords": [
-    "opnet",
-    "bitcoin",
-    "btc",
-    "bitcoin smart contracts",
-    "smart inscriptions",
-    "ordinals"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/btc-vision/op-vm.git"
-  },
-  "napi": {
-    "name": "op-vm",
-    "triples": {
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-linux-android",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-pc-windows-msvc",
-        "universal-apple-darwin"
-      ]
+    "name": "@btc-vision/op-vm",
+    "description": "OP-VM executable for Bitcoin Smart Contracts",
+    "version": "0.3.11",
+    "license": "LICENSE.MD",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "typings": "index.d.ts",
+    "homepage": "https://opnet.org/",
+    "keywords": [
+        "opnet",
+        "bitcoin",
+        "btc",
+        "bitcoin smart contracts",
+        "smart inscriptions",
+        "ordinals"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/btc-vision/op-vm.git"
+    },
+    "napi": {
+        "name": "op-vm",
+        "triples": {
+            "additional": [
+                "aarch64-apple-darwin",
+                "aarch64-linux-android",
+                "aarch64-unknown-linux-gnu",
+                "aarch64-pc-windows-msvc",
+                "universal-apple-darwin"
+            ]
+        }
+    },
+    "engines": {
+        "node": ">= 21"
+    },
+    "dependencies": {
+        "@napi-rs/cli": "^2.18.4"
+    },
+    "scripts": {
+        "artifacts": "napi artifacts",
+        "build": "napi build --platform --release",
+        "build:debug": "napi build --platform",
+        "test": "echo ''",
+        "prepublishOnly": "napi prepublish -t npm",
+        "universal": "napi universal",
+        "version": "napi version"
+    },
+    "devDependencies": {
+        "@types/node": "^22.14.0"
+    },
+    "optionalDependencies": {
+        "@btc-vision/op-vm-win32-x64-msvc": "0.3.11",
+        "@btc-vision/op-vm-darwin-x64": "0.3.11",
+        "@btc-vision/op-vm-linux-x64-gnu": "0.3.11",
+        "@btc-vision/op-vm-darwin-arm64": "0.3.11",
+        "@btc-vision/op-vm-android-arm64": "0.3.11",
+        "@btc-vision/op-vm-linux-arm64-gnu": "0.3.11",
+        "@btc-vision/op-vm-win32-arm64-msvc": "0.3.11",
+        "@btc-vision/op-vm-darwin-universal": "0.3.11"
     }
-  },
-  "engines": {
-    "node": ">= 18"
-  },
-  "dependencies": {
-    "@napi-rs/cli": "^2.18.4"
-  },
-  "scripts": {
-    "artifacts": "napi artifacts",
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
-    "test": "echo ''",
-    "prepublishOnly": "napi prepublish -t npm",
-    "universal": "napi universal",
-    "version": "napi version",
-    "postinstall": "npm run build"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.13"
-  }
 }
