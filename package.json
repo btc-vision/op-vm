@@ -1,9 +1,9 @@
 {
     "name": "@btc-vision/op-vm",
     "description": "OP-VM executable for Bitcoin Smart Contracts",
-    "version": "0.3.13",
+    "version": "0.4.0",
     "license": "LICENSE.MD",
-    "main": "index.js",
+    "main": "index.node",
     "types": "index.d.ts",
     "typings": "index.d.ts",
     "homepage": "https://opnet.org/",
@@ -19,33 +19,18 @@
         "type": "git",
         "url": "git://github.com/btc-vision/op-vm.git"
     },
-    "napi": {
-        "name": "op-vm",
-        "triples": {
-            "additional": [
-                "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "aarch64-unknown-linux-gnu",
-                "aarch64-pc-windows-msvc",
-                "universal-apple-darwin"
-            ]
-        }
-    },
     "engines": {
         "node": ">= 18"
     },
-    "dependencies": {
-        "@napi-rs/cli": "^2.18.4"
-    },
     "scripts": {
-        "artifacts": "napi artifacts",
-        "build": "napi build --platform --release",
-        "build:debug": "napi build --platform",
-        "test": "echo ''",
-        "prepublishOnly": "napi prepublish -t npm",
-        "universal": "napi universal",
-        "version": "napi version",
-        "postinstall": "npm run build"
+        "test": "cargo test",
+        "cargo-build": "cargo build --message-format=json-render-diagnostics > cargo.log",
+        "cross-build": "cross build --message-format=json-render-diagnostics > cross.log",
+        "postcargo-build": "neon dist < cargo.log",
+        "postcross-build": "neon dist -m /target < cross.log",
+        "debug": "npm run cargo-build --",
+        "build": "npm run cargo-build -- --release",
+        "cross": "npm run cross-build -- --release"
     },
     "devDependencies": {
         "@types/node": "^22.14.0"

@@ -1,6 +1,5 @@
 use crate::domain::runner::BitcoinNetwork;
 
-#[napi]
 pub enum BitcoinNetworkRequest {
     Mainnet,
     Testnet,

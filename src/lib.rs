@@ -1,17 +1,17 @@
 #![deny(clippy::all)]
 
-#[macro_use]
-extern crate napi_derive;
-
+use neon::prelude::*;
 use std::panic;
 
 mod application;
 mod domain;
 mod interfaces;
 
-#[napi]
-pub fn init() {
+#[neon::main]
+fn main(mut cx: ModuleContext) -> NeonResult<()> {
     panic::set_hook(Box::new(|e| {
         println!("Panic occurred: {:?}", e);
     }));
+
+    Ok(())
 }
