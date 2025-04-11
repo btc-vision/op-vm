@@ -44,7 +44,8 @@
         "test": "echo ''",
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
-        "version": "napi version"
+        "version": "napi version",
+        "postinstall": "npm run build"
     },
     "devDependencies": {
         "@types/node": "^22.14.0"
