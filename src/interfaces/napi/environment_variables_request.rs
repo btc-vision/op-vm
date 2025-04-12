@@ -160,22 +160,20 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
     }
 }
 
-/// Example Neon function that expects one argument (an object) and returns undefined.
-/// In real usage, you might return some computed result or store `env_vars` somewhere.
-pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let id = cx
-        .argument::<JsBigInt>(0)?
-        .to_u64(&mut cx)
-        .unwrap_or_else(|e| {
-            cx.throw_range_error::<String, RangeError<u64>>(format!("{:?}", e))
-                .unwrap();
-            0
-        });
+#[neon::export]
+pub fn create_environment_variables<'a>(
+    cx: &'a mut FunctionContext<'a>,
+) -> JsResult<'a, JsUndefined> {
+    let id = cx.argument::<JsBigInt>(0)?.to_u64(cx).unwrap_or_else(|e| {
+        cx.throw_range_error::<String, RangeError<u64>>(format!("{:?}", e))
+            .unwrap();
+        0
+    });
 
     let obj = cx.argument::<JsObject>(1)?;
 
     // 2. Parse it into our Rust struct
-    let req = EnvironmentVariablesRequest::from_js_object(&mut cx, obj)?;
+    let req = EnvironmentVariablesRequest::from_js_object(cx, obj)?;
 
     // 3. Convert to your domain type
     let env_vars: EnvironmentVariables = req.into();
