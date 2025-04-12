@@ -1,6 +1,6 @@
 [package]
 name = "op-vm"
-version = "0.3.13"
+version = "0.3.11"
 edition = "2021"
 
 [lib]
