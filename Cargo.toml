@@ -33,3 +33,6 @@ napi-build = "2.1.6"
 [profile.release]
 lto = true
 strip = "symbols"
+
+[patch.crates-io]
+napi = { git = "https://github.com/btc-vision/napi-rs.git", rev = "8dbdc15375e3b3e5a07a683a015864d58010509f" }
