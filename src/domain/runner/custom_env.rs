@@ -33,6 +33,7 @@ pub struct CustomEnv {
     pub last_call_result: CallResult,
     pub is_running_start_function: bool,
     pub transient_storage: TransientStorage,
+    pub max_pages: u32,
 }
 
 impl CustomEnv {
@@ -49,6 +50,7 @@ impl CustomEnv {
         account_type_external: AccountTypeExternalFunction,
         block_hash_external: BlockHashExternalFunction,
         runtime: Arc<Runtime>,
+        max_pages: u32,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             instance: None,
@@ -70,6 +72,7 @@ impl CustomEnv {
             last_call_result: CallResult::default(),
             is_running_start_function: false,
             transient_storage: TransientStorage::new(),
+            max_pages,
         })
     }
 }

@@ -6,7 +6,6 @@ use crate::interfaces::napi::external_functions::BlockHashRequest;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::ExitDataResponse;
 use anyhow::anyhow;
 use bytes::Bytes;
 use napi::bindgen_prelude::{BigInt, Buffer};
@@ -164,6 +163,7 @@ impl ContractManager {
         bytecode: Option<Buffer>,
         used_gas: BigInt,
         max_gas: BigInt,
+        memory_pages_used: BigInt,
         network: BitcoinNetworkRequest,
         is_debug_mode: bool,
     ) -> Result<(), Error> {
@@ -174,8 +174,9 @@ impl ContractManager {
         let mut params = JsContractParameter {
             bytecode: None,
             serialized: None,
-            used_gas: used_gas,
+            used_gas,
             max_gas,
+            memory_pages_used: memory_pages_used.get_u64().1 as u32,
             network,
             is_debug_mode,
         };
@@ -224,6 +225,8 @@ impl ContractManager {
         abort_tsfn!(self.emit_tsfn, &env);
         abort_tsfn!(self.inputs_tsfn, &env);
         abort_tsfn!(self.outputs_tsfn, &env);
+        abort_tsfn!(self.account_type_tsfn, &env);
+        abort_tsfn!(self.block_hash_tsfn, &env);
 
         Ok(())
     }
@@ -272,15 +275,26 @@ impl ContractManager {
         contract.use_gas(gas)
     }
 
-    #[napi]
-    pub fn get_exit_data(&self, contract_id: BigInt) -> Result<ExitDataResponse, Error> {
+    #[napi(ts_return_type = "ExitDataResponse")]
+    pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<napi::JsObject, Error> {
         let id = contract_id.get_u64().1;
 
         let contract = self
             .contracts
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
-        contract.get_exit_data()
+
+        let exit_data = contract.get_exit_data()?;
+
+        let mut js_object = env.create_object()?;
+        js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
+        js_object.set_named_property(
+            "data",
+            env.create_buffer_with_data(exit_data.data.to_vec())?
+                .into_raw(),
+        )?;
+        js_object.set_named_property("gasUsed", exit_data.gas_used)?;
+        Ok(js_object)
     }
 
     #[napi]

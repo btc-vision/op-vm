@@ -11,5 +11,9 @@ mod interfaces;
 
 #[napi]
 pub fn init() {
-    panic::set_hook(Box::new(|_| {}));
+    panic::set_hook(Box::new(|e| {
+        println!("Panic occurred: {:?}", e);
+    }));
+
+    debug_assert!(true);
 }
