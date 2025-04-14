@@ -12,7 +12,7 @@ pub struct BlockHashRequest {
     pub contract_id: BigInt,
 }
 
-#[napi(object)]
+#[napi(object, js_name = "BlockHashResponse")]
 pub struct JsBlockHashResponse {
     pub block_hash: Buffer,
     pub is_block_warm: bool,
