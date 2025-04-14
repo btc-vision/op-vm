@@ -1,3 +1,4 @@
+use napi::bindgen_prelude::Buffer;
 use napi::{
     bindgen_prelude::{BigInt, Promise},
     threadsafe_function::{ErrorStrategy, ThreadsafeFunction},
@@ -11,9 +12,13 @@ pub struct BlockHashRequest {
     pub contract_id: BigInt,
 }
 
-#[napi(object)]
+#[napi(object, js_name = "BlockHashResponse")]
+pub struct JsBlockHashResponse {
+    pub block_hash: Buffer,
+    pub is_block_warm: bool,
+}
+
 pub struct BlockHashResponse {
-    #[napi(ts_type = "Buffer")]
     pub block_hash: Vec<u8>,
     pub is_block_warm: bool,
 }
@@ -42,7 +47,7 @@ impl BlockHashExternalFunction {
         };
 
         let result = async move {
-            let response: Result<Promise<BlockHashResponse>, RuntimeError> = self
+            let response: Result<Promise<JsBlockHashResponse>, RuntimeError> = self
                 .tsfn
                 .call_async(Ok(request))
                 .await
@@ -51,7 +56,11 @@ impl BlockHashExternalFunction {
             let promise = response?;
 
             let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-            Ok(data)
+
+            Ok(BlockHashResponse {
+                block_hash: data.block_hash.into(),
+                is_block_warm: data.is_block_warm,
+            })
         };
 
         let response = runtime.block_on(result);
