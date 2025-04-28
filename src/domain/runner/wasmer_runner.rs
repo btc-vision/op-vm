@@ -173,7 +173,6 @@ impl WasmerRunner {
 
         let instance_wrapper = InstanceWrapper::new(instance.clone(), max_gas);
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
-        env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
 
         let mut imp = Self {
             module,
