@@ -75,7 +75,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     contract_manager_prototype.set(&mut cx, "length", contract_manager_length)?;
     contract_manager_prototype.set(&mut cx, "clear", contract_manager_clear)?;
 
-    cx.export_value("ContractManager", new_storag_slot_gas_cost)?;
+    cx.export_value("ContractManager", contract_manager_prototype)?;
 
     cx.export_value("NEW_STORAGE_SLOT_GAS_COST", new_storag_slot_gas_cost)?;
     cx.export_value(

@@ -7,6 +7,7 @@ export const enum BitcoinNetworkRequest {
   Mainnet = 0,
   Testnet = 1,
   Regtest = 2
+}
 export interface EnvironmentVariablesRequest {
   blockHash: Uint8Array
   blockNumber: bigint
