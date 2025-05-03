@@ -4,6 +4,7 @@
     "version": "0.3.11",
     "license": "LICENSE.MD",
     "main": "index.js",
+    "type": "module",
     "types": "index.d.ts",
     "typings": "index.d.ts",
     "homepage": "https://opnet.org/",
@@ -35,7 +36,6 @@
         "node": ">= 18"
     },
     "dependencies": {
-
     },
     "scripts": {
         "test": "cargo test",
