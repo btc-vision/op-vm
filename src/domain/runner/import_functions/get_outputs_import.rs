@@ -25,7 +25,7 @@ impl GetOutputsImport {
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
-        let result = &env.outputs_external.execute(&env.runtime)?;
+        let result = &env.outputs_external.execute_empty_request(&env.runtime)?;
 
         instance.use_gas(&mut store, result.len() as u64 * GAS_COST_PER_BYTE);
 

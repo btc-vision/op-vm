@@ -24,7 +24,7 @@ impl GetOutputsSizeImport {
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
         // TODO: Don't load all outputs for this
-        let outputs = &env.outputs_external.execute(&env.runtime)?;
+        let outputs = &env.outputs_external.execute_empty_request(&env.runtime)?;
 
         Ok(outputs.len() as u32)
     }

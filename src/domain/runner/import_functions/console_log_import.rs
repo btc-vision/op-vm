@@ -25,6 +25,7 @@ impl ConsoleLogImport {
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
-        env.console_log_external.execute(&data, &env.runtime)
+        env.console_log_external
+            .execute_no_response(&data, &env.runtime)
     }
 }
