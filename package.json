@@ -3,7 +3,7 @@
     "description": "OP-VM executable for Bitcoin Smart Contracts",
     "version": "0.3.11",
     "license": "LICENSE.MD",
-    "main": "index.node",
+    "main": "index.js",
     "types": "index.d.ts",
     "typings": "index.d.ts",
     "homepage": "https://opnet.org/",
