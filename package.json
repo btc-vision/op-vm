@@ -35,8 +35,6 @@
     "engines": {
         "node": ">= 18"
     },
-    "dependencies": {
-    },
     "scripts": {
         "test": "cargo test",
         "cargo-build": "cargo build --message-format=json-render-diagnostics > cargo.log",
@@ -48,6 +46,7 @@
         "cross": "npm run cross-build -- --release"
     },
     "devDependencies": {
+        "@types/node": "^22.15.3",
         "cargo-cp-artifact": "^0.1.9",
         "chai": "^4.3.10",
         "mocha": "^10.2.0"
