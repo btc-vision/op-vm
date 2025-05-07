@@ -72,8 +72,11 @@ impl AccountTypeExternalFunction {
             contract_id: self.contract_id,
         };
 
-        Ok(self
-            .call(runtime, args)
-            .or_else(|err| Err(RuntimeError::new(err.to_string())))?)
+        Ok(self.call(runtime, args).or_else(|err| {
+            Err(RuntimeError::new(format!(
+                "Failed to get result from account type: {}",
+                err.to_string()
+            )))
+        })?)
     }
 }

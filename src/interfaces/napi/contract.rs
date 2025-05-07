@@ -180,11 +180,13 @@ impl Contract {
 
     pub fn on_deploy(&self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         // Lock the contract and call
+        println!("Ondeploy contract inside");
         let mut contract = self
             .contract
             .lock()
             .or_else(|e| Err(anyhow!(e.to_string())))?;
 
+        println!("Ondeploy contract inside - unlocked");
         let call_result = contract.on_deploy(calldata);
 
         match call_result {
@@ -194,6 +196,7 @@ impl Contract {
     }
 
     pub fn execute(&self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
+        println!("Execute contract inside");
         let time = Local::now();
         // Lock the contract and call
         let mut contract = self
@@ -201,7 +204,11 @@ impl Contract {
             .lock()
             .or_else(|err| Err(anyhow::anyhow!(err.to_string())))?;
 
+        println!("Execute contract inside - unlocked");
+
         let call_result = contract.execute(calldata);
+
+        println!("Execute contract inside - done");
 
         let result = match call_result {
             Ok(values) => Ok(values),

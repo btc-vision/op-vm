@@ -42,10 +42,13 @@ impl AsArguments for BufferFunctionRequest {
     where
         C: Context<'a>,
     {
-        Ok(vec![
-            JsBigInt::from_u64(cx, self.contract_id).upcast(),
-            JsBuffer::from_slice(cx, &self.buffer)?.upcast(),
-        ])
+        let object = cx.empty_object();
+        let object_buffer = JsBuffer::from_slice(cx, &self.buffer)?;
+        let object_contract_id = JsBigInt::from_u64(cx, self.contract_id);
+        object.set(cx, "buffer", object_buffer)?;
+        object.set(cx, "contractId", object_contract_id)?;
+
+        Ok(vec![object.upcast()])
     }
 }
 

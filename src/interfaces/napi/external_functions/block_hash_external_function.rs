@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use neon::{prelude::*, types::buffer::TypedArray};
+use neon::{
+    prelude::*,
+    types::{buffer::TypedArray, JsBigInt},
+};
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -19,7 +22,13 @@ impl AsArguments for BlockHashRequest {
     where
         C: Context<'a>,
     {
-        Ok(vec![cx.undefined().upcast()])
+        let object = cx.empty_object();
+        let object_block_number = JsBigInt::from_u64(cx, self.block_number);
+        let object_contract_id = JsBigInt::from_u64(cx, self.contract_id);
+        object.set(cx, "blockNumber", object_block_number)?;
+        object.set(cx, "contractId", object_contract_id)?;
+
+        Ok(vec![object.upcast()])
     }
 }
 

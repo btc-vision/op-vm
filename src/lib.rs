@@ -21,6 +21,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         println!("Panic occurred: {:?}", e);
     }));
 
+    println!("Hello from main");
+
     // Create JS functions
     let new_storag_slot_gas_cost = JsBigInt::from_u64(&mut cx, NEW_STORAGE_SLOT_GAS_COST);
     let updated_storage_slot_gas_cost = JsBigInt::from_u64(&mut cx, UPDATED_STORAGE_SLOT_GAS_COST);
@@ -48,32 +50,56 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     let contract_manager_clear = JsFunction::new(&mut cx, ContractManager::js_clear)?;
 
     // Register functions to prototype
-    let contract_manager_prototype = contract_manager.get::<JsObject, _, _>(&mut cx, PROTOTYPE)?;
-    contract_manager_prototype.set(&mut cx, "reserveId", contract_manager_reserve_id)?;
-    contract_manager_prototype.set(&mut cx, "instantiate", contract_manager_instantiate)?;
-    contract_manager_prototype.set(
-        &mut cx,
-        "destroyContract",
-        contract_manager_destroy_contract,
-    )?;
-    contract_manager_prototype.set(&mut cx, "destroy", contract_manager_destroy)?;
-    contract_manager_prototype.set(&mut cx, "destroyCache", contract_manager_destroy_cache)?;
-    contract_manager_prototype.set(&mut cx, "destroyAll", contract_manager_destroy_all)?;
-    contract_manager_prototype.set(&mut cx, "useGas", contract_manager_use_gas)?;
-    contract_manager_prototype.set(&mut cx, "getExitData", contract_manager_get_exit_data)?;
-    contract_manager_prototype.set(&mut cx, "getUsedGas", contract_manager_get_used_gas)?;
-
-    contract_manager_prototype.set(&mut cx, "writeMemory", contract_manager_write_memory)?;
-    contract_manager_prototype.set(&mut cx, "readMemory", contract_manager_read_memory)?;
-    contract_manager_prototype.set(
-        &mut cx,
-        "setEnvironmentVariables",
-        contract_manager_set_environment_variable,
-    )?;
-    contract_manager_prototype.set(&mut cx, "onDeploy", contract_manager_on_deploy)?;
-    contract_manager_prototype.set(&mut cx, "execute", contract_manager_execute)?;
-    contract_manager_prototype.set(&mut cx, "length", contract_manager_length)?;
-    contract_manager_prototype.set(&mut cx, "clear", contract_manager_clear)?;
+    let contract_manager_prototype: Handle<JsObject> =
+        contract_manager.prop(&mut cx, PROTOTYPE).get()?;
+    contract_manager_prototype
+        .prop(&mut cx, "reserveId")
+        .set(contract_manager_reserve_id)?;
+    contract_manager_prototype
+        .prop(&mut cx, "instantiate")
+        .set(contract_manager_instantiate)?;
+    contract_manager_prototype
+        .prop(&mut cx, "destroyContract")
+        .set(contract_manager_destroy_contract)?;
+    contract_manager_prototype
+        .prop(&mut cx, "destroy")
+        .set(contract_manager_destroy)?;
+    contract_manager_prototype
+        .prop(&mut cx, "destroyCache")
+        .set(contract_manager_destroy_cache)?;
+    contract_manager_prototype
+        .prop(&mut cx, "destroyAll")
+        .set(contract_manager_destroy_all)?;
+    contract_manager_prototype
+        .prop(&mut cx, "useGas")
+        .set(contract_manager_use_gas)?;
+    contract_manager_prototype
+        .prop(&mut cx, "getExitData")
+        .set(contract_manager_get_exit_data)?;
+    contract_manager_prototype
+        .prop(&mut cx, "getUsedGas")
+        .set(contract_manager_get_used_gas)?;
+    contract_manager_prototype
+        .prop(&mut cx, "writeMemory")
+        .set(contract_manager_write_memory)?;
+    contract_manager_prototype
+        .prop(&mut cx, "readMemory")
+        .set(contract_manager_read_memory)?;
+    contract_manager_prototype
+        .prop(&mut cx, "setEnvironmentVariables")
+        .set(contract_manager_set_environment_variable)?;
+    contract_manager_prototype
+        .prop(&mut cx, "onDeploy")
+        .set(contract_manager_on_deploy)?;
+    contract_manager_prototype
+        .prop(&mut cx, "execute")
+        .set(contract_manager_execute)?;
+    contract_manager_prototype
+        .prop(&mut cx, "length")
+        .set(contract_manager_length)?;
+    contract_manager_prototype
+        .prop(&mut cx, "clear")
+        .set(contract_manager_clear)?;
 
     cx.export_value("ContractManager", contract_manager)?;
 
@@ -82,6 +108,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         "UPDATED_STORAGE_SLOT_GAS_COST",
         updated_storage_slot_gas_cost,
     )?;
+
+    println!("Rust initialized");
 
     Ok(())
 }
