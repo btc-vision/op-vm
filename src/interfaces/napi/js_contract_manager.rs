@@ -524,7 +524,6 @@ impl ContractManager {
 
         // We must clone the Arc for background usage and for final JS creation:
         let arc_for_bg = contract_arc.clone();
-
         let calldata_for_bg = calldata.to_vec();
 
         // The future to run in the background:
@@ -586,14 +585,18 @@ impl ContractManager {
             // Inside spawn_blocking to avoid blocking async runtime
             let exit_data = tokio::task::spawn_blocking(move || {
                 // The heavy-lifting synchronous call
-                arc_for_bg.execute(calldata_for_bg)
+
+                let resp = arc_for_bg.execute(calldata_for_bg);
+
+                println!("resp: {:?}", resp);
+
+                resp
             })
             .await
             .map_err(|join_err| {
                 Error::from_reason(format!("Tokio join error: {:?}", join_err))
             })??;
 
-            // Return the result to the next closure
             Ok(exit_data)
         };
 
@@ -601,8 +604,7 @@ impl ContractManager {
         let promise = env.execute_tokio_future(
             future,
             // This closure is run on the main thread to convert Rust data to JS objects
-            move |&mut env, exit_data| {
-                // use the second Arc to build a JS array
+            move |env, exit_data| {
                 let mut js_object = env.create_object()?;
                 js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
                 js_object.set_named_property(
@@ -613,6 +615,7 @@ impl ContractManager {
                     "gasUsed",
                     env.create_bigint_from_u64(exit_data.gas_used),
                 )?;
+
                 Ok(js_object)
             },
         )?;

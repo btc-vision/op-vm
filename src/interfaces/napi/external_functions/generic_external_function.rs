@@ -57,12 +57,26 @@ impl ExternalFunction for GenericExternalFunction<Promise<Buffer>> {
         let request = self.make_request(data.to_vec());
 
         let fut = async move {
-            let promise = tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason))?; // Promise<Buffer>
+            println!(
+                "[GenericExternalFunction] Executing with data: {:?}",
+                request.buffer
+            );
 
-            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            let promise = tsfn.call_async(Ok(request)).await;
+
+            let promise = match promise {
+                Ok(promise) => promise,
+                Err(e) => {
+                    println!("{:?}", e);
+                    println!("Error calling tsfn function: {}", e);
+                    return Err(RuntimeError::new(e.reason));
+                }
+            };
+
+            let buffer = promise.await.map_err(|e| {
+                println!("Error awaiting promise: {}", e);
+                RuntimeError::new(e.reason)
+            })?;
             Ok(buffer.to_vec())
         };
 
@@ -76,12 +90,15 @@ impl ExternalFunctionNoData for GenericExternalFunction<Promise<Buffer>> {
         let request = self.make_request(Vec::new());
 
         let fut = async move {
-            let promise = tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason))?;
+            let promise = tsfn.call_async(Ok(request)).await.map_err(|e| {
+                println!("Error calling tsfn function 2: {}", e);
+                RuntimeError::new(e.reason)
+            })?;
 
-            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            let buffer = promise.await.map_err(|e| {
+                println!("Error awaiting promise: {}", e);
+                RuntimeError::new(e.reason)
+            })?;
             Ok(buffer.to_vec())
         };
 
@@ -95,12 +112,15 @@ impl ExternalFunctionNoResponse for GenericExternalFunction<Promise<()>> {
         let request = self.make_request(data.to_vec());
 
         let fut = async move {
-            let promise = tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason))?; // Promise<()>
+            let promise = tsfn.call_async(Ok(request)).await.map_err(|e| {
+                println!("Error calling tsfn function 3: {}", e);
+                RuntimeError::new(e.reason)
+            })?; // Promise<()>
 
-            promise.await.map_err(|e| RuntimeError::new(e.reason))
+            promise.await.map_err(|e| {
+                println!("Error awaiting promise: {}", e);
+                RuntimeError::new(e.reason)
+            })
         };
 
         runtime.block_on(fut)

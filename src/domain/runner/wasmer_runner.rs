@@ -133,8 +133,8 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
-                // "tload" => import!(TransientLoadImport),
-                // "tstore" => import!(TransientStoreImport),
+                "tload" => import!(TransientLoadImport),
+                "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -357,6 +357,7 @@ impl ContractRunner for WasmerRunner {
             },
         };
 
+        // TODO HANDLE RUST ERRORS HERE, WONT RETURN EXIT DATA.
         let result = self.handle_errors(response, max_gas)?;
 
         let status = result
