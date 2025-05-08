@@ -6,12 +6,14 @@ use crate::interfaces::napi::external_functions::BlockHashRequest;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+use crate::interfaces::{AccountTypeResponse, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::{BigInt, Buffer};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::bindgen_prelude::BufferSlice;
+use napi::bindgen_prelude::{BigInt, Buffer, Function, Promise};
+use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
-use napi::{Error, JsFunction, JsNumber};
+use napi::{Error, JsNumber};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,13 +24,42 @@ pub const NEW_STORAGE_SLOT_GAS_COST: u64 = runner::NEW_STORAGE_SLOT_GAS_COST;
 #[allow(dead_code)]
 pub const UPDATED_STORAGE_SLOT_GAS_COST: u64 = runner::UPDATED_STORAGE_SLOT_GAS_COST;
 
-macro_rules! create_tsfn {
-    ($id:ident) => {
-        $id.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?
-    };
+/// Turns a `JsFunction` into a `ThreadsafeFunction` whose second tuple
+/// element (the “response” coming from the JS side) is decided by the caller.
+///
+/// Usage:
+///
+/// ```rust
+/// let tsfn = build_tsfn!(storage_load_js_function, ThreadSafeJsImportResponse);
+/// let tsfn = build_tsfn!(storage_load_js_function, MyResponse, 256); // queue = 256
+/// ```
+#[macro_export]
+macro_rules! build_tsfn {
+  // main entry
+  ( $fn_ident:expr, $resp:ty, $ret:ty $( , $queue:expr )? ) => {{
+    const Q: usize = build_tsfn!(@queue $( $queue )?);
+    let tsfn: Arc<ThreadsafeFunction<
+      $resp,
+      $ret,
+      $resp,
+      true,
+      false,
+      Q,
+    >> = Arc::new($fn_ident
+      .build_threadsafe_function()
+      .max_queue_size::<Q>()
+      .callee_handled::<true>()
+      .weak::<false>()
+      .build()?);
+    tsfn
+  }};
+
+  // handle the optional queue literal
+  (@queue) => { 128 };
+  (@queue $q:expr) => { $q };
 }
 
-macro_rules! abort_tsfn {
+/*macro_rules! abort_tsfn {
     ($id:expr, $env:expr) => {
         if !$id.aborted() {
             $id.clone().abort()?;
@@ -37,7 +68,7 @@ macro_rules! abort_tsfn {
         $id.unref(&$env)
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
     };
-}
+}*/
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
@@ -47,85 +78,217 @@ pub struct ContractManager {
     #[napi(skip)]
     pub runtime_pool: Arc<RuntimePool>,
     #[napi(skip)]
-    pub storage_load_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_load_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub storage_store_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_store_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub call_other_contract_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub call_other_contract_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub deploy_from_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub deploy_from_address_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub console_log_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub console_log_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<()>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub emit_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub emit_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<()>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub inputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub inputs_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub outputs_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub account_type_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub account_type_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub block_hash_tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+    pub block_hash_tsfn: Arc<
+        ThreadsafeFunction<
+            BlockHashRequest,
+            Promise<JsBlockHashResponse>,
+            BlockHashRequest,
+            true,
+            false,
+            128,
+        >,
+    >,
 }
 
-#[napi] //noinspection RsCompileErrorMacro
+#[napi] // noinspection RsCompileErrorMacro
 impl ContractManager {
     #[napi(constructor)]
     pub fn new(
         max_idling_runtimes: u32,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        storage_load_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        storage_store_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        call_other_contract_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        deploy_from_address_js_function: JsFunction,
-        #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
-        console_log_js_function: JsFunction,
-        #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
-        emit_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        inputs_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        )]
-        outputs_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
-        )]
-        account_type_js_function: JsFunction,
-        #[napi(
-            ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
-        )]
-        block_hash_js_function: JsFunction,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+        //)]
+        storage_load_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+        //)]
+        storage_store_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+        //)]
+        call_other_contract_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+        //)]
+        deploy_from_address_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        //#[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        console_log_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
+        //#[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        emit_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+        //)]
+        inputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+        //)]
+        outputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
+        //)]
+        account_type_js_function: Function<
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>,
+        >,
+        //#[napi(
+        //    ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
+        //)]
+        block_hash_js_function: Function<BlockHashRequest, Promise<JsBlockHashResponse>>,
     ) -> Result<Self, Error> {
-        let storage_load_tsfn = create_tsfn!(storage_load_js_function);
-        let storage_store_tsfn = create_tsfn!(storage_store_js_function);
-        let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
-        let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
-        let console_log_tsfn = create_tsfn!(console_log_js_function);
-        let emit_tsfn = create_tsfn!(emit_js_function);
-        let inputs_tsfn = create_tsfn!(inputs_js_function);
-        let outputs_tsfn = create_tsfn!(outputs_js_function);
-        let account_type_tsfn = create_tsfn!(account_type_js_function);
-        let block_hash_tsfn = create_tsfn!(block_hash_js_function);
+        let storage_load_tsfn = build_tsfn!(
+            storage_load_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let storage_store_tsfn = build_tsfn!(
+            storage_store_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let call_other_contract_tsfn = build_tsfn!(
+            call_other_contract_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let deploy_from_address_tsfn = build_tsfn!(
+            deploy_from_address_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let console_log_tsfn = build_tsfn!(
+            console_log_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<()>
+        );
+
+        let emit_tsfn = build_tsfn!(emit_js_function, ThreadSafeJsImportResponse, Promise<()>);
+
+        let inputs_tsfn = build_tsfn!(
+            inputs_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let outputs_tsfn = build_tsfn!(
+            outputs_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let account_type_tsfn = build_tsfn!(
+            account_type_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>
+        );
+
+        let block_hash_tsfn = build_tsfn!(
+            block_hash_js_function,
+            BlockHashRequest,
+            Promise<JsBlockHashResponse>
+        );
 
         let max_idling_runtimes = max_idling_runtimes as usize;
         let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
@@ -216,8 +379,8 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn destroy(&mut self, env: Env) -> Result<(), Error> {
-        abort_tsfn!(self.storage_load_tsfn, &env);
+    pub fn destroy(&mut self, _env: Env) -> Result<(), Error> {
+        /*abort_tsfn!(self.storage_load_tsfn, &env);
         abort_tsfn!(self.storage_store_tsfn, &env);
         abort_tsfn!(self.call_other_contract_tsfn, &env);
         abort_tsfn!(self.deploy_from_address_tsfn, &env);
@@ -226,7 +389,7 @@ impl ContractManager {
         abort_tsfn!(self.inputs_tsfn, &env);
         abort_tsfn!(self.outputs_tsfn, &env);
         abort_tsfn!(self.account_type_tsfn, &env);
-        abort_tsfn!(self.block_hash_tsfn, &env);
+        abort_tsfn!(self.block_hash_tsfn, &env);*/
 
         Ok(())
     }
@@ -275,7 +438,7 @@ impl ContractManager {
         contract.use_gas(gas)
     }
 
-    #[napi(ts_return_type = "ExitDataResponse")]
+    //#[napi(ts_return_type = "ExitDataResponse")]
     pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<napi::JsObject, Error> {
         let id = contract_id.get_u64().1;
 
@@ -290,8 +453,7 @@ impl ContractManager {
         js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
         js_object.set_named_property(
             "data",
-            env.create_buffer_with_data(exit_data.data.to_vec())?
-                .into_raw(),
+            BufferSlice::from_data(&env, exit_data.data.to_vec())?,
         )?;
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
         Ok(js_object)
@@ -363,7 +525,7 @@ impl ContractManager {
         // We must clone the Arc for background usage and for final JS creation:
         let arc_for_bg = contract_arc.clone();
 
-        let calldata_for_bg = calldata.clone();
+        let calldata_for_bg = calldata.to_vec();
 
         // The future to run in the background:
         let future = async move {
@@ -391,8 +553,7 @@ impl ContractManager {
                 js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
                 js_object.set_named_property(
                     "data",
-                    env.create_buffer_with_data(exit_data.data.to_vec())?
-                        .into_raw(),
+                    BufferSlice::from_data(&env, exit_data.data.to_vec())?,
                 )?;
                 js_object.set_named_property(
                     "gasUsed",
@@ -418,7 +579,7 @@ impl ContractManager {
         // We must clone the Arc for background usage and for final JS creation:
         let arc_for_bg = contract_arc.clone();
 
-        let calldata_for_bg = calldata.clone();
+        let calldata_for_bg = calldata.to_vec();
 
         // The future to run in the background:
         let future = async move {
@@ -446,8 +607,7 @@ impl ContractManager {
                 js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
                 js_object.set_named_property(
                     "data",
-                    env.create_buffer_with_data(exit_data.data.to_vec())?
-                        .into_raw(),
+                    BufferSlice::from_data(&env, exit_data.data.to_vec())?,
                 )?;
                 js_object.set_named_property(
                     "gasUsed",

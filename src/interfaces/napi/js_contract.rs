@@ -18,7 +18,6 @@ use napi::bindgen_prelude::{Array, BigInt, Buffer};
 use napi::Env;
 use napi::Error;
 use napi::JsUnknown;
-use std::panic::catch_unwind;
 use std::sync::{Arc, Mutex, TryLockError};
 use tokio::runtime::Runtime;
 use wasmer::Value;
@@ -32,67 +31,79 @@ pub struct JsContract {
 
 impl JsContract {
     pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
-        catch_unwind(|| {
-            let time = Local::now();
+        //catch_unwind(|| {
+        let time = Local::now();
 
-            let storage_load_tsfn = manager.storage_load_tsfn.clone();
-            let storage_store_tsfn = manager.storage_store_tsfn.clone();
-            let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
-            let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
-            let console_log_tsfn = manager.console_log_tsfn.clone();
-            let emit_tsfn = manager.emit_tsfn.clone();
-            let inputs_tsfn = manager.inputs_tsfn.clone();
-            let outputs_tsfn = manager.outputs_tsfn.clone();
-            let account_type_tsfn = manager.account_type_tsfn.clone();
-            let block_hash_tsfn = manager.block_hash_tsfn.clone();
+        let storage_load_tsfn = manager.storage_load_tsfn.clone();
+        let storage_store_tsfn = manager.storage_store_tsfn.clone();
+        let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
+        let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
+        let console_log_tsfn = manager.console_log_tsfn.clone();
+        let emit_tsfn = manager.emit_tsfn.clone();
+        let inputs_tsfn = manager.inputs_tsfn.clone();
+        let outputs_tsfn = manager.outputs_tsfn.clone();
+        let account_type_tsfn = manager.account_type_tsfn.clone();
+        let block_hash_tsfn = manager.block_hash_tsfn.clone();
 
-            // Create ExternalFunction instances with contract_id
-            let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
-            let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
-            let call_other_contract_external =
-                CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
-            let deploy_from_address_external =
-                DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
-            let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
-            let emit_external = EmitExternalFunction::new(emit_tsfn, id);
-            let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
-            let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
-            let account_type_external = AccountTypeExternalFunction::new(account_type_tsfn, id);
-            let block_hash_external = BlockHashExternalFunction::new(block_hash_tsfn, id);
+        // Create ExternalFunction instances with contract_id
+        let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
+        let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
+        let call_other_contract_external =
+            CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
+        let deploy_from_address_external =
+            DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
+        let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
+        let emit_external = EmitExternalFunction::new(emit_tsfn, id);
+        let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
+        let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
+        let account_type_external = AccountTypeExternalFunction::new(account_type_tsfn, id);
+        let block_hash_external = BlockHashExternalFunction::new(block_hash_tsfn, id);
 
-            // Obtain a Runtime from the pool
-            let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
-                Error::from_reason("No available runtimes in the pool".to_string())
-            })?;
+        // Obtain a Runtime from the pool
+        let runtime = manager
+            .runtime_pool
+            .get_runtime()
+            .ok_or_else(|| Error::from_reason("No available runtimes in the pool".to_string()))?;
 
-            if params.memory_pages_used >= MAX_PAGES {
-                return Err(Error::from_reason("No more memory pages available"));
-            }
-            let max_pages = MAX_PAGES - params.memory_pages_used;
+        if params.memory_pages_used >= MAX_PAGES {
+            return Err(Error::from_reason("No more memory pages available"));
+        }
+        let max_pages = MAX_PAGES - params.memory_pages_used;
 
-            //let runtime = Arc::new(Runtime::new()?);
-            let custom_env: CustomEnv = CustomEnv::new(
-                params.network.into(),
-                storage_load_external,
-                storage_store_external,
-                call_other_contract_external,
-                deploy_from_address_external,
-                console_log_external,
-                emit_external,
-                inputs_external,
-                outputs_external,
-                account_type_external,
-                block_hash_external,
-                runtime.clone(),
+        //let runtime = Arc::new(Runtime::new()?);
+        let custom_env: CustomEnv = CustomEnv::new(
+            params.network.into(),
+            storage_load_external,
+            storage_store_external,
+            call_other_contract_external,
+            deploy_from_address_external,
+            console_log_external,
+            emit_external,
+            inputs_external,
+            outputs_external,
+            account_type_external,
+            block_hash_external,
+            runtime.clone(),
+            max_pages,
+        )
+        .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+        let runner: WasmerRunner;
+
+        if let Some(bytecode) = params.bytecode {
+            runner = WasmerRunner::from_bytecode(
+                &bytecode,
+                params.used_gas,
+                params.max_gas,
                 max_pages,
+                custom_env,
+                params.is_debug_mode,
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
-            let runner: WasmerRunner;
-
-            if let Some(bytecode) = params.bytecode {
-                runner = WasmerRunner::from_bytecode(
-                    &bytecode,
+        } else if let Some(serialized) = params.serialized {
+            unsafe {
+                runner = WasmerRunner::from_serialized(
+                    serialized,
                     params.used_gas,
                     params.max_gas,
                     max_pages,
@@ -100,34 +111,23 @@ impl JsContract {
                     params.is_debug_mode,
                 )
                 .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-            } else if let Some(serialized) = params.serialized {
-                unsafe {
-                    runner = WasmerRunner::from_serialized(
-                        serialized,
-                        params.used_gas,
-                        params.max_gas,
-                        max_pages,
-                        custom_env,
-                        params.is_debug_mode,
-                    )
-                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-                }
-            } else {
-                return Err(Error::from_reason("No bytecode or serialized data"));
             }
+        } else {
+            return Err(Error::from_reason("No bytecode or serialized data"));
+        }
 
-            let contract = JsContract::from_runner(
-                runner,
-                params.max_gas,
-                runtime.clone(),
-                manager.runtime_pool.clone(),
-            )?;
+        let contract = JsContract::from_runner(
+            runner,
+            params.max_gas,
+            runtime.clone(),
+            manager.runtime_pool.clone(),
+        )?;
 
-            log_time_diff(&time, "JsContract::from");
+        log_time_diff(&time, "JsContract::from");
 
-            Ok(contract)
-        })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        Ok(contract)
+        //})
+        //.unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn set_environment_variables(
@@ -151,7 +151,7 @@ impl JsContract {
         Ok(())
     }
 
-    pub fn on_deploy(&self, calldata: Buffer) -> Result<ExitData> {
+    pub fn on_deploy(&self, calldata: Vec<u8>) -> Result<ExitData> {
         // Lock the contract and call
         let mut contract = self
             .contract
@@ -166,7 +166,7 @@ impl JsContract {
         }
     }
 
-    pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
+    pub fn execute(&self, calldata: Vec<u8>) -> Result<ExitData> {
         let time = Local::now();
         // Lock the contract and call
         let mut contract = self

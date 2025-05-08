@@ -1,106 +1,108 @@
-use napi::bindgen_prelude::{BigInt, Buffer, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::bindgen_prelude::{BigInt, Buffer, FromNapiValue, Promise, Unknown};
+use napi::threadsafe_function::ThreadsafeFunction;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use crate::interfaces::{ExternalFunction, ExternalFunctionNoData, ExternalFunctionNoResponse};
 
-pub struct GenericExternalFunction {
-    tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+/// Generic wrapper around a `ThreadsafeFunction` whose JavaScript promise
+/// resolves to any N-API value `R` (`Buffer`, `()`, …).
+pub struct GenericExternalFunction<Return: 'static + FromNapiValue = Unknown> {
+    tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Return,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     contract_id: u64,
 }
 
-impl GenericExternalFunction {
+impl<R> GenericExternalFunction<R>
+where
+    R: FromNapiValue,
+{
     pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        tsfn: Arc<
+            ThreadsafeFunction<
+                ThreadSafeJsImportResponse,
+                R,
+                ThreadSafeJsImportResponse,
+                true,
+                false,
+                128,
+            >,
+        >,
         contract_id: u64,
     ) -> Self {
         Self { tsfn, contract_id }
     }
+
+    fn make_request(&self, buffer: Vec<u8>) -> ThreadSafeJsImportResponse {
+        ThreadSafeJsImportResponse {
+            buffer,
+            contract_id: BigInt::from(self.contract_id),
+        }
+    }
 }
 
-impl ExternalFunction for GenericExternalFunction {
+impl ExternalFunction for GenericExternalFunction<Promise<Buffer>> {
     fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: data.to_vec(),
-            contract_id: BigInt::from(self.contract_id),
-        };
+        let tsfn = self.tsfn.clone();
+        let request = self.make_request(data.to_vec());
 
-        let deploy = async move {
-            let response: Result<Promise<Buffer>, RuntimeError> = self
-                .tsfn
+        let fut = async move {
+            let promise = tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason));
+                .map_err(|e| RuntimeError::new(e.reason))?; // Promise<Buffer>
 
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            let data = data.to_vec();
-
-            Ok(data.into())
+            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            Ok(buffer.to_vec())
         };
 
-        let response = runtime.block_on(deploy);
-
-        response
+        runtime.block_on(fut)
     }
 }
 
-impl ExternalFunctionNoData for GenericExternalFunction {
+impl ExternalFunctionNoData for GenericExternalFunction<Promise<Buffer>> {
     fn execute_no_data(&self, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: Vec::new(),
-            contract_id: BigInt::from(self.contract_id),
-        };
+        let tsfn = self.tsfn.clone();
+        let request = self.make_request(Vec::new());
 
-        let deploy = async move {
-            let response: Result<Promise<Buffer>, RuntimeError> = self
-                .tsfn
+        let fut = async move {
+            let promise = tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason));
+                .map_err(|e| RuntimeError::new(e.reason))?;
 
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            let data = data.to_vec();
-
-            Ok(data.into())
+            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            Ok(buffer.to_vec())
         };
 
-        let response = runtime.block_on(deploy);
-
-        response
+        runtime.block_on(fut)
     }
 }
 
-impl ExternalFunctionNoResponse for GenericExternalFunction {
+impl ExternalFunctionNoResponse for GenericExternalFunction<Promise<()>> {
     fn execute_no_response(&self, data: &[u8], runtime: &Runtime) -> Result<(), RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: Vec::from(data),
-            contract_id: BigInt::from(self.contract_id),
-        };
+        let tsfn = self.tsfn.clone();
+        let request = self.make_request(data.to_vec());
 
-        let deploy = async move {
-            let response: Result<Promise<()>, RuntimeError> = self
-                .tsfn
+        let fut = async move {
+            let promise = tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason));
+                .map_err(|e| RuntimeError::new(e.reason))?; // Promise<()>
 
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            Ok(data)
+            promise.await.map_err(|e| RuntimeError::new(e.reason))
         };
 
-        let response = runtime.block_on(deploy);
-
-        response
+        runtime.block_on(fut)
     }
 }

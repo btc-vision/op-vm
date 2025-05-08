@@ -1,5 +1,6 @@
 use napi::bindgen_prelude::{BigInt, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::threadsafe_function::ThreadsafeFunction;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -12,13 +13,31 @@ pub struct AccountTypeResponse {
 }
 
 pub struct AccountTypeExternalFunction {
-    tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     contract_id: u64,
 }
 
 impl AccountTypeExternalFunction {
     pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        tsfn: Arc<
+            ThreadsafeFunction<
+                ThreadSafeJsImportResponse,
+                Promise<AccountTypeResponse>,
+                ThreadSafeJsImportResponse,
+                true,
+                false,
+                128,
+            >,
+        >,
         id: u64,
     ) -> Self {
         Self {

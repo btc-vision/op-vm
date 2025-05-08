@@ -1,8 +1,9 @@
 use napi::bindgen_prelude::Buffer;
 use napi::{
     bindgen_prelude::{BigInt, Promise},
-    threadsafe_function::{ErrorStrategy, ThreadsafeFunction},
+    threadsafe_function::ThreadsafeFunction,
 };
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -24,13 +25,31 @@ pub struct BlockHashResponse {
 }
 
 pub struct BlockHashExternalFunction {
-    tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+    tsfn: Arc<
+        ThreadsafeFunction<
+            BlockHashRequest,
+            Promise<JsBlockHashResponse>,
+            BlockHashRequest,
+            true,
+            false,
+            128,
+        >,
+    >,
     contract_id: u64,
 }
 
 impl BlockHashExternalFunction {
     pub fn new(
-        tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+        tsfn: Arc<
+            ThreadsafeFunction<
+                BlockHashRequest,
+                Promise<JsBlockHashResponse>,
+                BlockHashRequest,
+                true,
+                false,
+                128,
+            >,
+        >,
         contract_id: u64,
     ) -> Self {
         Self { tsfn, contract_id }
