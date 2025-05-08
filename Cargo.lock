@@ -1363,9 +1363,9 @@ dependencies = [
 
 [[package]]
 name = "neon"
-version = "1.1.0-alpha.1"
+version = "1.1.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd61d11347a66a4b5d10bf413169a99de37cf7b11191fac0c6f0b242878fa889"
+checksum = "dc81ad718d7f9a9bb937ad630c088ac85ebf92d04c0f97e0586e68c24c3560a2"
 dependencies = [
  "either",
  "getrandom 0.2.15",
@@ -1381,9 +1381,9 @@ dependencies = [
 
 [[package]]
 name = "neon-macros"
-version = "1.1.0-alpha.1"
+version = "1.1.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ef6445e861d1eeaf27de82311abc6e16e660c1d3afebf2b62ef9a2909cd86d0"
+checksum = "e769ae03a4c633352f5bf5c89465abd85145a9b1458cc078bdd4adccf0a6ddb4"
 dependencies = [
  "proc-macro2",
  "quote",

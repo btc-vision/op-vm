@@ -1,9 +1,10 @@
-use crate::domain::runner::{self, ContractRunner, ExitData};
+use crate::domain::runner::{ContractRunner, ExitData};
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::Contract;
 use crate::interfaces::napi::contract::ContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
+use crate::INNER;
 use bytes::Bytes;
 use neon::prelude::*;
 use neon::types::buffer::TypedArray;
@@ -11,10 +12,8 @@ use neon::types::JsBigInt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::INNER;
-
 pub struct ContractManager {
-    contracts: HashMap<u64, Contract>,
+    contracts: HashMap<u64, Arc<Contract>>,
     contract_cache: HashMap<String, Bytes>,
     next_id: u64,
     pub runtime_pool: Arc<RuntimePool>,
@@ -148,7 +147,7 @@ impl ContractManager {
             manager.contract_cache.insert(address, serialized);
         }
 
-        manager.add_contract(reserved_id, contract);
+        manager.add_contract(reserved_id, Arc::from(contract));
 
         Ok(cx.undefined())
     }
@@ -334,38 +333,45 @@ impl ContractManager {
     }
 
     pub fn js_on_deploy(mut cx: FunctionContext) -> JsResult<JsPromise> {
-        println!("Hello from on deploy js");
-
         let this = cx.this::<JsObject>()?;
-        let inner: Handle<'_, BoxedContractManager> =
-            this.get::<BoxedContractManager, _, _>(&mut cx, INNER)?;
-        let manager = Arc::clone(&inner);
+        let inner: Handle<BoxedContractManager> = this.get(&mut cx, INNER)?;
+        let mgr_arc = Arc::clone(&inner);
 
         let contract_id = cx
             .argument::<JsBigInt>(0)?
             .to_u64(&mut cx)
-            .or_throw(&mut cx)?;
+            .or_else(|e| cx.throw_range_error(e.to_string()))?;
+
         let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
+
+        let (contract, runtime) = {
+            let mgr = mgr_arc.lock().unwrap();
+
+            let contract = match mgr.contracts.get(&contract_id) {
+                Some(c) => Arc::clone(c),
+                None => return cx.throw_range_error("contract not found"),
+            };
+
+            let rt = mgr.runtime_pool.get_runtime().unwrap();
+            (contract, rt)
+        };
+
         let (deferred, promise) = cx.promise();
         let channel = cx.channel();
 
-        // Call task on background
-        let runtime = manager.lock().unwrap().runtime_pool.get_runtime().unwrap();
         runtime.spawn_blocking(move || {
-            let manager = manager.lock().unwrap();
-            let result = manager.on_deploy(contract_id, calldata);
+            let result = contract.on_deploy(calldata);
 
-            // Sync with main JS thread
             channel.send(move |mut cx| match result {
                 Ok(exit_data) => {
-                    // TODO: unwrap
-                    let result = exit_data.to_js_object(&mut cx).unwrap();
-                    Ok(deferred.resolve(&mut cx, result))
+                    let obj = exit_data.to_js_object(&mut cx).unwrap();
+                    deferred.resolve(&mut cx, obj);
+                    Ok(())
                 }
                 Err(err) => {
-                    let error = cx.string(err.to_string());
-                    deferred.reject(&mut cx, error);
-                    cx.throw_error(err.to_string())
+                    let e = cx.error(err.to_string())?;
+                    deferred.reject(&mut cx, e);
+                    Ok(())
                 }
             })
         });
@@ -373,38 +379,47 @@ impl ContractManager {
         Ok(promise)
     }
 
+    /* ---------- execute: identical pattern ---------- */
     pub fn js_execute(mut cx: FunctionContext) -> JsResult<JsPromise> {
-        println!("Hello from execute JS");
         let this = cx.this::<JsObject>()?;
-        let inner: Handle<'_, BoxedContractManager> =
-            this.get::<BoxedContractManager, _, _>(&mut cx, INNER)?;
-        let manager = Arc::clone(&inner);
+        let inner: Handle<BoxedContractManager> = this.get(&mut cx, INNER)?;
+        let mgr_arc = Arc::clone(&inner);
 
         let contract_id = cx
             .argument::<JsBigInt>(0)?
             .to_u64(&mut cx)
-            .or_throw(&mut cx)?;
+            .or_else(|e| cx.throw_range_error(e.to_string()))?;
+
         let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
+
+        let (contract, runtime) = {
+            let mgr = mgr_arc.lock().unwrap();
+
+            let contract = match mgr.contracts.get(&contract_id) {
+                Some(c) => Arc::clone(c),
+                None => return cx.throw_range_error("contract not found"),
+            };
+
+            let rt = mgr.runtime_pool.get_runtime().unwrap();
+            (contract, rt)
+        };
+
         let (deferred, promise) = cx.promise();
         let channel = cx.channel();
-        let runtime = manager.lock().unwrap().runtime_pool.get_runtime().unwrap();
-        runtime.spawn_blocking(move || {
-            let result = manager.lock().unwrap().execute(contract_id, calldata);
 
-            // Sync with main JS thread
-            channel.send(move |mut cx| {
-                println!("Hello from execute - done 1");
-                match result {
-                    Ok(exit_data) => {
-                        let result = exit_data.to_js_object(&mut cx).unwrap();
-                        Ok(deferred.resolve(&mut cx, result))
-                    }
-                    Err(err) => {
-                        let error = cx.string(err.to_string());
-                        println!("{}", error.value(&mut cx));
-                        deferred.reject(&mut cx, error);
-                        cx.throw_error(err.to_string())
-                    }
+        runtime.spawn_blocking(move || {
+            let result = contract.execute(calldata);
+
+            channel.send(move |mut cx| match result {
+                Ok(exit_data) => {
+                    let obj = exit_data.to_js_object(&mut cx).unwrap();
+                    deferred.resolve(&mut cx, obj);
+                    Ok(())
+                }
+                Err(err) => {
+                    let e = cx.error(err.to_string())?;
+                    deferred.reject(&mut cx, e);
+                    Ok(())
                 }
             })
         });
@@ -508,12 +523,12 @@ impl ContractManager {
     }
 
     // Add a JsContract to the map and return its ID
-    fn add_contract(&mut self, id: u64, contract: Contract) -> u64 {
+    fn add_contract(&mut self, id: u64, contract: Arc<Contract>) -> u64 {
         self.contracts.insert(id, contract);
         id
     }
 
-    pub fn get_contract(&self, id: u64) -> anyhow::Result<&Contract> {
+    pub fn get_contract(&self, id: u64) -> anyhow::Result<&Arc<Contract>> {
         self.contracts
             .get(&id)
             .ok_or(anyhow::anyhow!("Contract not found"))
@@ -557,7 +572,7 @@ impl ContractManager {
         Ok(())
     }
 
-    pub fn on_deploy(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
+    /*pub fn on_deploy(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         println!("Hello from on deploy");
         self.get_contract(contract_id)?.on_deploy(calldata)
     }
@@ -567,7 +582,7 @@ impl ContractManager {
         let result = self.get_contract(contract_id)?.execute(calldata);
         println!("Hello from execute - done");
         result
-    }
+    }*/
 
     pub fn length(&self) -> anyhow::Result<u64> {
         Ok(self.contracts.len() as u64)

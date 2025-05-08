@@ -1,8 +1,11 @@
-use std::panic;
-
 use domain::runner::{NEW_STORAGE_SLOT_GAS_COST, UPDATED_STORAGE_SLOT_GAS_COST};
 use interfaces::ContractManager;
 use neon::{prelude::*, types::JsBigInt};
+use once_cell::sync::OnceCell;
+use std::thread::ThreadId;
+use std::{panic, thread};
+
+static JS_THREAD: OnceCell<ThreadId> = OnceCell::new();
 
 mod application;
 mod domain;
@@ -15,6 +18,8 @@ pub const INNER: &str = "inner";
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
+    JS_THREAD.set(thread::current().id()).ok();
+
     //cx.export_function("callJsFromRust", call_js_from_rust)?;
 
     panic::set_hook(Box::new(|e| {

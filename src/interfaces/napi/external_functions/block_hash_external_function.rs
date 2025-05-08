@@ -15,10 +15,7 @@ pub struct BlockHashRequest {
 }
 
 impl AsArguments for BlockHashRequest {
-    fn as_arguments<'a, C>(
-        &self,
-        cx: &mut C,
-    ) -> neon::prelude::NeonResult<Vec<Handle<'a, neon::prelude::JsValue>>>
+    fn as_arguments<'a, C>(&self, cx: &mut C) -> NeonResult<Vec<Handle<'a, JsValue>>>
     where
         C: Context<'a>,
     {
@@ -60,6 +57,7 @@ impl FromJsObject for BlockHashResponse {
     }
 }
 
+#[derive(Clone)]
 pub struct BlockHashExternalFunction {
     handle: Arc<Root<JsFunction>>,
     channel: Channel,
@@ -95,8 +93,9 @@ impl BlockHashExternalFunction {
             contract_id: self.contract_id,
         };
 
-        Ok(self
-            .call(runtime, args)
-            .or_else(|err| Err(RuntimeError::new(err.to_string())))?)
+        Ok(
+            ExternalFunction::<BlockHashResponse>::call_blocking(self, runtime, args)
+                .or_else(|err| Err(RuntimeError::new(err.to_string())))?,
+        )
     }
 }

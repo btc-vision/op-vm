@@ -33,6 +33,7 @@ impl FromJsObject for AccountTypeResponse {
     }
 }
 
+#[derive(Clone)]
 pub struct AccountTypeExternalFunction {
     handle: Arc<Root<JsFunction>>,
     channel: Channel,
@@ -49,9 +50,7 @@ impl AccountTypeExternalFunction {
     }
 }
 
-impl super::external_function::ExternalFunction<AccountTypeResponse>
-    for AccountTypeExternalFunction
-{
+impl ExternalFunction<AccountTypeResponse> for AccountTypeExternalFunction {
     fn handle(&self) -> Arc<Root<JsFunction>> {
         self.handle.clone()
     }
@@ -72,11 +71,15 @@ impl AccountTypeExternalFunction {
             contract_id: self.contract_id,
         };
 
-        Ok(self.call(runtime, args).or_else(|err| {
-            Err(RuntimeError::new(format!(
-                "Failed to get result from account type: {}",
-                err.to_string()
-            )))
-        })?)
+        Ok(
+            ExternalFunction::<AccountTypeResponse>::call_blocking(self, runtime, args).or_else(
+                |err| {
+                    Err(RuntimeError::new(format!(
+                        "Failed to get result from account type: {}",
+                        err.to_string()
+                    )))
+                },
+            )?,
+        )
     }
 }

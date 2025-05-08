@@ -196,6 +196,8 @@ impl Contract {
     }
 
     pub fn execute(&self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
+        //self.runtime = Runtime::new()?;
+        
         println!("Execute contract inside");
         let time = Local::now();
         // Lock the contract and call
