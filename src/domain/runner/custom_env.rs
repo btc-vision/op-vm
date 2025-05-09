@@ -1,7 +1,5 @@
 use crate::domain::runner::environment_variables::EnvironmentVariables;
-use crate::domain::runner::{
-    BitcoinNetwork, CallResult, Calldata, ExitData, InstanceWrapper,
-};
+use crate::domain::runner::{BitcoinNetwork, CallResult, Calldata, ExitData, InstanceWrapper};
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,

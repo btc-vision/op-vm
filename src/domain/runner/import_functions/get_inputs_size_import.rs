@@ -24,7 +24,7 @@ impl GetInputsSizeImport {
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
         // TODO: Don't load all inputs for this
-        let inputs = &env.inputs_external.execute(&env.runtime)?;
+        let inputs = &env.inputs_external.execute_empty_request(&env.runtime)?;
 
         Ok(inputs.len() as u32)
     }

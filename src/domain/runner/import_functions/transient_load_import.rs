@@ -27,7 +27,7 @@ impl TransientLoadImport {
             .ok_or(RuntimeError::new("Instance not found"))?;
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
-        
+
         let data = instance
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;

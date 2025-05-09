@@ -32,6 +32,6 @@ impl EmitImport {
 
         instance.use_gas(&mut store, data.len() as u64 * GAS_COST_PER_BYTES);
 
-        env.emit_external.execute(&data, &env.runtime)
+        env.emit_external.execute_no_response(&data, &env.runtime)
     }
 }

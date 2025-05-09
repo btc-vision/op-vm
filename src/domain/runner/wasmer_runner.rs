@@ -133,8 +133,8 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
-                // "tload" => import!(TransientLoadImport),
-                // "tstore" => import!(TransientStoreImport),
+                "tload" => import!(TransientLoadImport),
+                "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -289,13 +289,14 @@ impl WasmerRunner {
     }
 }
 
+#[async_trait::async_trait]
 impl ContractRunner for WasmerRunner {
     fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables) {
         let env = self.env.as_mut(&mut self.store);
         env.environment_variables = Some(environment_variables);
     }
 
-    fn on_deploy(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
+    fn on_deploy(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData> {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 
@@ -334,7 +335,7 @@ impl ContractRunner for WasmerRunner {
         Ok(env.exit_data.clone())
     }
 
-    fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
+    fn execute(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData> {
         let time = Local::now();
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);

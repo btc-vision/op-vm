@@ -13,9 +13,8 @@ wasmer-middlewares = "5.0.4"
 wasmer-types = "5.0.4"
 wasmer-compiler = "5.0.4"
 anyhow = "1.0.97"
-napi = { version = "2.16.17", default-features = false, features = ["napi9", "tokio_rt", "async", "tokio_io_std"] }
-napi-derive = "2.16.13"
-tokio = "1.44.2"
+neon = {version="1.1.0-alpha.1", features=["napi-8", "futures"]}
+tokio = {version="1.44.2", features=["rt","rt-multi-thread", "macros", "time", "sync"]}
 chrono = "0.4.40"
 sha2 = "0.10.8"
 ripemd = "0.1.3"
@@ -26,13 +25,9 @@ log = "0.4.27"
 secp256k1 = { version = "0.30.0", features = ["std"] }
 once_cell = "1.21.3"
 thiserror = "2.0.12"
+async-trait = "0.1.88"
 
-[build-dependencies]
-napi-build = "2.1.6"
 
 [profile.release]
 lto = true
 strip = "symbols"
-
-[patch.crates-io]
-napi = { git = "https://github.com/btc-vision/napi-rs.git", rev = "8dbdc15375e3b3e5a07a683a015864d58010509f" }

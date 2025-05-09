@@ -244,5 +244,3 @@ fabric.properties
 ### NAPI
 
 *.node
-index.js
-index.d.ts
