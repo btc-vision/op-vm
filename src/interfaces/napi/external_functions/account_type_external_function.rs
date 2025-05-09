@@ -52,6 +52,10 @@ impl AccountTypeExternalFunction {
 impl super::external_function::ExternalFunction<AccountTypeResponse>
     for AccountTypeExternalFunction
 {
+    fn name(&self) -> String {
+        String::from("AccountType")
+    }
+
     fn handle(&self) -> Arc<Root<JsFunction>> {
         self.handle.clone()
     }

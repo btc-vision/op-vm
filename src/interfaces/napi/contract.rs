@@ -50,37 +50,50 @@ impl Contract {
 
         // Create ExternalFunction instances with contract_id
         let storage_load_external = StorageLoadExternalFunction::new(
+            "StorageLoad",
             manager.storage_load_js_function.clone(),
             cx.channel(),
             id,
         );
         let storage_store_external = StorageStoreExternalFunction::new(
+            "StorageStore",
             manager.storage_store_js_function.clone(),
             cx.channel(),
             id,
         );
 
         let call_other_contract_external = CallOtherContractExternalFunction::new(
+            "CallOther",
             manager.call_other_contract_js_function.clone(),
             cx.channel(),
             id,
         );
         let deploy_from_address_external = DeployFromAddressExternalFunction::new(
+            "DeployFromAddress",
             manager.deploy_from_address_js_function.clone(),
             cx.channel(),
             id,
         );
         let console_log_external = ConsoleLogExternalFunction::new(
+            "ConsoleLog",
             manager.console_log_js_function.clone(),
             cx.channel(),
             id,
         );
         let emit_external =
-            EmitExternalFunction::new(manager.emit_js_function.clone(), cx.channel(), id);
-        let inputs_external =
-            InputsExternalFunction::new(manager.inputs_js_function.clone(), cx.channel(), id);
-        let outputs_external =
-            OutputsExternalFunction::new(manager.outputs_js_function.clone(), cx.channel(), id);
+            EmitExternalFunction::new("Emit", manager.emit_js_function.clone(), cx.channel(), id);
+        let inputs_external = InputsExternalFunction::new(
+            "Inputs",
+            manager.inputs_js_function.clone(),
+            cx.channel(),
+            id,
+        );
+        let outputs_external = OutputsExternalFunction::new(
+            "Outputs",
+            manager.outputs_js_function.clone(),
+            cx.channel(),
+            id,
+        );
         let account_type_external = AccountTypeExternalFunction::new(
             manager.account_type_js_function.clone(),
             cx.channel(),

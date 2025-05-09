@@ -34,7 +34,7 @@ impl ExitData {
 
         object.set(cx, "status", number)?;
         object.set(cx, "data", data)?;
-        object.set(cx, "gasUSed", gas_used)?;
+        object.set(cx, "gasUsed", gas_used)?;
 
         Ok(object)
     }

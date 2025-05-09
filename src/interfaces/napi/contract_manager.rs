@@ -256,6 +256,8 @@ impl ContractManager {
             .get_used_gas(contract_id)
             .or_else(|err| cx.throw_error(err.to_string()))?;
 
+        println!("Returning gas: {}", gas);
+
         Ok(JsBigInt::from_u64(&mut cx, gas))
     }
 
@@ -387,8 +389,8 @@ impl ContractManager {
         let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
         let (deferred, promise) = cx.promise();
         let channel = cx.channel();
-        let runtime = manager.lock().unwrap().runtime_pool.get_runtime().unwrap();
-        runtime.spawn_blocking(move || {
+        //let runtime = manager.lock().unwrap().runtime_pool.get_runtime().unwrap();
+        std::thread::spawn(move || {
             let result = manager.lock().unwrap().execute(contract_id, calldata);
 
             // Sync with main JS thread
@@ -400,10 +402,12 @@ impl ContractManager {
                         Ok(deferred.resolve(&mut cx, result))
                     }
                     Err(err) => {
-                        let error = cx.string(err.to_string());
-                        println!("{}", error.value(&mut cx));
+                        let string = err.to_string();
+                        let error = cx.error(string.clone())?;
+                        let value = cx.string(string);
+
                         deferred.reject(&mut cx, error);
-                        cx.throw_error(err.to_string())
+                        cx.throw(value)
                     }
                 }
             })

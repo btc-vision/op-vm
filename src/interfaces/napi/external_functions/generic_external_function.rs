@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use neon::{prelude::*, types::JsBigInt};
+use sha2::digest::typenum::TypeArray;
 
 use super::AsArguments;
 use crate::interfaces::ExternalFunction;
@@ -8,6 +9,7 @@ use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 pub struct GenericExternalFunction {
+    name: String,
     channel: Channel,
     handle: Arc<Root<JsFunction>>,
     contract_id: u64,
@@ -43,16 +45,25 @@ impl AsArguments for BufferFunctionRequest {
         C: Context<'a>,
     {
         let object = cx.empty_object();
-        let object_buffer = JsBuffer::from_slice(cx, &self.buffer)?;
+        let object_buffer = JsTypedArray::from_slice(cx, &self.buffer)?;
         let object_contract_id = JsBigInt::from_u64(cx, self.contract_id);
         object.set(cx, "buffer", object_buffer)?;
         object.set(cx, "contractId", object_contract_id)?;
 
-        Ok(vec![object.upcast()])
+        let console = cx.global_object().get::<JsObject, _, _>(cx, "console")?;
+        let log = console.get::<JsFunction, _, _>(cx, "log")?;
+
+        let args = vec![cx.undefined().upcast(), object.upcast()];
+        log.call(cx, console, args.clone()).unwrap();
+        Ok(args)
     }
 }
 
 impl ExternalFunction<Vec<u8>> for GenericExternalFunction {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
     fn handle(&self) -> Arc<Root<JsFunction>> {
         self.handle.clone()
     }
@@ -63,6 +74,10 @@ impl ExternalFunction<Vec<u8>> for GenericExternalFunction {
 }
 
 impl ExternalFunction<()> for GenericExternalFunction {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
     fn handle(&self) -> std::sync::Arc<Root<JsFunction>> {
         self.handle.clone()
     }
@@ -73,8 +88,14 @@ impl ExternalFunction<()> for GenericExternalFunction {
 }
 
 impl GenericExternalFunction {
-    pub fn new(handle: Arc<Root<JsFunction>>, channel: Channel, contract_id: u64) -> Self {
+    pub fn new(
+        name: &str,
+        handle: Arc<Root<JsFunction>>,
+        channel: Channel,
+        contract_id: u64,
+    ) -> Self {
         Self {
+            name: name.to_string(),
             handle,
             channel,
             contract_id,

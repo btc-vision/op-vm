@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use neon::{prelude::*, result::Throw, types::buffer::TypedArray};
 use tokio::runtime::Runtime;
@@ -39,6 +39,10 @@ pub trait AsArguments {
 }
 
 pub trait ExternalFunction<R: Sized + Send + Sync> {
+    fn name(&self) -> String {
+        String::from("no name function")
+    }
+
     fn handle(&self) -> Arc<Root<JsFunction>>;
     fn channel(&self) -> Channel;
     fn call<'a, AS>(&self, runtime: &Runtime, args: AS) -> Result<R, RuntimeError>
@@ -46,16 +50,15 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
         AS: AsArguments + Send + Sync + 'static,
         R: FromJsObject + 'static,
     {
-        println!("External handle");
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<Result<R, RuntimeError>>(1);
+        println!("External handle: {}", self.name());
+        let (sender, mut receiver) = std::sync::mpsc::channel::<Result<R, RuntimeError>>();
         let handle = self.handle();
         let channel = self.channel();
         let success = sender.clone();
         let failure = success.clone();
 
-        runtime.spawn_blocking(move || {
-            println!("Hello handle!!!");
-            let run = channel.send(move |mut cx| {
+        std::thread::spawn(move || {
+            channel.send(move |mut cx| {
                 println!("Hello handle 22!!!");
                 let this = cx.undefined();
                 let console = cx
@@ -65,48 +68,54 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
                 println!("Promise in channel 1 ");
                 let callback = handle.to_inner(&mut cx);
                 let args = args.as_arguments(&mut cx)?;
-                let msg = cx.string("MEssage from callback");
+                let msg = cx.string("Message from callback");
                 log.call(&mut cx, this, vec![msg.upcast()])?;
                 println!("Promise in channel 2 ");
 
                 let result: Result<(), Throw> = {
+                    println!("Promise in channel - registering 1");
                     let call = callback.call(&mut cx, this, args)?;
+                    println!("Promise in channel - registering 2");
                     let promise: Handle<JsPromise> = call.downcast_or_throw(&mut cx)?;
 
                     // Register promise callbacks
                     // promise.then(succes(value), failure(value));
-                    println!("Promise in channel");
+                    println!("Promise in channel - registering 3");
 
                     let then = promise.get::<JsFunction, _, _>(&mut cx, "then")?;
 
+                    println!("Promise in channel - registering - success");
                     let success = JsFunction::new(&mut cx, move |mut cx| {
                         let result = cx.argument::<JsValue>(0)?;
 
                         println!("Success promise");
                         success
-                            .try_send(Ok(R::from_js_object(&mut cx, result)
+                            .send(Ok(R::from_js_object(&mut cx, result)
                                 .or_else(|err| cx.throw_error(err.to_string()))?))
                             .unwrap();
 
                         Ok(cx.undefined())
                     })?;
+                    println!("Promise in channel - registering - failure");
                     let failure = JsFunction::new(&mut cx, move |mut cx| {
                         let result = cx.argument::<JsValue>(0)?;
                         let msg = result.to_string(&mut cx).unwrap().value(&mut cx);
-                        println!("failure promise");
-                        failure.try_send(Err(RuntimeError::new(msg))).unwrap();
+                        println!("failure promise: {}", msg);
+                        failure.send(Err(RuntimeError::new(msg))).unwrap();
                         Ok(cx.undefined())
                     })?;
 
-                    println!("register callbacks");
+                    println!("register callbacks - pre call");
                     then.call(&mut cx, promise, vec![success.upcast(), failure.upcast()])?;
-
+                    println!("register callbacks - done");
                     Ok(())
                 };
 
+                // Notice error
                 if let Err(err) = result {
+                    println!("Error occured during registering callbacks");
                     sender
-                        .try_send(Err(RuntimeError::new(err.to_string())))
+                        .send(Err(RuntimeError::new(err.to_string())))
                         .unwrap();
 
                     cx.throw_error(err.to_string())
@@ -114,13 +123,11 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
                     Ok(())
                 }
             });
-
-            println!("Problem with spawnig task");
         });
 
         println!("Waing on block on");
 
-        let result = if let Some(value) = runtime.block_on(receiver.recv()) {
+        let result = if let Ok(value) = receiver.recv_timeout(Duration::from_secs(1)) {
             value
         } else {
             Err(RuntimeError::new("Problem to getting result from JS"))

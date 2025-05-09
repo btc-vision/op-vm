@@ -28,7 +28,7 @@ impl AsArguments for BlockHashRequest {
         object.set(cx, "blockNumber", object_block_number)?;
         object.set(cx, "contractId", object_contract_id)?;
 
-        Ok(vec![object.upcast()])
+        Ok(vec![cx.undefined().upcast(), object.upcast()])
     }
 }
 
@@ -67,6 +67,10 @@ pub struct BlockHashExternalFunction {
 }
 
 impl ExternalFunction<BlockHashResponse> for BlockHashExternalFunction {
+    fn name(&self) -> String {
+        String::from("BlockHash")
+    }
+
     fn handle(&self) -> std::sync::Arc<Root<JsFunction>> {
         self.handle.clone()
     }
