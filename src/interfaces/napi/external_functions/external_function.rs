@@ -89,10 +89,8 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
                         let result = cx.argument::<JsValue>(0)?;
 
                         println!("Success promise");
-                        success
-                            .send(Ok(R::from_js_object(&mut cx, result)
-                                .or_else(|err| cx.throw_error(err.to_string()))?))
-                            .unwrap();
+                        let _ = success.send(Ok(R::from_js_object(&mut cx, result)
+                            .or_else(|err| cx.throw_error(err.to_string()))?));
 
                         Ok(cx.undefined())
                     })?;
@@ -101,7 +99,7 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
                         let result = cx.argument::<JsValue>(0)?;
                         let msg = result.to_string(&mut cx).unwrap().value(&mut cx);
                         println!("failure promise: {}", msg);
-                        failure.send(Err(RuntimeError::new(msg))).unwrap();
+                        let _ = failure.send(Err(RuntimeError::new(msg)));
                         Ok(cx.undefined())
                     })?;
 
@@ -113,10 +111,8 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
 
                 // Notice error
                 if let Err(err) = result {
-                    println!("Error occured during registering callbacks");
-                    sender
-                        .send(Err(RuntimeError::new(err.to_string())))
-                        .unwrap();
+                    println!("Error occurred during registering callbacks");
+                    let _ = sender.send(Err(RuntimeError::new(err.to_string())));
 
                     cx.throw_error(err.to_string())
                 } else {

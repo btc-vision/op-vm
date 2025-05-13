@@ -360,14 +360,13 @@ impl ContractManager {
             // Sync with main JS thread
             channel.send(move |mut cx| match result {
                 Ok(exit_data) => {
-                    // TODO: unwrap
                     let result = exit_data.to_js_object(&mut cx).unwrap();
                     Ok(deferred.resolve(&mut cx, result))
                 }
                 Err(err) => {
                     let error = cx.string(err.to_string());
                     deferred.reject(&mut cx, error);
-                    cx.throw_error(err.to_string())
+                    Ok(())
                 }
             })
         });
@@ -389,7 +388,6 @@ impl ContractManager {
         let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
         let (deferred, promise) = cx.promise();
         let channel = cx.channel();
-        //let runtime = manager.lock().unwrap().runtime_pool.get_runtime().unwrap();
         std::thread::spawn(move || {
             let result = manager.lock().unwrap().execute(contract_id, calldata);
 
@@ -407,7 +405,7 @@ impl ContractManager {
                         let value = cx.string(string);
 
                         deferred.reject(&mut cx, error);
-                        cx.throw(value)
+                        Ok(())
                     }
                 }
             })
