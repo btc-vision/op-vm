@@ -1,8 +1,60 @@
 use wasmer::wasmparser::Operator;
+use wasmer::wasmparser::Operator::*;
 
-pub fn get_gas_cost(operator: &Operator) -> u64 {
-    use Operator::*;
+#[cfg(feature = "contract-threading")]
+const fn atomic_load_cost(bytes: u32) -> u64 {
+    20_000 + (bytes as u64) * 2_000
+}
+#[cfg(feature = "contract-threading")]
+const fn atomic_store_cost(bytes: u32) -> u64 {
+    45_000 + (bytes as u64) * 3_000
+}
+#[cfg(feature = "contract-threading")]
+const fn atomic_rmw_cost(bytes: u32) -> u64 {
+    60_000 + (bytes as u64) * 4_000
+}
+#[cfg(feature = "contract-threading")]
+const fn memory_atomic_notify() -> u64 {
+    600_000
+}
+#[cfg(feature = "contract-threading")]
+const fn memory_atomic_wait(bytes: u64) -> u64 {
+    800_000 + (bytes * 6_250)
+}
 
+#[cfg(not(feature = "contract-threading"))]
+const fn atomic_load_cost(bytes: u32) -> u64 {
+    u64::MAX
+}
+#[cfg(not(feature = "contract-threading"))]
+const fn atomic_store_cost(bytes: u32) -> u64 {
+    u64::MAX
+}
+#[cfg(not(feature = "contract-threading"))]
+const fn atomic_rmw_cost(bytes: u32) -> u64 {
+    u64::MAX
+}
+#[cfg(not(feature = "contract-threading"))]
+const fn memory_atomic_notify() -> u64 {
+    u64::MAX
+}
+#[cfg(not(feature = "contract-threading"))]
+const fn memory_atomic_wait(bytes: u64) -> u64 {
+    u64::MAX
+}
+
+/// A near call costs 3750. An indirect call does an extra table lookup + signature check.
+/// We charge a 2000-gas premium plus 500 gas for each argument/return slot so larger
+/// function signatures scale naturally.
+#[inline]
+fn call_indirect_cost(type_arity: Option<(u32, u32)>) -> u64 {
+    match type_arity {
+        Some((params, results)) => 5_750 + 500 * (params + results) as u64,
+        None => 7_500,
+    }
+}
+
+pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
     #[rustfmt::skip]
     let gas_cost = match operator {
         Unreachable | Return | Nop | I32Const { .. } | I64Const { .. } => 1,
@@ -50,10 +102,84 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
             2500 + 350 * targets.len() as u64
         }
 
-        CallIndirect { .. } => {
-            15000
-            //u64::MAX
-        }
+        CallIndirect { .. } => call_indirect_cost(func_type),
+
+        I32AtomicStore    { .. }                      => atomic_store_cost(4),
+        I32AtomicStore8   { .. }                      => atomic_store_cost(1),
+        I32AtomicStore16  { .. }                      => atomic_store_cost(2),
+        I64AtomicStore    { .. }                      => atomic_store_cost(8),
+        I64AtomicStore8   { .. }                      => atomic_store_cost(1),
+        I64AtomicStore16  { .. }                      => atomic_store_cost(2),
+        I64AtomicStore32  { .. }                      => atomic_store_cost(4),
+
+        I32AtomicLoad     { .. }                      => atomic_load_cost(4),
+        I32AtomicLoad8U   { .. }                      => atomic_load_cost(1),
+        I32AtomicLoad16U  { .. }                      => atomic_load_cost(2),
+        I64AtomicLoad     { .. }                      => atomic_load_cost(8),
+        I64AtomicLoad8U   { .. }                      => atomic_load_cost(1),
+        I64AtomicLoad16U  { .. }                      => atomic_load_cost(2),
+        I64AtomicLoad32U  { .. }                      => atomic_load_cost(4),
+
+        I32AtomicRmwAdd { .. }          |
+        I32AtomicRmwSub { .. }          |
+        I32AtomicRmwAnd { .. }          |
+        I32AtomicRmwOr  { .. }          |
+        I32AtomicRmwXor { .. }          |
+        I32AtomicRmwXchg { .. }         |
+        I32AtomicRmwCmpxchg { .. }      => atomic_rmw_cost(4),
+
+        I32AtomicRmw8AddU { .. }        |
+        I32AtomicRmw8SubU { .. }        |
+        I32AtomicRmw8AndU { .. }        |
+        I32AtomicRmw8OrU  { .. }        |
+        I32AtomicRmw8XorU { .. }        |
+        I32AtomicRmw8XchgU { .. }       |
+        I32AtomicRmw8CmpxchgU { .. }    => atomic_rmw_cost(1),
+
+        I32AtomicRmw16AddU { .. }       |
+        I32AtomicRmw16SubU { .. }       |
+        I32AtomicRmw16AndU { .. }       |
+        I32AtomicRmw16OrU  { .. }       |
+        I32AtomicRmw16XorU { .. }       |
+        I32AtomicRmw16XchgU { .. }      |
+        I32AtomicRmw16CmpxchgU { .. }   => atomic_rmw_cost(2),
+
+        I64AtomicRmwAdd { .. }          |
+        I64AtomicRmwSub { .. }          |
+        I64AtomicRmwAnd { .. }          |
+        I64AtomicRmwOr  { .. }          |
+        I64AtomicRmwXor { .. }          |
+        I64AtomicRmwXchg { .. }         |
+        I64AtomicRmwCmpxchg { .. }      => atomic_rmw_cost(8),
+
+        I64AtomicRmw8AddU { .. }        |
+        I64AtomicRmw8SubU { .. }        |
+        I64AtomicRmw8AndU { .. }        |
+        I64AtomicRmw8OrU  { .. }        |
+        I64AtomicRmw8XorU { .. }        |
+        I64AtomicRmw8XchgU { .. }       |
+        I64AtomicRmw8CmpxchgU { .. }    => atomic_rmw_cost(1),
+
+        I64AtomicRmw16AddU { .. }       |
+        I64AtomicRmw16SubU { .. }       |
+        I64AtomicRmw16AndU { .. }       |
+        I64AtomicRmw16OrU  { .. }       |
+        I64AtomicRmw16XorU { .. }       |
+        I64AtomicRmw16XchgU { .. }      |
+        I64AtomicRmw16CmpxchgU { .. }   => atomic_rmw_cost(2),
+
+        I64AtomicRmw32AddU { .. }       |
+        I64AtomicRmw32SubU { .. }       |
+        I64AtomicRmw32AndU { .. }       |
+        I64AtomicRmw32OrU  { .. }       |
+        I64AtomicRmw32XorU { .. }       |
+        I64AtomicRmw32XchgU { .. }      |
+        I64AtomicRmw32CmpxchgU { .. }   => atomic_rmw_cost(4),
+
+        MemoryAtomicNotify { .. }       => memory_atomic_notify(),
+        MemoryAtomicWait32 { .. }       => memory_atomic_wait(32),
+        MemoryAtomicWait64 { .. }       => memory_atomic_wait(64),
+
 
         Try { .. } | Catch { .. } | CatchAll { .. } | Delegate { .. } | Throw { .. } | Rethrow { .. } | ThrowRef { .. } | TryTable { .. }
 
@@ -88,20 +214,7 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
         | I32TruncSatF32S { .. } | I32TruncSatF32U { .. } | I32TruncSatF64S { .. } | I32TruncSatF64U { .. }
         | I64TruncSatF32S { .. } | I64TruncSatF32U { .. } | I64TruncSatF64S { .. } | I64TruncSatF64U { .. }
 
-        | MemoryAtomicNotify { .. } | MemoryAtomicWait32 { .. } | MemoryAtomicWait64 { .. } | AtomicFence { .. } | I32AtomicLoad { .. }
-        | I64AtomicLoad { .. } | I32AtomicLoad8U { .. } | I32AtomicLoad16U { .. } | I64AtomicLoad8U { .. } | I64AtomicLoad16U { .. }
-        | I64AtomicLoad32U { .. } | I32AtomicStore { .. } | I64AtomicStore { .. } | I32AtomicStore8 { .. } | I32AtomicStore16 { .. }
-        | I64AtomicStore8 { .. } | I64AtomicStore16 { .. } | I64AtomicStore32 { .. } | I32AtomicRmwAdd { .. } | I64AtomicRmwAdd { .. }
-        | I32AtomicRmw8AddU { .. } | I32AtomicRmw16AddU { .. } | I64AtomicRmw8AddU { .. } | I64AtomicRmw16AddU { .. } | I64AtomicRmw32AddU { .. }
-        | I32AtomicRmwSub { .. } | I64AtomicRmwSub { .. } | I32AtomicRmw8SubU { .. } | I32AtomicRmw16SubU { .. } | I64AtomicRmw8SubU { .. }
-        | I64AtomicRmw16SubU { .. } | I64AtomicRmw32SubU { .. } | I32AtomicRmwAnd { .. } | I64AtomicRmwAnd { .. } | I32AtomicRmw8AndU { .. }
-        | I32AtomicRmw16AndU { .. } | I64AtomicRmw8AndU { .. } | I64AtomicRmw16AndU { .. } | I64AtomicRmw32AndU { .. } | I32AtomicRmwOr { .. }
-        | I64AtomicRmwOr { .. } | I32AtomicRmw8OrU { .. } | I32AtomicRmw16OrU { .. } | I64AtomicRmw8OrU { .. } | I64AtomicRmw16OrU { .. }
-        | I64AtomicRmw32OrU { .. } | I32AtomicRmwXor { .. } | I64AtomicRmwXor { .. } | I32AtomicRmw8XorU { .. } | I32AtomicRmw16XorU { .. }
-        | I64AtomicRmw8XorU { .. } | I64AtomicRmw16XorU { .. } | I64AtomicRmw32XorU { .. } | I32AtomicRmwXchg { .. } | I64AtomicRmwXchg { .. }
-        | I32AtomicRmw8XchgU { .. } | I32AtomicRmw16XchgU { .. } | I64AtomicRmw8XchgU { .. } | I64AtomicRmw16XchgU { .. }
-        | I64AtomicRmw32XchgU { .. } | I32AtomicRmwCmpxchg { .. } | I64AtomicRmwCmpxchg { .. } | I32AtomicRmw8CmpxchgU { .. }
-        | I32AtomicRmw16CmpxchgU { .. } | I64AtomicRmw8CmpxchgU { .. } | I64AtomicRmw16CmpxchgU { .. } | I64AtomicRmw32CmpxchgU { .. }
+        | AtomicFence { .. }
 
         | V128Load { .. } | V128Load8x8S { .. } | V128Load8x8U { .. } | V128Load16x4S { .. } | V128Load16x4U { .. } | V128Load32x2S { .. } | V128Load32x2U { .. }
         | V128Load8Splat { .. } | V128Load16Splat { .. } | V128Load32Splat { .. } | V128Load64Splat { .. } | V128Load32Zero { .. } | V128Load64Zero { .. }
@@ -151,5 +264,6 @@ pub fn get_gas_cost(operator: &Operator) -> u64 {
     _ => {
         u64::MAX
     }};
+
     gas_cost
 }

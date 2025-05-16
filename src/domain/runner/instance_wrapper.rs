@@ -1,13 +1,25 @@
-use crate::domain::runner::MAX_MEMORY_SIZE;
+use crate::domain::runner::{MAX_MEMORY_SIZE, MAX_THREADS};
 use thiserror::Error;
 use wasmer::{AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError};
-use wasmer_middlewares::metering::{get_remaining_points, set_remaining_points, MeteringPoints};
 use wasmer_types::Pages;
+
+#[cfg(feature = "contract-threading")]
+use crate::domain::vm::WaitQueue;
+#[cfg(feature = "contract-threading")]
+use crate::domain::vm::{get_points_atomic, get_total_threads, AtomicMeteringError, AtomicPoints};
+use crate::domain::vm::{get_remaining_points, set_remaining_points, MeteringPoints};
+#[cfg(feature = "contract-threading")]
+use dashmap::DashMap;
+#[cfg(feature = "contract-threading")]
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct InstanceWrapper {
-    instance: Instance,
+    pub(crate) instance: Instance,
     max_gas: u64,
+
+    #[cfg(feature = "contract-threading")]
+    futexes: Arc<DashMap<u64, Arc<WaitQueue>>>,
 }
 
 #[derive(Clone, Copy, Debug, Error)]
@@ -22,7 +34,12 @@ pub enum ExtendedMemoryAccessError {
 
 impl InstanceWrapper {
     pub fn new(instance: Instance, max_gas: u64) -> Self {
-        Self { instance, max_gas }
+        Self {
+            instance,
+            max_gas,
+            #[cfg(feature = "contract-threading")]
+            futexes: Arc::new(DashMap::default()),
+        }
     }
 
     pub fn is_out_of_memory(
@@ -30,10 +47,7 @@ impl InstanceWrapper {
         store: &(impl AsStoreRef + ?Sized),
     ) -> Result<bool, ExtendedMemoryAccessError> {
         let memory = Self::get_memory(&self.instance)?;
-        let view = memory.view(store);
-        let size = view.data_size();
-
-        Ok(MAX_MEMORY_SIZE <= size)
+        Ok(MAX_MEMORY_SIZE <= memory.view(store).data_size())
     }
 
     pub fn read_memory(
@@ -43,12 +57,11 @@ impl InstanceWrapper {
         length: u64,
     ) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
         let memory = Self::get_memory(&self.instance)?;
-        let view = memory.view(store);
-
-        let mut buffer: Vec<u8> = vec![0; length as usize];
-        view.read(offset, &mut buffer)
-            .map_err(|e| ExtendedMemoryAccessError::Base(e))?;
-
+        let mut buffer = vec![0u8; length as usize];
+        memory
+            .view(store)
+            .read(offset, &mut buffer)
+            .map_err(ExtendedMemoryAccessError::Base)?;
         Ok(buffer)
     }
 
@@ -59,18 +72,20 @@ impl InstanceWrapper {
         data: &[u8],
     ) -> Result<(), ExtendedMemoryAccessError> {
         let memory = Self::get_memory(&self.instance)?;
-        let view = memory.view(store);
-        view.write(offset, data)
-            .map_err(|e| ExtendedMemoryAccessError::Base(e))
+        memory
+            .view(store)
+            .write(offset, data)
+            .map_err(ExtendedMemoryAccessError::Base)
     }
 
-    pub fn get_memory_size(&self, store: &(impl AsStoreRef + ?Sized)) -> Result<Pages, ExtendedMemoryAccessError> {
-        let memory = Self::get_memory(&self.instance)?;
-        let view = memory.view(store);
-        Ok(view.size())
+    pub fn get_memory_size(
+        &self,
+        store: &(impl AsStoreRef + ?Sized),
+    ) -> Result<Pages, ExtendedMemoryAccessError> {
+        Ok(Self::get_memory(&self.instance)?.view(store).size())
     }
 
-    fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
+    pub(crate) fn get_memory(instance: &Instance) -> Result<&Memory, ExtendedMemoryAccessError> {
         instance
             .exports
             .get_memory("memory")
@@ -78,35 +93,73 @@ impl InstanceWrapper {
     }
 
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
-        let gas_before = self.get_remaining_gas(store);
-
-        let gas_after = if gas_before <= gas_cost {
-            0
-        } else {
-            gas_before - gas_cost
-        };
-
-        self.set_remaining_gas(store, gas_after);
+        let remaining = self.get_remaining_gas(store);
+        self.set_remaining_gas(store, remaining.saturating_sub(gas_cost));
     }
 
     pub fn get_remaining_gas(&self, store: &mut impl AsStoreMut) -> u64 {
-        let remaining_points = get_remaining_points(store, &self.instance);
-        match remaining_points {
-            MeteringPoints::Remaining(remaining) => remaining,
+        match get_remaining_points(store, &self.instance) {
+            MeteringPoints::Remaining(r) => r,
             MeteringPoints::Exhausted => 0,
         }
     }
 
     pub fn get_used_gas(&self, store: &mut impl AsStoreMut) -> u64 {
-        let remaining_points = self.get_remaining_gas(store);
-        self.max_gas - remaining_points
+        self.max_gas - self.get_remaining_gas(store)
     }
 
     pub fn set_remaining_gas(&self, store: &mut impl AsStoreMut, gas: u64) {
         set_remaining_points(store, &self.instance, gas);
     }
 
-    pub fn get_function(&self, function: &str) -> Result<&Function, ExportError> {
-        self.instance.exports.get_function(function)
+    pub fn get_function(&self, name: &str) -> Result<&Function, ExportError> {
+        self.instance.exports.get_function(name)
+    }
+
+    #[cfg(feature = "contract-threading")]
+    #[inline]
+    pub fn futex_for(&self, offset: u64) -> Arc<WaitQueue> {
+        self.futexes
+            .entry(offset)
+            .or_insert_with(|| Arc::new(WaitQueue::default()))
+            .clone()
+    }
+
+    #[cfg(feature = "contract-threading")]
+    #[allow(dead_code)]
+    pub fn get_total_threads(
+        &self,
+        store: &mut impl AsStoreMut,
+    ) -> Result<u32, AtomicMeteringError> {
+        let thread_count = get_total_threads(store, &self.instance)?;
+        let max: u32 = MAX_THREADS as u32;
+
+        if max < thread_count {
+            Ok(0)
+        } else {
+            Ok(max - thread_count)
+        }
+    }
+
+    #[cfg(feature = "contract-threading")]
+    #[allow(dead_code)]
+    pub fn get_remaining_atomic_gas(
+        &self,
+        store: &mut impl AsStoreMut,
+    ) -> Result<u64, AtomicMeteringError> {
+        match get_points_atomic(store, &self.instance) {
+            Ok(AtomicPoints::Remaining(r)) => Ok(r),
+            Ok(AtomicPoints::Exhausted) => Ok(0),
+            _ => Err(AtomicMeteringError::Exhausted),
+        }
+    }
+}
+
+#[cfg(feature = "contract-threading")]
+impl Drop for InstanceWrapper {
+    fn drop(&mut self) {
+        if Arc::strong_count(&self.futexes) == 1 {
+            self.futexes.retain(|_, q| Arc::strong_count(q) > 1);
+        }
     }
 }

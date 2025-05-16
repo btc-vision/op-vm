@@ -2,16 +2,11 @@ use bytes::Bytes;
 use chrono::Local;
 use std::sync::Arc;
 use wasmer::sys::{BaseTunables, EngineBuilder};
-use wasmer::{
-    imports, CompilerConfig, Function, FunctionEnv, Instance, Module, RuntimeError, Store, Value,
-};
-use wasmer_compiler::types::target::Target;
-use wasmer_compiler::Engine;
+use wasmer::{imports, Function, FunctionEnv, Instance, Module, RuntimeError, Store, Value};
+use wasmer_compiler::{CompilerConfig, Engine};
 use wasmer_compiler_singlepass::Singlepass;
-use wasmer_middlewares::Metering;
-use wasmer_types::SerializeError;
-
-use crate::domain::vm::{get_gas_cost, log_time_diff, LimitingTunables};
+use wasmer_types::target::Target;
+use wasmer_types::{Features, SerializeError};
 
 use crate::domain::runner::constants::STACK_SIZE;
 #[allow(unused_imports)]
@@ -23,6 +18,15 @@ use crate::domain::runner::{
     GetOutputsImport, GetOutputsSizeImport, InstanceWrapper, Ripemd160Import, Sha256Import,
     StorageLoadImport, StorageStoreImport, TransientLoadImport, TransientStoreImport,
     ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_WASM_INIT,
+};
+
+#[cfg(feature = "contract-threading")]
+use crate::domain::runner::MAX_GAS_WASM_INIT_ATOMIC;
+use crate::domain::runner::MAX_MEMORY_COPY_SIZE;
+use crate::domain::vm::{
+    atomic_notify, atomic_wait32, atomic_wait64, default_cost_atomic, get_gas_cost, log_time_diff,
+    set_helper_index_atomic, thread_spawn, AtomicHelper, AtomicWaitMetering, ClampBulkMem,
+    GasConfig, LimitingTunables, Metering, RejectFPMiddleware,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
@@ -62,12 +66,64 @@ impl WasmerRunner {
 
         let mut compiler = Singlepass::default();
         compiler.canonicalize_nans(true);
-        compiler.push_middleware(metering);
-        compiler.enable_verifier();
 
-        let engine = EngineBuilder::new(compiler).set_features(None).engine();
+        compiler.enable_verifier();
+        compiler.push_middleware(RejectFPMiddleware::new());
+        compiler.push_middleware(ClampBulkMem::new(MAX_MEMORY_COPY_SIZE));
+
+        #[cfg(feature = "contract-threading")]
+        {
+            let atomic_meter = AtomicWaitMetering::new(
+                GasConfig {
+                    setup_gas: 2_000,
+                    wait_fallback: 15_000,
+                    notify_gas: 3_000,
+                    spawn_cost: 100_000,
+                },
+                MAX_GAS_WASM_INIT_ATOMIC,
+                default_cost_atomic,
+            );
+            compiler.push_middleware(Arc::new(atomic_meter));
+        }
+
+        compiler.push_middleware(metering);
+
+        let engine = EngineBuilder::new(compiler)
+            .set_features(Option::from(Self::get_features()))
+            .engine();
+
         let store = Store::new(Self::create_tunable(engine, max_pages));
         Ok(store)
+    }
+
+    fn get_features() -> Features {
+        let mut features = Features::default();
+
+        // Not deterministic
+        features.relaxed_simd = false; // https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
+
+        // DoS: MUST BE DISABLED FEATURES
+        features.tail_call = false; // Turns infinite self-tail recursion into a single metered opcode; impossible to bound with stack-depth limits.
+
+        // DoS possible if enabled like it is.
+        features.threads = true; // TODO: atomic.wait + infinite timeout and scheduler starvation. Must set timeout to 0.
+        features.reference_types = false; // TODO: Add length-aware gas on TableGrow. Enables table.grow/externref which can allocate millions of funcref slots in one opcode. https://github.com/WebAssembly/spec/blob/main/proposals/reference-types/Overview.md
+        features.multi_memory = false; // TODO: Multiple memories break the single-meter assumption. Support must be added.
+        features.exceptions = false; // Gas free operation. Not in metering. Can be used to bypass gas limits. Separate opcodes for catch and throw.
+
+        // Could be cool if implemented, maybe useful for loading other contracts in the same module?
+        features.module_linking = false; // https://github.com/WebAssembly/module-linking/blob/main/proposals/module-linking/Explainer.md
+
+        // Verify before mainnet
+        features.bulk_memory = true; // TODO: Add cost by length on bulk memory operations. This is a huge performance boost for large memory operations.
+        features.memory64 = true; // TODO: Allowing 64bit memory can bypass max_pages < 2^32 but, is theoretically impossible to use more than 2^32 pages since we limit it to 32MB.
+
+        // Ok
+        features.simd = true;
+        features.multi_value = true;
+        features.extended_const = true;
+
+        features
     }
 
     pub fn serialize(&self) -> anyhow::Result<Bytes, SerializeError> {
@@ -86,7 +142,10 @@ impl WasmerRunner {
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let engine = EngineBuilder::headless().set_features(None).engine();
+        let engine = EngineBuilder::headless()
+            .set_features(Option::from(Self::get_features()))
+            .engine();
+
         let store = Store::new(Self::create_tunable(engine, max_pages));
         let module = Module::deserialize(&store, serialized)?;
         let instance =
@@ -114,10 +173,8 @@ impl WasmerRunner {
         module: Module,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
-        // Verify and calculate remaining gas
         let remaining_gas = Self::calculate_remaining_gas(used_gas, max_gas)?;
 
-        // Load environment
         let env = FunctionEnv::new(&mut store, custom_env);
 
         macro_rules! import {
@@ -133,8 +190,6 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
-                // "tload" => import!(TransientLoadImport),
-                // "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -152,24 +207,62 @@ impl WasmerRunner {
             },
         };
 
+        #[cfg(feature = "contract-threading")]
+        {
+            import_object.define(
+                "env",
+                "__atomic_wait32",
+                Function::new_typed_with_env(&mut store, &env, atomic_wait32),
+            );
+            import_object.define(
+                "env",
+                "__atomic_wait64",
+                Function::new_typed_with_env(&mut store, &env, atomic_wait64),
+            );
+
+            import_object.define(
+                "env",
+                "__atomic_notify",
+                Function::new_typed_with_env(&mut store, &env, atomic_notify),
+            );
+            import_object.define(
+                "env",
+                "__thread_spawn",
+                Function::new_typed_with_env(&mut store, &env, thread_spawn),
+            );
+        }
+
         if is_debug_mode {
             import_object.define("debug", "log", import!(ConsoleLogImport));
         }
 
-        let instance_result = Instance::new(&mut store, &module, &import_object);
-        let instance = match instance_result {
-            Ok(i) => i,
-            Err(e) => {
-                if e.to_string().contains("unreachable") {
-                    return Err(anyhow::anyhow!(
-                        "out of gas during initialization (consumed: {})",
-                        MAX_GAS_WASM_INIT
-                    ));
-                }
-
-                return Err(anyhow::anyhow!("Failed to instantiate contract: {}", e));
+        let instance = Instance::new(&mut store, &module, &import_object).map_err(|e| {
+            if e.to_string().contains("unreachable") {
+                anyhow::anyhow!(
+                    "out of gas during initialization (consumed: {})",
+                    MAX_GAS_WASM_INIT
+                )
+            } else {
+                anyhow::anyhow!("Failed to instantiate contract: {}", e)
             }
-        };
+        })?;
+
+        #[cfg(feature = "contract-threading")]
+        {
+            for (idx, import) in instance.module().imports().enumerate() {
+                let helper = match (import.module(), import.name()) {
+                    ("env", "__atomic_wait32") => Some(AtomicHelper::Wait32),
+                    ("env", "__atomic_wait64") => Some(AtomicHelper::Wait64),
+                    ("env", "__atomic_notify") => Some(AtomicHelper::Notify),
+                    ("env", "__thread_spawn") => Some(AtomicHelper::Spawn),
+                    _ => None,
+                };
+
+                if let Some(h) = helper {
+                    let _ = set_helper_index_atomic(&mut store, &instance, h, idx as u32);
+                }
+            }
+        }
 
         let instance_wrapper = InstanceWrapper::new(instance.clone(), max_gas);
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());
@@ -181,30 +274,23 @@ impl WasmerRunner {
             env,
         };
 
-        // We must verify that the gas we do not track yet is not greater than the remaining gas
         let gas_used_by_start_function = imp.get_remaining_gas();
         if gas_used_by_start_function > remaining_gas {
             return Err(anyhow::anyhow!("out of gas (consumed: {})", max_gas));
         }
 
-        // Get the remaining gas after initializing the contract
         let remaining_gas = remaining_gas - gas_used_by_start_function;
-
-        // Now, we override the default remaining gas with the actual remaining gas
         imp.set_remaining_gas(remaining_gas);
 
-        // Start explicitly the contract "start" function
         let start_function = instance
             .exports
             .get_function("start")
             .map_err(|_| anyhow::anyhow!("OP_NET: start function not found"))?;
 
-        // Call the "start" function and handle the result
         imp.set_is_running_start(true);
         let result_start = start_function.call(&mut imp.store, &[]);
         imp.set_is_running_start(false);
 
-        // Handle the result of the "start" function
         if let Err(e) = result_start {
             if e.to_string().contains("unreachable") {
                 return Err(anyhow::anyhow!(
@@ -226,6 +312,41 @@ impl WasmerRunner {
 
         Ok(imp)
     }
+
+    /*fn fill_atomic_idx_globals(
+        store: &mut Store,
+        instance: &Instance,
+        module: &Module,
+    ) -> anyhow::Result<()> {
+        let mut idx_wait32 = u32::MAX;
+        let mut idx_wait64 = u32::MAX;
+        let mut idx_notify = u32::MAX;
+        let mut idx_spawn = u32::MAX;
+
+        for (i, (key, _)) in module.info().imports.iter().enumerate() {
+            match (key.module.as_str(), key.field.as_str()) {
+                ("env", "atomic_wait32") => idx_wait32 = i as u32,
+                ("env", "atomic_wait64") => idx_wait64 = i as u32,
+                ("env", "atomic_notify") => idx_notify = i as u32,
+                ("env", "thread_spawn") => idx_spawn = i as u32,
+                _ => {}
+            }
+        }
+
+        macro_rules! set {
+            ($name:literal, $val:expr) => {
+                instance
+                    .exports
+                    .get_global($name)?
+                    .set(store, ($val as i32).into())?;
+            };
+        }
+        set!("atomic_wait32_idx", idx_wait32);
+        set!("atomic_wait64_idx", idx_wait64);
+        set!("atomic_notify_idx", idx_notify);
+        set!("thread_spawn_idx", idx_spawn);
+        Ok(())
+    }*/
 
     fn calculate_remaining_gas(used_gas: u64, max_gas: u64) -> anyhow::Result<u64> {
         if MAX_GAS_WASM_INIT > max_gas {
