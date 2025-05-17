@@ -12,6 +12,7 @@ use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_std::rand::{rngs::StdRng, SeedableRng};
 use ark_std::vec::Vec;
+use bitcoin::hex::DisplayHex;
 use sha2::{Digest, Sha256};
 
 pub type Output = [u8; 32];
@@ -26,7 +27,7 @@ pub fn sha256_array(data: &[u8]) -> Output {
 #[derive(Clone)]
 struct Sha256IterCircuit {
     init: Vec<u8>,
-    iterations: usize,
+    iterations: u64,
     pub_hash_fr: Fr,
 }
 
@@ -34,8 +35,11 @@ impl ConstraintSynthesizer<Fr> for Sha256IterCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
         let mut state = UInt8::new_witness_vec(cs.clone(), &self.init)?;
 
-        let digest = Sha256Gadget::<Fr>::evaluate(&UnitVar::default(), &state)?;
-        state = digest.0;
+        let parms = &UnitVar::default();
+        for _ in 0..self.iterations {
+            let digest = Sha256Gadget::<Fr>::evaluate(parms, &state)?;
+            state = digest.0;
+        }
 
         let mut input = UInt8::new_witness_vec(cs.clone(), &self.init)?;
         input.extend_from_slice(&state);
@@ -61,10 +65,7 @@ fn hash_to_fr(digest: &[u8]) -> Fr {
     Fr::from_le_bytes_mod_order(digest)
 }
 
-fn gen_params(
-    t: usize,
-    seed_len: usize,
-) -> Result<(ProvingKey<Bls12_381>, VerifyingKey<Bls12_381>)> {
+fn gen_params(t: u64, seed_len: usize) -> Result<(ProvingKey<Bls12_381>, VerifyingKey<Bls12_381>)> {
     let dummy = Sha256IterCircuit {
         init: vec![0u8; seed_len],
         iterations: t,
@@ -80,9 +81,16 @@ pub fn expected_output(seed: &[u8], t: u64) -> Output {
     let mut cur = seed.to_vec();
     let mut digest = [0u8; 32];
 
-    digest = sha256_array(&cur);
-    cur.clear();
-    cur.extend_from_slice(&digest);
+    println!("looping {} times", t);
+
+    for _ in 0..t {
+        digest = sha256_array(&cur);
+        cur.clear();
+        cur.extend_from_slice(&digest);
+        //cur.reverse();
+
+        println!("v -> {:?}", cur);
+    }
 
     digest
 }
@@ -97,11 +105,11 @@ pub fn prove(seed: &[u8], t: u64) -> Result<(Output, Proof<Bls12_381>, Verifying
 
     let circ = Sha256IterCircuit {
         init: seed.to_vec(),
-        iterations: t as usize,
+        iterations: t,
         pub_hash_fr: h_fr,
     };
 
-    let (pk, vk) = gen_params(t as usize, seed.len())?;
+    let (pk, vk) = gen_params(t, seed.len())?;
 
     let mut rng = StdRng::seed_from_u64(99);
     let proof = Groth16::<Bls12_381>::create_random_proof_with_reduction(circ, &pk, &mut rng)
@@ -132,13 +140,38 @@ pub fn verify(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::vm::OUTPUT_LEN;
+    use ark_serialize::{CanonicalSerialize, Compress};
+    use std::io::Cursor;
 
     #[test]
     fn roundtrip_small() {
-        let t = 4;
+        let t = 1;
         let seed = b"btc-compatible-seed-phrase-32-bytes!";
 
         let (y, proof, vk) = prove(seed, t).expect("prove failed");
         assert!(verify(seed, &y, &proof, &vk));
+
+        let mut buf = Vec::with_capacity(OUTPUT_LEN + proof.serialized_size(Compress::Yes));
+
+        let mut vk_compressed = Vec::with_capacity(vk.serialized_size(Compress::Yes));
+        if vk
+            .serialize_compressed(&mut Cursor::new(&mut vk_compressed))
+            .is_err()
+        {
+            assert!(false);
+        }
+
+        buf.extend_from_slice(&y);
+
+        if proof
+            .serialize_compressed(&mut Cursor::new(&mut buf))
+            .is_err()
+        {
+            assert!(false);
+        }
+
+        println!("Serialized proof: {}", buf.to_lower_hex_string());
+        println!("Serialized vk: {}", vk_compressed.to_lower_hex_string());
     }
 }
