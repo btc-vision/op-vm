@@ -9,4 +9,5 @@ pub struct JsContractParameter {
     pub(crate) memory_pages_used: u32,
     pub(crate) network: BitcoinNetworkRequest,
     pub(crate) is_debug_mode: bool,
+    pub(crate) return_proofs: bool,
 }

@@ -8,6 +8,8 @@ pub struct ExitDataResponse {
     pub data: Vec<u8>,
     #[napi(ts_type = "bigint")]
     pub gas_used: BigInt,
+    #[napi(ts_type = "Buffer[]")]
+    pub proofs: Vec<Vec<u8>>,
 }
 
 impl From<ExitData> for ExitDataResponse {
@@ -16,6 +18,7 @@ impl From<ExitData> for ExitDataResponse {
             status: exit_data.status,
             data: exit_data.data,
             gas_used: BigInt::from(exit_data.gas_used),
+            proofs: exit_data.proofs,
         }
     }
 }

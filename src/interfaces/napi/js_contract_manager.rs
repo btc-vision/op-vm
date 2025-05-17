@@ -166,6 +166,7 @@ impl ContractManager {
         memory_pages_used: BigInt,
         network: BitcoinNetworkRequest,
         is_debug_mode: bool,
+        return_proofs: bool,
     ) -> Result<(), Error> {
         let used_gas = used_gas.get_u64().1;
         let max_gas = max_gas.get_u64().1;
@@ -179,6 +180,7 @@ impl ContractManager {
             memory_pages_used: memory_pages_used.get_u64().1 as u32,
             network,
             is_debug_mode,
+            return_proofs,
         };
 
         let mut should_cache = false;
@@ -294,6 +296,16 @@ impl ContractManager {
                 .into_raw(),
         )?;
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
+
+        let length = exit_data.proofs.len() as u32;
+        let mut array = env.create_array(length)?;
+        for (_, proof) in exit_data.proofs.iter().enumerate() {
+            let buffer = env.create_buffer_with_data(proof.to_vec())?.into_raw();
+
+            array.insert(buffer)?
+        }
+
+        js_object.set_named_property("proofs", array)?;
         Ok(js_object)
     }
 
@@ -399,6 +411,16 @@ impl ContractManager {
                     env.create_bigint_from_u64(exit_data.gas_used),
                 )?;
 
+                let length = exit_data.proofs.len() as u32;
+                let mut array = env.create_array(length)?;
+                for (_, proof) in exit_data.proofs.iter().enumerate() {
+                    let buffer = env.create_buffer_with_data(proof.to_vec())?.into_raw();
+
+                    array.insert(buffer)?
+                }
+
+                js_object.set_named_property("proofs", array)?;
+
                 Ok(js_object)
             },
         )?;
@@ -453,6 +475,17 @@ impl ContractManager {
                     "gasUsed",
                     env.create_bigint_from_u64(exit_data.gas_used),
                 )?;
+
+                let length = exit_data.proofs.len() as u32;
+                let mut array = env.create_array(length)?;
+                for (_, proof) in exit_data.proofs.iter().enumerate() {
+                    let buffer = env.create_buffer_with_data(proof.to_vec())?.into_raw();
+
+                    array.insert(buffer)?
+                }
+
+                js_object.set_named_property("proofs", array)?;
+
                 Ok(js_object)
             },
         )?;

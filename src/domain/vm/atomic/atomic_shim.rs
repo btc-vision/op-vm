@@ -1,6 +1,6 @@
 #![cfg(feature = "contract-threading")]
-#![allow(dead_code)]
 #![allow(clippy::too_many_arguments)]
+#![allow(dead_code)]
 
 use anyhow::Result;
 use futures::{future::select, pin_mut, FutureExt};
@@ -15,34 +15,43 @@ use tokio::task;
 use wasmer::{AsStoreRef, FunctionEnvMut, Memory, RuntimeError, StoreRef};
 
 use crate::domain::runner::{CustomEnv, InstanceWrapper, MAX_DIFF, NS_PER_HASH};
+use crate::domain::vm::{verify, Output, WaitQueue, OUTPUT_LEN};
 
 #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
 use crate::domain::vm::{prove_one_step, VdfState};
 
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
-use crate::domain::vm::{prove_one_step_zk_snark, VdfStateZkSnark, WaitQueue};
+use crate::domain::vm::{prove_one_step_zk_snark as prove_one_step, VdfStateZkSnark as VdfState};
+
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+use ark_bls12_381::Bls12_381;
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+use ark_groth16::Proof;
+
+#[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
+use crate::domain::vm::prove;
+
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+use {crate::domain::vm::prove, ark_serialize::CanonicalDeserialize};
 
 const OK: i32 = 0;
 const TIMED_OUT: i32 = 1;
 const NOT_EQUAL: i32 = 2;
+const NOT_AUTHORIZED: i32 = 3;
 const FAULT: i32 = -1;
 
 trait AtomicInt: Send + Sync + 'static {
     type Int: Copy + Eq + Into<u64>;
     fn load_seq_acq(&self) -> Self::Int;
 }
-
 impl AtomicInt for AtomicU32 {
     type Int = u32;
-    #[inline]
     fn load_seq_acq(&self) -> u32 {
         self.load(Ordering::Acquire)
     }
 }
-
 impl AtomicInt for AtomicU64 {
     type Int = u64;
-    #[inline]
     fn load_seq_acq(&self) -> u64 {
         self.load(Ordering::Acquire)
     }
@@ -62,31 +71,137 @@ fn atomic_at<A: AtomicInt>(
         return Err(RuntimeError::new("oob"));
     }
 
-    // SAFETY: bounds verified above; `data_ptr` lives as long as `mem`
+    // SAFETY: bounds checked
     Ok(unsafe { &*(view.data_ptr().add(addr as usize) as *const A) })
 }
 
+fn read_slice<'a>(
+    mem: &'a Memory,
+    store: &impl AsStoreRef,
+    ptr: u32,
+    len: u32,
+) -> Result<&'a [u8], RuntimeError> {
+    let view = mem.view(store);
+    let offset = ptr as usize;
+    let end = offset
+        .checked_add(len as usize)
+        .ok_or_else(|| RuntimeError::new("oob"))?;
+
+    if end > view.data_size() as usize {
+        return Err(RuntimeError::new("oob"));
+    }
+
+    // SAFETY: bounds checked
+    Ok(unsafe { std::slice::from_raw_parts(view.data_ptr().add(offset), len as usize) })
+}
+
+fn little_endian_u64(x: u64) -> [u8; 8] {
+    let mut buf = [0u8; 8];
+    buf.copy_from_slice(&x.to_le_bytes());
+    buf
+}
+
 async fn deterministic_delay(seed: u64, diff: u64) {
-    #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+    let mut vdf = VdfState::new(&little_endian_u64(seed));
+    for n in 0..diff {
+        prove_one_step(&mut vdf);
+
+        if n & 0xFF == 0 {
+            tokio::task::yield_now().await;
+        }
+    }
+}
+
+#[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
+fn parse_proof(buf: &[u8]) -> Option<([u8; OUTPUT_LEN], BigUint)> {
+    if buf.len() < OUTPUT_LEN {
+        return None;
+    }
+
+    let mut y = [0u8; OUTPUT_LEN];
+    y.copy_from_slice(&buf[..OUTPUT_LEN]);
+
+    let pi = BigUint::from_bytes_be(&buf[OUTPUT_LEN..]);
+    Some((y, pi))
+}
+
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+fn parse_snark(buf: &[u8]) -> Option<(Output, Proof<Bls12_381>)> {
+    if buf.len() < OUTPUT_LEN {
+        return None;
+    }
+
+    let mut y = [0u8; OUTPUT_LEN];
+    y.copy_from_slice(&buf[..OUTPUT_LEN]);
+
+    let proof = Proof::<Bls12_381>::deserialize_compressed(&buf[OUTPUT_LEN..]).ok()?;
+
+    Some((y, proof))
+}
+
+async fn wait_async<A: AtomicInt>(
+    mem: Memory,
+    store: StoreRef<'_>,
+    queue: Arc<WaitQueue>,
+    addr: u64,
+    expected: A::Int,
+    timeout_ns: i64,
+    proof_bytes: Vec<u8>,
+) -> Result<i32, RuntimeError>
+where
+    <A as AtomicInt>::Int: std::fmt::Display,
+{
+    /* quick mismatch check */
+    if timeout_ns < 0 {
+        return Err(RuntimeError::new("timeout must be >= 0"));
+    }
+
     {
-        let mut vdf = VdfStateZkSnark::new(&seed.to_le_bytes());
-        for n in 0..diff {
-            prove_one_step_zk_snark(&mut vdf);
-            if n & 0xFF == 0 {
-                tokio::task::yield_now().await; // cooperative yield
-            }
+        let atomic = atomic_at::<A>(&mem, &store, addr)?;
+        if atomic.load_seq_acq() != expected {
+            return Ok(NOT_EQUAL);
         }
     }
 
-    #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
-    {
-        let mut vdf = VdfState::new(&seed.to_le_bytes());
-        for n in 0..diff {
-            vdf.step();
-            if n & 0xFF == 0 {
-                tokio::task::yield_now().await; // cooperative yield
+    /* zero timeout → immediate failure (spec) */
+    if timeout_ns == 0 {
+        return Ok(TIMED_OUT);
+    }
+
+    if !proof_bytes.is_empty() {
+        let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
+        let seed = addr ^ expected.into() ^ diff;
+
+        #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
+        match parse_proof(&proof_bytes) {
+            None => return Ok(NOT_AUTHORIZED), // bad format
+            Some((y, pi)) if verify(&little_endian_u64(seed), diff, &y, &pi) => {
+                /* proof is VALID → keep going and *still* run the delay */
             }
+            _ => return Ok(NOT_AUTHORIZED), // wrong proof
         }
+
+        #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+        match parse_snark(&proof_bytes) {
+            None => return Ok(NOT_AUTHORIZED),
+            Some((y, proof)) if verify(&little_endian_u64(seed), diff, &y, &proof) => {}
+            _ => return Ok(NOT_AUTHORIZED),
+        }
+    }
+
+    let waiter = {
+        let ticket = queue.ticket();
+        queue.clone().wait_for_change(ticket).map(|_| ())
+    };
+
+    let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
+    let seed = addr ^ expected.into() ^ diff;
+    let timer = deterministic_delay(seed, diff);
+
+    pin_mut!(waiter, timer);
+    match select(waiter, timer).await {
+        futures::future::Either::Left((_, _)) => Ok(OK),
+        futures::future::Either::Right((_, _)) => Ok(TIMED_OUT),
     }
 }
 
@@ -106,119 +221,114 @@ fn notify_impl(
         InstanceWrapper::get_memory(&inst.instance).map_err(|_| RuntimeError::new("no memory"))?;
 
     if addr >= mem.view(&store).data_size() {
-        return Ok(0); // OOB => no-op
+        return Ok(0);
     }
 
     inst.futex_for(addr).notify(count)
 }
 
-async fn wait_async<A: AtomicInt>(
-    mem: Memory,
-    store: StoreRef<'_>,
-    queue: Arc<WaitQueue>,
-    addr: u64,
-    expected: A::Int,
-    timeout_ns: i64,
-) -> Result<i32, RuntimeError>
-where
-    <A as AtomicInt>::Int: std::fmt::Display,
-{
-    println!("wait_async: addr = {addr}, expected = {expected}, timeout_ns = {timeout_ns}");
-    if timeout_ns < 0 {
-        return Err(RuntimeError::new("timeout must be >= 0"));
-    }
+macro_rules! impl_wait_fn {
+    ($name:ident, $atomic:ty, $val_ty:ty) => {
+        #[allow(non_snake_case)]
+        pub fn $name(
+            mut ctx: FunctionEnvMut<'_, CustomEnv>,
+            ptr: u32,
+            expected: $val_ty,
+            timeout_ns: i64,
+            proof_ptr: u32,
+            proof_len: u32,
+        ) -> i32 {
+            use std::io::Cursor;
 
-    // unmatched value? – bail out quickly
-    {
-        let atomic = atomic_at::<A>(&mem, &store, addr)?;
-        if atomic.load_seq_acq() != expected {
-            return Ok(NOT_EQUAL);
+            let (env, store_mut) = ctx.data_and_store_mut();
+            let wrapper = match env.instance.as_ref().cloned() {
+                Some(w) => w,
+                None => return FAULT,
+            };
+            let mem = match InstanceWrapper::get_memory(&wrapper.instance) {
+                Ok(m) => m.clone(),
+                Err(_) => return FAULT,
+            };
+
+            let raw_proof = match read_slice(&mem, &store_mut, proof_ptr, proof_len) {
+                Ok(s) => s.to_vec(),
+                Err(_) => return FAULT,
+            };
+
+            let want_proof =
+                env.return_proofs && !raw_proof.is_empty() && raw_proof.iter().all(|b| *b == 0);
+
+            // send empty Vec to wait_async so it behaves like “no proof”
+            let proof_vec_for_wait = if want_proof {
+                Vec::new()
+            } else {
+                raw_proof.clone()
+            };
+
+            let queue = wrapper.futex_for(ptr as u64);
+            let store_ref = store_mut.as_store_ref();
+            let res = task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(wait_async::<$atomic>(
+                    mem,
+                    store_ref,
+                    queue,
+                    ptr as u64,
+                    expected as _,
+                    timeout_ns,
+                    proof_vec_for_wait,
+                ))
+            });
+            let code = res.unwrap_or_else(|_| FAULT);
+
+            if want_proof && code == TIMED_OUT {
+                let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
+                let seed = (ptr as u64) ^ (expected as u64) ^ diff;
+
+                #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
+                {
+                    let (y, pi) = prove(&little_endian_u64(seed), diff);
+                    let mut bytes = Vec::with_capacity(OUTPUT_LEN + pi.to_bytes_be().len());
+                    bytes.extend_from_slice(&y);
+                    bytes.extend_from_slice(&pi.to_bytes_be());
+                    env.proofs.push(bytes);
+                }
+
+                #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+                {
+                    use ark_serialize::{CanonicalSerialize, Compress};
+
+                    let (y, proof) = match prove(&little_endian_u64(seed), diff) {
+                        Ok(pair) => pair,
+                        Err(_) => return FAULT,
+                    };
+
+                    let mut buf =
+                        Vec::with_capacity(OUTPUT_LEN + proof.serialized_size(Compress::Yes));
+                    buf.extend_from_slice(&y);
+                    proof
+                        .serialize_compressed(&mut Cursor::new(&mut buf))
+                        .unwrap();
+                    env.proofs.push(buf);
+                }
+            }
+
+            /* ------------------ push caller-supplied proof ----------- */
+            if env.return_proofs && !raw_proof.is_empty() && !want_proof {
+                env.proofs.push(raw_proof);
+            }
+
+            code
         }
-    }
-
-    if timeout_ns == 0 {
-        return Ok(TIMED_OUT);
-    }
-
-    /* build deterministic waiter + timer futures */
-    let waiter = {
-        let ticket = queue.ticket();
-        queue.clone().wait_for_change(ticket).map(|_| ())
     };
-
-    let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
-    let seed = addr ^ expected.into() ^ diff;
-    let timer = deterministic_delay(seed, diff);
-
-    println!("Starting vdf timer: seed = {seed}, diff = {diff}");
-
-    pin_mut!(waiter, timer);
-    match select(waiter, timer).await {
-        futures::future::Either::Left((_, _)) => Ok(OK),
-        futures::future::Either::Right((_, _)) => Ok(TIMED_OUT),
-    }
 }
 
-pub fn atomic_wait32(
-    mut ctx: FunctionEnvMut<'_, CustomEnv>,
-    ptr: u32,
-    expected: i32,
-    timeout_ns: i64,
-) -> i32 {
-    println!("atomic_wait32: ptr = {ptr}, expected = {expected}, timeout_ns = {timeout_ns}");
-    do_wait::<AtomicU32>(&mut ctx, ptr as u64, expected as u32, timeout_ns)
-}
+impl_wait_fn!(atomic_wait32, AtomicU32, i32);
+impl_wait_fn!(atomic_wait64, AtomicU64, i64);
 
-pub fn atomic_wait64(
-    mut ctx: FunctionEnvMut<'_, CustomEnv>,
-    ptr: u32,
-    expected: i64,
-    timeout_ns: i64,
-) -> i32 {
-    println!("atomic_wait64: ptr = {ptr}, expected = {expected}, timeout_ns = {timeout_ns}");
-    do_wait::<AtomicU64>(&mut ctx, ptr as u64, expected as u64, timeout_ns)
-}
-
+/* the notify ABI never changed */
 pub fn atomic_notify(mut ctx: FunctionEnvMut<'_, CustomEnv>, ptr: u32, count: i32) -> i32 {
-    println!("atomic_notify: ptr = {ptr}, count = {count}");
     match notify_impl(&mut ctx, ptr as u64, count as u32) {
-        Ok(woken) => woken as i32, // success
-        Err(_runtime_err) => {
-            println!("atomic_notify: error: {:?}", _runtime_err);
-            FAULT
-        }
+        Ok(w) => w as i32,
+        Err(_) => FAULT,
     }
-}
-
-fn do_wait<A>(
-    ctx: &mut FunctionEnvMut<'_, CustomEnv>,
-    addr: u64,
-    expected: A::Int,
-    timeout_ns: i64,
-) -> i32
-where
-    A: AtomicInt,
-    <A as AtomicInt>::Int: std::fmt::Display,
-{
-    let (env, store_mut) = ctx.data_and_store_mut();
-    let wrapper = match env.instance.as_ref().cloned() {
-        Some(w) => w,
-        None => return FAULT,
-    };
-
-    let mem = match InstanceWrapper::get_memory(&wrapper.instance) {
-        Ok(m) => m.clone(),
-        Err(_) => return FAULT,
-    };
-
-    let queue = wrapper.futex_for(addr);
-    let store_ref = store_mut.as_store_ref();
-
-    let res = task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(wait_async::<A>(
-            mem, store_ref, queue, addr, expected, timeout_ns,
-        ))
-    });
-
-    res.unwrap_or_else(|_| FAULT)
 }

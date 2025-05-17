@@ -1,7 +1,5 @@
 use crate::domain::runner::environment_variables::EnvironmentVariables;
-use crate::domain::runner::{
-    BitcoinNetwork, CallResult, Calldata, ExitData, InstanceWrapper,
-};
+use crate::domain::runner::{BitcoinNetwork, CallResult, Calldata, ExitData, InstanceWrapper};
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
@@ -34,6 +32,9 @@ pub struct CustomEnv {
     pub is_running_start_function: bool,
     pub transient_storage: TransientStorage,
     pub max_pages: u32,
+
+    pub return_proofs: bool,
+    pub proofs: Vec<Vec<u8>>,
 }
 
 impl CustomEnv {
@@ -51,6 +52,7 @@ impl CustomEnv {
         block_hash_external: BlockHashExternalFunction,
         runtime: Arc<Runtime>,
         max_pages: u32,
+        return_proofs: bool,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             instance: None,
@@ -73,6 +75,9 @@ impl CustomEnv {
             is_running_start_function: false,
             transient_storage: TransientStorage::new(),
             max_pages,
+
+            return_proofs: return_proofs,
+            proofs: Vec::new(),
         })
     }
 }

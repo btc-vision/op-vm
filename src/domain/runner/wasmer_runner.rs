@@ -450,7 +450,7 @@ impl ContractRunner for WasmerRunner {
         let gas_used = self.get_used_gas();
         let env = self.env.as_mut(&mut self.store);
 
-        env.exit_data = ExitData::new(status, gas_used, &[]);
+        env.exit_data = ExitData::new(status, gas_used, &[], env.proofs.clone());
 
         Ok(env.exit_data.clone())
     }
@@ -489,7 +489,7 @@ impl ContractRunner for WasmerRunner {
 
         let gas_used = self.get_used_gas();
         let env = self.env.as_mut(&mut self.store);
-        env.exit_data = ExitData::new(status, gas_used, &[]);
+        env.exit_data = ExitData::new(status, gas_used, &[], env.proofs.clone());
 
         log_time_diff(&time, "WasmerRunner::execute");
         Ok(env.exit_data.clone())
