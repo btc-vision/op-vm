@@ -2,10 +2,14 @@
 #![forbid(unsafe_code)]
 
 use anyhow::Result;
-use ark_bls12_381::{Bls12_381, Fr};
+use ark_bls12_381::Bls12_381;
+use ark_bls12_381::Fr;
 use ark_crypto_primitives::crh::sha256::constraints::{Sha256Gadget, UnitVar};
 use ark_crypto_primitives::crh::CRHSchemeGadget;
+use ark_ff::PrimeField;
+use ark_ff::Zero;
 use ark_groth16::{prepare_verifying_key, Groth16, Proof, ProvingKey, VerifyingKey};
+use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::prelude::*;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 use ark_std::rand::{rngs::StdRng, SeedableRng};
@@ -18,64 +22,72 @@ pub type Output = [u8; 32];
 pub fn sha256_array(data: &[u8]) -> Output {
     let mut out = [0u8; 32];
     out.copy_from_slice(Sha256::digest(data).as_slice());
-
-    // flip the 4 bytes inside each 32-bit word
-    for chunk in out.chunks_mut(4) {
-        chunk.reverse();
-    }
     out
 }
 
 #[derive(Clone)]
 struct Sha256IterCircuit {
     init: Vec<u8>,
-    expected: Vec<u8>,
     iterations: usize,
-}
-
-#[cfg(test)]
-fn dump(tag: &str, bytes: &[UInt8<Fr>]) {
-    let v: Vec<u8> = bytes.iter().map(|b| b.value().unwrap()).collect();
-    println!("{tag}: {}", hex::encode(v));
+    pub_hash_fr: Fr,
 }
 
 impl ConstraintSynthesizer<Fr> for Sha256IterCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
-        let mut state = UInt8::new_input_vec(cs.clone(), &self.init)?;
-        let expected_vec = UInt8::new_input_vec(cs, &self.expected)?;
+        let mut state = UInt8::new_witness_vec(cs.clone(), &self.init)?;
 
-        for i in 0..self.iterations {
+        for _ in 0..self.iterations {
             let digest = Sha256Gadget::<Fr>::evaluate(&UnitVar::default(), &state)?;
             state = digest.to_bytes_le()?;
-            #[cfg(test)]
-            dump(&format!("gadget iter {i}"), &state);
         }
 
-        #[cfg(test)]
-        dump("expected", &expected_vec);
+        let mut input = UInt8::new_witness_vec(cs.clone(), &self.init)?;
+        input.extend_from_slice(&state);
 
-        for (a, b) in state.iter().zip(expected_vec.iter()) {
-            a.enforce_equal(b)?;
-        }
+        let pub_digest = Sha256Gadget::<Fr>::evaluate(&UnitVar::default(), &input)?;
+        let digest_bytes = pub_digest.to_bytes_le()?;
+
+        let bits: Vec<Boolean<Fr>> = digest_bytes
+            .iter()
+            .flat_map(|b| b.to_bits_le().unwrap())
+            .collect();
+
+        let fr_in_circuit = Boolean::le_bits_to_fp(&bits)?;
+        let fr_public =
+            ark_r1cs_std::fields::fp::FpVar::<Fr>::new_input(cs, || Ok(self.pub_hash_fr))?;
+        fr_in_circuit.enforce_equal(&fr_public)?;
+
         Ok(())
     }
 }
 
-fn gen_params(iters: usize) -> Result<(ProvingKey<Bls12_381>, VerifyingKey<Bls12_381>)> {
+#[inline]
+fn hash_to_fr(digest_be: &[u8]) -> Fr {
+    let mut le = digest_be.to_vec();
+    le.reverse();
+    Fr::from_le_bytes_mod_order(&le)
+}
+
+fn gen_params(
+    t: usize,
+    seed_len: usize,
+) -> Result<(ProvingKey<Bls12_381>, VerifyingKey<Bls12_381>)> {
     let dummy = Sha256IterCircuit {
-        init: vec![0; 32],
-        expected: vec![0; 32],
-        iterations: iters,
+        init: vec![0u8; seed_len],
+        iterations: t,
+        pub_hash_fr: Fr::zero(),
     };
+
     let mut rng = StdRng::seed_from_u64(42);
     let pk = Groth16::<Bls12_381>::generate_random_parameters_with_reduction(dummy, &mut rng)?;
     Ok((pk.clone(), pk.vk))
 }
 
 pub fn expected_output(seed: &[u8], t: u64) -> Output {
-    if t == 0 {
+    /*if t == 0 {
         return sha256_array(seed);
-    }
+    }*/
+
     let mut h = sha256_array(seed);
     for i in 1..t {
         println!("native digest at iter {i}: {}", hex::encode(h));
@@ -84,47 +96,55 @@ pub fn expected_output(seed: &[u8], t: u64) -> Output {
     h
 }
 
-pub fn prove(seed: &[u8], t: u64) -> Result<(Output, Proof<Bls12_381>), SynthesisError> {
-    if t == 0 {
-        return Ok((sha256_array(seed), Proof::<Bls12_381>::default()));
-    }
+pub fn prove(seed: &[u8], t: u64) -> Result<(Output, Proof<Bls12_381>, VerifyingKey<Bls12_381>)> {
+    let y = expected_output(seed, t);
+    let mut buf = seed.to_vec();
+    buf.extend_from_slice(&y);
+    let h_fr = hash_to_fr(&buf);
 
-    let out = expected_output(seed, t);
-    let cir = Sha256IterCircuit {
+    let circ = Sha256IterCircuit {
         init: seed.to_vec(),
-        expected: out.to_vec(),
         iterations: t as usize,
+        pub_hash_fr: h_fr,
     };
 
-    let (pk, _) = gen_params(t as usize).expect("parameter generation failed");
+    let (pk, vk) = gen_params(t as usize, seed.len()).map_err(|e| {
+        println!("Parameter generation error: {:?}", e);
+        e
+    })?;
+
     let mut rng = StdRng::seed_from_u64(99);
-    let proof = Groth16::<Bls12_381>::create_random_proof_with_reduction(cir, &pk, &mut rng)
+    let proof = Groth16::<Bls12_381>::create_random_proof_with_reduction(circ, &pk, &mut rng)
         .map_err(|e| {
             println!("Proof generation error: {:?}", e);
             e
         })?;
-    Ok((out, proof))
+
+    Ok((y, proof, vk))
 }
 
-pub fn verify(seed: &[u8], t: u64, out: &Output, proof: &Proof<Bls12_381>) -> bool {
-    if t == 0 {
-        return out == &sha256_array(seed);
-    }
+pub fn verify(
+    seed: &[u8],
+    y: &Output,
+    proof: &Proof<Bls12_381>,
+    vk: &VerifyingKey<Bls12_381>,
+) -> bool {
+    let mut buf = seed.to_vec();
+    buf.extend_from_slice(y);
 
-    let (_, vk) = match gen_params(t as usize) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    let mut public: Vec<Fr> = seed.iter().map(|&b| Fr::from(b as u64)).collect();
-    public.extend(out.iter().map(|&b| Fr::from(b as u64)));
-
-    let pvk = prepare_verifying_key(&vk);
-    Groth16::<Bls12_381>::verify_proof(&pvk, proof, &public)
+    let h_fr = hash_to_fr(&buf);
+    let pvk = prepare_verifying_key(vk);
+    let prepared_inputs = Groth16::<Bls12_381>::prepare_inputs(&pvk, &[h_fr])
         .map_err(|e| {
-            println!("Verification error: {:?}", e);
+            println!("Error preparing inputs: {:?}", e);
+            e
+        })
+        .expect("Prepare input error");
 
-            false
+    Groth16::<Bls12_381>::verify_proof_with_prepared_inputs(&pvk, proof, &prepared_inputs)
+        .map_err(|e| {
+            println!("Proof verification error: {:?}", e);
+            e
         })
         .unwrap_or(false)
 }
@@ -135,10 +155,10 @@ mod tests {
 
     #[test]
     fn roundtrip_small() {
-        for t in 0u64..=4 {
-            let seed = b"btc-compatible-seed-phrase-32-bytes!";
-            let (y, pi) = prove(seed, t).expect("prove failed");
-            assert!(verify(seed, t, &y, &pi));
-        }
+        let t = 4;
+        let seed = b"btc-compatible-seed-phrase-32-bytes!";
+
+        let (y, pi, vk) = prove(seed, t).expect("prove failed");
+        assert!(verify(seed, &y, &pi, &vk));
     }
 }

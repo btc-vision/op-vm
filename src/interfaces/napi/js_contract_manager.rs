@@ -300,9 +300,17 @@ impl ContractManager {
         let length = exit_data.proofs.len() as u32;
         let mut array = env.create_array(length)?;
         for (_, proof) in exit_data.proofs.iter().enumerate() {
-            let buffer = env.create_buffer_with_data(proof.to_vec())?.into_raw();
+            let proof_buffer = env
+                .create_buffer_with_data(proof.proof.to_vec())?
+                .into_raw();
 
-            array.insert(buffer)?
+            let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+
+            let mut object = env.create_object()?;
+            object.set_named_property("proof", proof_buffer)?;
+            object.set_named_property("vk", vk_buffer)?;
+
+            array.insert(object)?
         }
 
         js_object.set_named_property("proofs", array)?;
@@ -414,9 +422,17 @@ impl ContractManager {
                 let length = exit_data.proofs.len() as u32;
                 let mut array = env.create_array(length)?;
                 for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let buffer = env.create_buffer_with_data(proof.to_vec())?.into_raw();
+                    let proof_buffer = env
+                        .create_buffer_with_data(proof.proof.to_vec())?
+                        .into_raw();
 
-                    array.insert(buffer)?
+                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+
+                    let mut object = env.create_object()?;
+                    object.set_named_property("proof", proof_buffer)?;
+                    object.set_named_property("vk", vk_buffer)?;
+
+                    array.insert(object)?
                 }
 
                 js_object.set_named_property("proofs", array)?;
@@ -479,9 +495,17 @@ impl ContractManager {
                 let length = exit_data.proofs.len() as u32;
                 let mut array = env.create_array(length)?;
                 for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let buffer = env.create_buffer_with_data(proof.to_vec())?.into_raw();
+                    let proof_buffer = env
+                        .create_buffer_with_data(proof.proof.to_vec())?
+                        .into_raw();
 
-                    array.insert(buffer)?
+                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+
+                    let mut object = env.create_object()?;
+                    object.set_named_property("proof", proof_buffer)?;
+                    object.set_named_property("vk", vk_buffer)?;
+
+                    array.insert(object)?
                 }
 
                 js_object.set_named_property("proofs", array)?;

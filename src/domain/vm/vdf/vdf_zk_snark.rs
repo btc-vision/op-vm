@@ -3,10 +3,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(dead_code)]
 
-use crate::domain::vm::{prove, sha256_array, verify, Output};
-use ark_bls12_381::Bls12_381;
-use ark_groth16::Proof;
-use wasmer::RuntimeError;
+use crate::domain::vm::{sha256_array, Output};
 
 pub const OUTPUT_LEN: usize = 32;
 
@@ -38,8 +35,7 @@ impl VdfStateZkSnark {
         self.acc
     }
 
-    /// Produce a Groth16 proof for “`steps − 1` more hashes of `seed`”
-    pub fn generate_proof(
+    /*pub fn generate_proof(
         &self,
         seed: &[u8],
         t: u64,
@@ -58,7 +54,7 @@ impl VdfStateZkSnark {
 
         let t = self.steps - 1;
         verify(seed, t, &self.acc, &proof)
-    }
+    }*/
 }
 
 /// Convenience wrapper for the WASM VM
@@ -73,24 +69,15 @@ mod tests {
     use crate::domain::vm::expected_output;
 
     #[test]
-    fn roundtrip_small() {
-        for t in 0u64..=4 {
-            let seed = b"btc-compatible-seed-phrase-32-bytes!";
-            let (y, pi) = prove(seed, t).expect("Failed to prove");
-            assert!(verify(seed, t, &y, &pi));
-        }
-    }
-
-    #[test]
     fn incremental_equals_bulk() {
         let seed = b"inc-test";
         let t = 20;
 
         let mut s = VdfStateZkSnark::new(seed);
         for _ in 1..t {
-            // t − 1 extra rounds → total of t
             s.step();
         }
+
         assert_eq!(s.output(), expected_output(seed, t));
     }
 }

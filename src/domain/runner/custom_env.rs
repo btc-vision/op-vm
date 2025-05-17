@@ -11,6 +11,18 @@ use tokio::runtime::Runtime;
 
 use super::TransientStorage;
 
+#[derive(Clone, Debug, Default)]
+pub struct ProvenState {
+    pub proof: Vec<u8>,
+    pub vk: Vec<u8>,
+}
+
+#[napi(object)]
+pub struct ProvenStateWrapped {
+    pub proof: Vec<u8>,
+    pub vk: Vec<u8>,
+}
+
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
     pub network: BitcoinNetwork,
@@ -34,7 +46,7 @@ pub struct CustomEnv {
     pub max_pages: u32,
 
     pub return_proofs: bool,
-    pub proofs: Vec<Vec<u8>>,
+    pub proofs: Vec<ProvenState>,
 }
 
 impl CustomEnv {
@@ -76,7 +88,7 @@ impl CustomEnv {
             transient_storage: TransientStorage::new(),
             max_pages,
 
-            return_proofs: return_proofs,
+            return_proofs,
             proofs: Vec::new(),
         })
     }

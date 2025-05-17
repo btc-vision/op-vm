@@ -1,3 +1,4 @@
+use crate::domain::runner::ProvenState;
 use bitcoin::hex::DisplayHex;
 use std::fmt::Display;
 
@@ -7,11 +8,11 @@ pub struct ExitData {
     pub data: Vec<u8>,
     pub gas_used: u64,
 
-    pub proofs: Vec<Vec<u8>>,
+    pub proofs: Vec<ProvenState>,
 }
 
 impl ExitData {
-    pub fn new(status: u32, gas_used: u64, data: &[u8], proofs: Vec<Vec<u8>>) -> Self {
+    pub fn new(status: u32, gas_used: u64, data: &[u8], proofs: Vec<ProvenState>) -> Self {
         Self {
             status,
             data: data.to_vec(),
@@ -35,8 +36,12 @@ impl Display for ExitData {
             self.data.to_lower_hex_string(),
             self.proofs
                 .iter()
-                .map(|p| p.to_lower_hex_string())
-                .collect::<Vec<String>>()
+                .map(|p| format!(
+                    "{{proof: {}, vk: {}}}",
+                    p.proof.to_lower_hex_string(),
+                    p.vk.to_lower_hex_string()
+                ))
+                .collect::<Vec<_>>()
                 .join(", ")
         )
     }

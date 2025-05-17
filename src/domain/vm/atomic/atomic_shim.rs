@@ -14,7 +14,7 @@ use std::{
 use tokio::task;
 use wasmer::{AsStoreRef, FunctionEnvMut, Memory, RuntimeError, StoreRef};
 
-use crate::domain::runner::{CustomEnv, InstanceWrapper, MAX_DIFF, NS_PER_HASH};
+use crate::domain::runner::{CustomEnv, InstanceWrapper, ProvenState, MAX_DIFF, NS_PER_HASH};
 use crate::domain::vm::{verify, Output, WaitQueue, OUTPUT_LEN};
 
 #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
@@ -23,13 +23,14 @@ use crate::domain::vm::{prove_one_step, VdfState};
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use crate::domain::vm::{prove_one_step_zk_snark as prove_one_step, VdfStateZkSnark as VdfState};
 
+#[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
+use crate::domain::vm::prove;
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use ark_bls12_381::Bls12_381;
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use ark_groth16::Proof;
-
-#[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
-use crate::domain::vm::prove;
+use ark_groth16::VerifyingKey;
+use ark_serialize::{Compress, Validate};
 
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use {crate::domain::vm::prove, ark_serialize::CanonicalDeserialize};
@@ -135,8 +136,18 @@ fn parse_snark(buf: &[u8]) -> Option<(Output, Proof<Bls12_381>)> {
     y.copy_from_slice(&buf[..OUTPUT_LEN]);
 
     let proof = Proof::<Bls12_381>::deserialize_compressed(&buf[OUTPUT_LEN..]).ok()?;
-
     Some((y, proof))
+}
+
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+fn deserialize_vk(bytes: &[u8]) -> Option<VerifyingKey<Bls12_381>> {
+    use std::io::Cursor;
+    CanonicalDeserialize::deserialize_with_mode(
+        &mut Cursor::new(bytes),
+        Compress::Yes,
+        Validate::Yes,
+    )
+    .ok()
 }
 
 async fn wait_async<A: AtomicInt>(
@@ -147,6 +158,7 @@ async fn wait_async<A: AtomicInt>(
     expected: A::Int,
     timeout_ns: i64,
     proof_bytes: Vec<u8>,
+    vk_bytes: Vec<u8>,
 ) -> Result<i32, RuntimeError>
 where
     <A as AtomicInt>::Int: std::fmt::Display,
@@ -184,8 +196,20 @@ where
         #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
         match parse_snark(&proof_bytes) {
             None => return Ok(NOT_AUTHORIZED),
-            Some((y, proof)) if verify(&little_endian_u64(seed), diff, &y, &proof) => {}
-            _ => return Ok(NOT_AUTHORIZED),
+            Some((y, proof)) => {
+                let vk = if vk_bytes.is_empty() {
+                    return Ok(NOT_AUTHORIZED);
+                } else {
+                    match deserialize_vk(&vk_bytes) {
+                        Some(v) => Box::leak(Box::new(v)), // 'static lifetime hack
+                        None => return Ok(NOT_AUTHORIZED),
+                    }
+                };
+
+                if !verify(&little_endian_u64(seed), &y, &proof, &vk) {
+                    return Ok(NOT_AUTHORIZED);
+                }
+            }
         }
     }
 
@@ -237,6 +261,8 @@ macro_rules! impl_wait_fn {
             timeout_ns: i64,
             proof_ptr: u32,
             proof_len: u32,
+            vk_ptr: u32,
+            vk_len: u32,
         ) -> i32 {
             use std::io::Cursor;
 
@@ -255,6 +281,11 @@ macro_rules! impl_wait_fn {
                 Err(_) => return FAULT,
             };
 
+            let raw_vk = match read_slice(&mem, &store_mut, vk_ptr, vk_len) {
+                Ok(s) => s.to_vec(),
+                Err(_) => return FAULT,
+            };
+
             let want_proof =
                 env.return_proofs && !raw_proof.is_empty() && raw_proof.iter().all(|b| *b == 0);
 
@@ -263,6 +294,12 @@ macro_rules! impl_wait_fn {
                 Vec::new()
             } else {
                 raw_proof.clone()
+            };
+
+            let vk_vec_for_wait = if want_proof {
+                Vec::new()
+            } else {
+                raw_vk.clone()
             };
 
             let queue = wrapper.futex_for(ptr as u64);
@@ -276,11 +313,13 @@ macro_rules! impl_wait_fn {
                     expected as _,
                     timeout_ns,
                     proof_vec_for_wait,
+                    vk_vec_for_wait,
                 ))
             });
+
             let code = res.unwrap_or_else(|_| FAULT);
 
-            if want_proof && code == TIMED_OUT {
+            if want_proof && code != FAULT {
                 let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
                 let seed = (ptr as u64) ^ (expected as u64) ^ diff;
 
@@ -297,24 +336,46 @@ macro_rules! impl_wait_fn {
                 {
                     use ark_serialize::{CanonicalSerialize, Compress};
 
-                    let (y, proof) = match prove(&little_endian_u64(seed), diff) {
+                    let (y, proof, vk) = match prove(&little_endian_u64(seed), diff) {
                         Ok(pair) => pair,
                         Err(_) => return FAULT,
                     };
 
                     let mut buf =
                         Vec::with_capacity(OUTPUT_LEN + proof.serialized_size(Compress::Yes));
+
+                    let mut vk_compressed = Vec::with_capacity(vk.serialized_size(Compress::Yes));
+                    if vk
+                        .serialize_compressed(&mut Cursor::new(&mut vk_compressed))
+                        .is_err()
+                    {
+                        println!("Failed to serialize vk");
+                        return FAULT;
+                    }
+
                     buf.extend_from_slice(&y);
-                    proof
+
+                    if proof
                         .serialize_compressed(&mut Cursor::new(&mut buf))
-                        .unwrap();
-                    env.proofs.push(buf);
+                        .is_err()
+                    {
+                        println!("Failed to serialize proof");
+                        return FAULT;
+                    }
+
+                    env.proofs.push(ProvenState {
+                        proof: buf,
+                        vk: vk_compressed,
+                    });
                 }
             }
 
             /* ------------------ push caller-supplied proof ----------- */
             if env.return_proofs && !raw_proof.is_empty() && !want_proof {
-                env.proofs.push(raw_proof);
+                env.proofs.push(ProvenState {
+                    proof: raw_proof,
+                    vk: raw_vk,
+                });
             }
 
             code
