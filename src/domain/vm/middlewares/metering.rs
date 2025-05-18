@@ -286,7 +286,36 @@ pub fn is_accounting(operator: &Operator) -> bool {
             | CallRef { .. } // branch source
             | ReturnCallRef { .. } // branch source
             | BrOnNull { .. } // branch source
-            | BrOnNonNull { .. } // branch source
+            | BrOnNonNull { .. }
+
+            // arithmetic traps
+            /*| I32DivU { .. } | I32DivS { .. }
+            | I64DivU { .. } | I64DivS { .. }
+            | I32RemU { .. } | I32RemS { .. }
+            | I64RemU { .. } | I64RemS { .. }
+            | I32TruncF32S { .. } | I32TruncF32U { .. }
+            | I32TruncF64S { .. } | I32TruncF64U { .. }
+            | I64TruncF32S { .. } | I64TruncF32U { .. }
+            | I64TruncF64S { .. } | I64TruncF64U { .. }*/
+
+            // memory traps
+            | I32Load { .. } | I64Load { .. } | F32Load { .. } | F64Load { .. }
+            | I32Load8S { .. } | I32Load8U { .. } | I32Load16S { .. } | I32Load16U { .. }
+            | I64Load8S { .. } | I64Load8U { .. } | I64Load16S { .. } | I64Load16U { .. }
+            | I64Load32S { .. } | I64Load32U { .. }
+            | I32Store { .. } | I64Store { .. } | F32Store { .. } | F64Store { .. }
+            | I32Store8 { .. } | I32Store16 { .. }
+            | I64Store8 { .. } | I64Store16 { .. } | I64Store32 { .. }
+            | I32AtomicLoad { .. } | I64AtomicLoad { .. }
+            | I32AtomicStore { .. } | I64AtomicStore { .. }
+            | I32AtomicRmwAdd { .. } | I64AtomicRmwAdd { .. }
+
+            // table traps
+            | TableGet { .. } | TableSet { .. } | TableGrow { .. }
+            | TableFill { .. } | TableCopy { .. } | TableInit { .. }
+
+            // Always-trap op
+            | Unreachable
     )
 }
 
@@ -864,6 +893,68 @@ mod tests {
         assert_eq!(
             get_remaining_points(&mut store, &instance),
             MeteringPoints::Exhausted
+        );
+    }
+
+    fn div_cost2(op: &Operator, _: Option<(u32, u32)>) -> u64 {
+        match op {
+            Operator::LocalGet { .. } | Operator::I32Const { .. } => 1,
+            Operator::I32DivU { .. } => 2,
+            _ => 0,
+        }
+    }
+
+    #[test]
+    fn metering_divu_regression() {
+        // Disable length-clamp effects for this test.
+        let metering = Arc::new(Metering::new(10, div_cost2, u32::MAX));
+
+        let mut compiler_cfg = Cranelift::default();
+        compiler_cfg.push_middleware(metering);
+        let mut store = Store::new(EngineBuilder::new(compiler_cfg));
+
+        // WASM: 10 / x
+        let wasm = wat2wasm(
+            br#"
+            (module
+              (type $bomb_t (func (param i32) (result i32)))
+              (func $bomb (type $bomb_t) (param $x i32) (result i32)
+                i32.const 10
+                local.get $x
+                i32.div_u)
+              (export "bomb" (func $bomb)))
+            "#,
+        )
+        .unwrap()
+        .to_vec();
+
+        let module = Module::new(&store, wasm).unwrap();
+        let instance = Instance::new(&mut store, &module, &imports! {}).unwrap();
+
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Remaining(10)
+        );
+
+        let bomb: TypedFunction<i32, i32> = instance
+            .exports
+            .get_function("bomb")
+            .unwrap()
+            .typed(&store)
+            .unwrap();
+
+        // 10 / 2 = 5, costs 4 points → 6 left
+        assert_eq!(bomb.call(&mut store, 2).unwrap(), 5);
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Remaining(6)
+        );
+
+        // 10 / 0 traps, still costs 4 points → 2 left
+        assert!(bomb.call(&mut store, 0).is_err());
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Remaining(2)
         );
     }
 }

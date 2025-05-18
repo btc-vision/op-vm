@@ -114,7 +114,7 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
 
         MemorySize { .. } => 3000,
         MemoryGrow { .. } => 8000,
-    
+
         MemoryCopy { .. } => 0,  // Done in metering directly.
         MemoryFill { .. } => 0, // Done in metering directly.
 
@@ -212,12 +212,12 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         TableFill { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
         TableFill { .. } => u64::MAX,
-    
+
         #[cfg(feature = "table-metering")]
         TableGrow { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
         TableGrow { .. } => u64::MAX,
-    
+
         #[cfg(feature = "table-metering")]
         TableInit { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
@@ -237,7 +237,7 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         TableSize { .. } => 2_500,
         #[cfg(not(feature = "table-metering"))]
         TableSize { .. } => u64::MAX,
-    
+
         MemoryInit { .. } |
 
         Try { .. } | Catch { .. } | CatchAll { .. } | Delegate { .. } | Throw { .. } | Rethrow { .. } | ThrowRef { .. } | TryTable { .. }

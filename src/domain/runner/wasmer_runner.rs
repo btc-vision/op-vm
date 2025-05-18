@@ -138,7 +138,7 @@ impl WasmerRunner {
         features.module_linking = false; // https://github.com/WebAssembly/module-linking/blob/main/proposals/module-linking/Explainer.md
 
         // Verify before mainnet
-        features.bulk_memory = true; // TODO: Add cost by length on bulk memory operations. This is a huge performance boost for large memory operations.
+        features.bulk_memory = true; // TODO: Verify the new metring clamp added. Verify memory dynamic gas.
 
         // Ok
         features.simd = true;
