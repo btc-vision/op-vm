@@ -25,6 +25,9 @@ use wasmer::{
 };
 use wasmer_types::{GlobalIndex, ModuleInfo};
 
+const MAX_U64_COST: u64 = u64::MAX;
+const MAX_ACCUM: u64 = MAX_U64_COST - 1;
+
 #[derive(Clone)]
 struct MeteringGlobalIndexes {
     remaining: GlobalIndex,
@@ -501,7 +504,9 @@ where
             CallIndirect { type_index, .. } => self.type_arities.get(*type_index as usize).copied(),
             _ => None,
         };
-        self.accumulated_cost += (self.cost_function)(&operator, arity);
+
+        let cost = (self.cost_function)(&operator, arity).min(MAX_ACCUM);
+        self.accumulated_cost = self.accumulated_cost.saturating_add(cost);
 
         if is_accounting(&operator) && self.accumulated_cost > 0 {
             let g = &self.global_indexes;
