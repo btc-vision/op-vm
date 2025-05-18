@@ -37,7 +37,7 @@ impl ExitImport {
 
         let gas_used = instance.get_used_gas(&mut store);
 
-        env.exit_data = ExitData::new(status, gas_used, data.as_slice());
+        env.exit_data = ExitData::new(status, gas_used, data.as_slice(), env.proofs.clone());
 
         Ok(env.exit_data.clone())
     }

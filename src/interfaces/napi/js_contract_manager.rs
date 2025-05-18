@@ -329,6 +329,7 @@ impl ContractManager {
         memory_pages_used: BigInt,
         network: BitcoinNetworkRequest,
         is_debug_mode: bool,
+        return_proofs: bool,
     ) -> Result<(), Error> {
         let used_gas = used_gas.get_u64().1;
         let max_gas = max_gas.get_u64().1;
@@ -342,6 +343,7 @@ impl ContractManager {
             memory_pages_used: memory_pages_used.get_u64().1 as u32,
             network,
             is_debug_mode,
+            return_proofs,
         };
 
         let mut should_cache = false;
@@ -456,6 +458,24 @@ impl ContractManager {
             BufferSlice::from_data(&env, exit_data.data.to_vec())?,
         )?;
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
+
+        let length = exit_data.proofs.len() as u32;
+        let mut array = env.create_array(length)?;
+        for (_, proof) in exit_data.proofs.iter().enumerate() {
+            let proof_buffer = env
+                .create_buffer_with_data(proof.proof.to_vec())?
+                .into_raw();
+
+            let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+
+            let mut object = env.create_object()?;
+            object.set_named_property("proof", proof_buffer)?;
+            object.set_named_property("vk", vk_buffer)?;
+
+            array.insert(object)?
+        }
+
+        js_object.set_named_property("proofs", array)?;
         Ok(js_object)
     }
 
@@ -559,6 +579,24 @@ impl ContractManager {
                     env.create_bigint_from_u64(exit_data.gas_used),
                 )?;
 
+                let length = exit_data.proofs.len() as u32;
+                let mut array = env.create_array(length)?;
+                for (_, proof) in exit_data.proofs.iter().enumerate() {
+                    let proof_buffer = env
+                        .create_buffer_with_data(proof.proof.to_vec())?
+                        .into_raw();
+
+                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+
+                    let mut object = env.create_object()?;
+                    object.set_named_property("proof", proof_buffer)?;
+                    object.set_named_property("vk", vk_buffer)?;
+
+                    array.insert(object)?
+                }
+
+                js_object.set_named_property("proofs", array)?;
+
                 Ok(js_object)
             },
         )?;
@@ -611,10 +649,29 @@ impl ContractManager {
                     "data",
                     BufferSlice::from_data(&env, exit_data.data.to_vec())?,
                 )?;
+
                 js_object.set_named_property(
                     "gasUsed",
                     env.create_bigint_from_u64(exit_data.gas_used),
                 )?;
+
+                let length = exit_data.proofs.len() as u32;
+                let mut array = env.create_array(length)?;
+                for (_, proof) in exit_data.proofs.iter().enumerate() {
+                    let proof_buffer = env
+                        .create_buffer_with_data(proof.proof.to_vec())?
+                        .into_raw();
+
+                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+
+                    let mut object = env.create_object()?;
+                    object.set_named_property("proof", proof_buffer)?;
+                    object.set_named_property("vk", vk_buffer)?;
+
+                    array.insert(object)?
+                }
+
+                js_object.set_named_property("proofs", array)?;
 
                 Ok(js_object)
             },

@@ -40,7 +40,7 @@ impl VerifySchnorrImport {
             .read_memory(&store, message_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading Schnorr message from memory"))?;
 
-        let xonly_public_key = XOnlyPublicKey::from_byte_array(&public_key_bytes)
+        let xonly_public_key = XOnlyPublicKey::from_byte_array(public_key_bytes)
             .map_err(|e| RuntimeError::new(format!("Error converting public key: {}", e)))?;
 
         let signature = schnorr::Signature::from_byte_array(signature_bytes);

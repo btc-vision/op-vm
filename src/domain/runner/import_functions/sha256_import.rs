@@ -1,14 +1,24 @@
 use crate::domain::runner::CustomEnv;
+use crate::domain::vm::MAX_ACCUM;
 use sha2::{Digest, Sha256};
 use wasmer::{FunctionEnvMut, RuntimeError};
 
-const STATIC_GAS_COST: u64 = 300_000;
-const GAS_COST_PER_BYTE: u64 = 1_000;
+const STATIC_GAS_COST: u64 = 1_000_000;
+const PER_BLOCK: u64 = 34_000;
+const MAX: u64 = MAX_ACCUM;
 
 #[derive(Default)]
 pub struct Sha256Import;
 
 impl Sha256Import {
+    #[inline]
+    fn sha256_gas(len: u64) -> u64 {
+        let blocks = 1 + (len.saturating_sub(1) >> 6);
+        STATIC_GAS_COST
+            .saturating_add(PER_BLOCK.saturating_mul(blocks.saturating_sub(1)))
+            .min(MAX)
+    }
+
     pub fn execute(
         mut context: FunctionEnvMut<CustomEnv>,
         data_ptr: u32,
@@ -28,7 +38,7 @@ impl Sha256Import {
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
-        instance.use_gas(&mut store, data.len() as u64 * GAS_COST_PER_BYTE);
+        instance.use_gas(&mut store, Self::sha256_gas(data.len() as u64));
 
         let result = Self::sha256(&data)?;
 

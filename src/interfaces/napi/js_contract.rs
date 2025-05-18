@@ -65,10 +65,12 @@ impl JsContract {
             .get_runtime()
             .ok_or_else(|| Error::from_reason("No available runtimes in the pool".to_string()))?;
 
-        if params.memory_pages_used >= MAX_PAGES {
-            return Err(Error::from_reason("No more memory pages available"));
-        }
-        let max_pages = MAX_PAGES - params.memory_pages_used;
+            if params.memory_pages_used >= MAX_PAGES {
+                return Err(Error::from_reason("No more memory pages available"));
+            }
+
+            let max_pages = MAX_PAGES - params.memory_pages_used;
+            let return_proofs = params.return_proofs;
 
         //let runtime = Arc::new(Runtime::new()?);
         let custom_env: CustomEnv = CustomEnv::new(
@@ -85,6 +87,7 @@ impl JsContract {
             block_hash_external,
             runtime.clone(),
             max_pages,
+            return_proofs,
         )
         .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
 
