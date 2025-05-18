@@ -120,8 +120,20 @@ impl WasmerRunner {
             features.threads = false;
         }
 
+        // Bad
+        features.memory64 = false; // TODO: Enabling this break metering for gas and memory. We need two meters. Larger binaries and ~2–10 % slower memory-heavy loops.
+
         // DoS possible if enabled like it is.
-        features.reference_types = false; // TODO: Add length-aware gas on TableGrow. Enables table.grow/externref which can allocate millions of funcref slots in one opcode. https://github.com/WebAssembly/spec/blob/main/proposals/reference-types/Overview.md
+        #[cfg(feature = "reference-types")]
+        {
+            features.reference_types = true; // TODO: Add length-aware gas on TableGrow. Enables table.grow/externref which can allocate millions of funcref slots in one opcode. https://github.com/WebAssembly/spec/blob/main/proposals/reference-types/Overview.md
+        }
+
+        #[cfg(not(feature = "reference-types"))]
+        {
+            features.reference_types = false;
+        }
+
         features.multi_memory = false; // TODO: Multiple memories break the single-meter assumption. Support must be added.
         features.exceptions = false; // Gas free operation. Not in metering. Can be used to bypass gas limits. Separate opcodes for catch and throw.
 
@@ -130,7 +142,6 @@ impl WasmerRunner {
 
         // Verify before mainnet
         features.bulk_memory = true; // TODO: Add cost by length on bulk memory operations. This is a huge performance boost for large memory operations.
-        features.memory64 = true; // TODO: Allowing 64bit memory can bypass max_pages < 2^32 but, is theoretically impossible to use more than 2^32 pages since we limit it to 32MB.
 
         // Ok
         features.simd = true;

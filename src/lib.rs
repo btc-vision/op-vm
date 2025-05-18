@@ -17,6 +17,12 @@ mod interfaces;
 
 #[napi]
 pub fn init() {
+    #[cfg(feature = "debug-metering")]
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    #[cfg(feature = "debug-metering")]
+    log::set_max_level(log::LevelFilter::Trace);
+
     panic::set_hook(Box::new(|e| {
         println!("Panic occurred: {:?}", e);
     }));

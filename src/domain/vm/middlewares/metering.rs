@@ -8,9 +8,15 @@
 //! [See the `metering` detailed and complete
 //! example](https://github.com/wasmerio/wasmer/blob/main/examples/metering.rs).
 
+use crate::domain::vm::{
+    MEMORY_COPY_BASE, MEMORY_COPY_PER_BLOCK, MEMORY_FILL_BASE, MEMORY_FILL_PER_BLOCK,
+    TABLE_COPY_BASE, TABLE_COPY_PER_ELEM, TABLE_FILL_BASE, TABLE_FILL_PER_ELEM, TABLE_GROW_BASE,
+    TABLE_GROW_PER_ELEM,
+};
 use std::convert::TryInto;
 use std::fmt;
 use std::sync::{Arc, Mutex};
+use wasmer::wasmparser::Operator::*;
 use wasmer::wasmparser::{BlockType as WpTypeOrFuncType, Operator};
 use wasmer::{
     sys::{FunctionMiddleware, MiddlewareError, MiddlewareReaderState, ModuleMiddleware},
@@ -20,12 +26,16 @@ use wasmer::{
 use wasmer_types::{GlobalIndex, ModuleInfo};
 
 #[derive(Clone)]
-struct MeteringGlobalIndexes(GlobalIndex, GlobalIndex);
+struct MeteringGlobalIndexes {
+    remaining: GlobalIndex,
+    exhausted: GlobalIndex,
+    scratch_len: GlobalIndex,
+}
 
 impl MeteringGlobalIndexes {
     /// The global index in the current module for remaining points.
     fn remaining_points(&self) -> GlobalIndex {
-        self.0
+        self.remaining
     }
 
     /// The global index in the current module for a boolean indicating whether points are exhausted
@@ -34,7 +44,7 @@ impl MeteringGlobalIndexes {
     ///   * 0: there are remaining points
     ///   * 1: points have been exhausted
     fn points_exhausted(&self) -> GlobalIndex {
-        self.1
+        self.exhausted
     }
 }
 
@@ -108,6 +118,8 @@ pub struct FunctionMetering<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send +
 
     /// Accumulated cost of the current basic block.
     accumulated_cost: u64,
+
+    last_i32_const: Option<u32>,
 }
 
 /// Represents the type of the metering points, either `Remaining` or
@@ -166,6 +178,7 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync + 'static> Module
             global_indexes: self.global_indexes.lock().unwrap().clone().unwrap(),
             accumulated_cost: 0,
             type_arities: self.type_arities.lock().unwrap().clone().unwrap(),
+            last_i32_const: None,
         })
     }
 
@@ -205,10 +218,19 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync + 'static> Module
             ExportIndex::Global(points_exhausted_global_index),
         );
 
-        *global_indexes = Some(MeteringGlobalIndexes(
-            remaining_points_global_index,
-            points_exhausted_global_index,
-        ));
+        let scratch_len = module_info
+            .globals
+            .push(GlobalType::new(Type::I32, Mutability::Var));
+
+        module_info
+            .global_initializers
+            .push(GlobalInit::I32Const(0));
+
+        *global_indexes = Some(MeteringGlobalIndexes {
+            remaining: remaining_points_global_index,
+            exhausted: points_exhausted_global_index,
+            scratch_len,
+        });
 
         // collect (params, results) arity for each type index
         let mut arities: Vec<(u32, u32)> = Vec::new();
@@ -228,33 +250,33 @@ pub fn is_accounting(operator: &Operator) -> bool {
     // Possible sources and targets of a branch.
     matches!(
         operator,
-        Operator::Loop { .. } // loop headers are branch targets
-            | Operator::End // block ends are branch targets
-            | Operator::If { .. } // branch source, "if" can branch to else branch
-            | Operator::Else // "else" is the "end" of an if branch
-            | Operator::Br { .. } // branch source
-            | Operator::BrTable { .. } // branch source
-            | Operator::BrIf { .. } // branch source
-            | Operator::Call { .. } // function call - branch source
-            | Operator::CallIndirect { .. } // function call - branch source
-            | Operator::Return // end of function - branch source
+        Loop { .. } // loop headers are branch targets
+            | End // block ends are branch targets
+            | If { .. } // branch source, "if" can branch to else branch
+            | Else // "else" is the "end" of an if branch
+            | Br { .. } // branch source
+            | BrTable { .. } // branch source
+            | BrIf { .. } // branch source
+            | Call { .. } // function call - branch source
+            | CallIndirect { .. } // function call - branch source
+            | Return // end of function - branch source
             // exceptions proposal
-            | Operator::Throw { .. } // branch source
-            | Operator::ThrowRef // branch source
-            | Operator::Rethrow { .. } // branch source
-            | Operator::Delegate { .. } // branch source
-            | Operator::Catch { .. } // branch target
+            | Throw { .. } // branch source
+            | ThrowRef // branch source
+            | Rethrow { .. } // branch source
+            | Delegate { .. } // branch source
+            | Catch { .. } // branch target
             // tail_call proposal
-            | Operator::ReturnCall { .. } // branch source
-            | Operator::ReturnCallIndirect { .. } // branch source
+            | ReturnCall { .. } // branch source
+            | ReturnCallIndirect { .. } // branch source
             // gc proposal
-            | Operator::BrOnCast { .. } // branch source
-            | Operator::BrOnCastFail { .. } // branch source
+            | BrOnCast { .. } // branch source
+            | BrOnCastFail { .. } // branch source
             // function_references proposal
-            | Operator::CallRef { .. } // branch source
-            | Operator::ReturnCallRef { .. } // branch source
-            | Operator::BrOnNull { .. } // branch source
-            | Operator::BrOnNonNull { .. } // branch source
+            | CallRef { .. } // branch source
+            | ReturnCallRef { .. } // branch source
+            | BrOnNull { .. } // branch source
+            | BrOnNonNull { .. } // branch source
     )
 }
 
@@ -267,63 +289,223 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> fmt::Debug for F
     }
 }
 
-impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> FunctionMiddleware
-    for FunctionMetering<F>
+impl<F> FunctionMetering<F>
+where
+    F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync,
+{
+    #[inline(always)]
+    fn log_len_based(&mut self, op: &'static str, per_block: u64, block: u32) {
+        #[cfg(feature = "debug-metering")]
+        {
+            if let Some(len) = self.last_i32_const.take() {
+                let blocks = (len as u64 + block as u64 - 1) / block as u64;
+                let charged = per_block * blocks;
+                log::info!(
+                    "instrumenting {}: constant len = {} → +{} gas",
+                    op,
+                    len,
+                    charged
+                );
+            } else {
+                log::info!(
+                    "instrumenting {}: dynamic len → +{}·blocks gas",
+                    op,
+                    per_block
+                );
+            }
+        }
+    }
+
+    /// Injects `global.scratch_len`-based gas accounting.
+    #[inline(always)]
+    fn charge_len_based(
+        &self,
+        state: &mut MiddlewareReaderState<'_>,
+        base: u64,
+        per_block: u64,
+        log2_block: i32,
+    ) {
+        let g = &self.global_indexes;
+
+        state.extend(&[
+            GlobalGet {
+                global_index: g.scratch_len.as_u32(),
+            },
+            I32Const {
+                value: (1 << log2_block) - 1,
+            },
+            I32Add,
+            I32Const { value: log2_block },
+            I32ShrU,
+            I64ExtendI32U,
+            I64Const {
+                value: per_block as i64,
+            },
+            I64Mul, // variable part
+            I64Const { value: base as i64 },
+            I64Add, // total cost
+            GlobalGet {
+                global_index: g.remaining.as_u32(),
+            },
+            I64GtU,
+            If {
+                blockty: WpTypeOrFuncType::Empty,
+            },
+            I32Const { value: 1 },
+            GlobalSet {
+                global_index: g.exhausted.as_u32(),
+            },
+            Unreachable,
+            End,
+            // remaining -= cost
+            GlobalGet {
+                global_index: g.remaining.as_u32(),
+            },
+            I64Const { value: base as i64 },
+            GlobalGet {
+                global_index: g.scratch_len.as_u32(),
+            },
+            I32Const {
+                value: (1 << log2_block) - 1,
+            },
+            I32Add,
+            I32Const { value: log2_block },
+            I32ShrU,
+            I64ExtendI32U,
+            I64Const {
+                value: per_block as i64,
+            },
+            I64Mul,
+            I64Add,
+            I64Sub,
+            GlobalSet {
+                global_index: g.remaining.as_u32(),
+            },
+        ]);
+
+        // push len back for the real instruction
+        state.push_operator(GlobalGet {
+            global_index: g.scratch_len.as_u32(),
+        });
+    }
+}
+
+/// log2 of the block size for each metered op
+const LOG2_BYTE_BLOCK: i32 = 4; // 2⁴ = 16 bytes
+const LOG2_ELEM_BLOCK: i32 = 0; // 1 element
+
+impl<F> FunctionMiddleware for FunctionMetering<F>
+where
+    F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync,
 {
     fn feed<'a>(
         &mut self,
         operator: Operator<'a>,
         state: &mut MiddlewareReaderState<'a>,
     ) -> Result<(), MiddlewareError> {
-        // Get the cost of the current operator, and add it to the accumulator.
-        // This needs to be done before the metering logic, to prevent operators like `Call` from escaping metering in some
-        // corner cases.
-        let arity = match &operator {
-            Operator::CallIndirect { type_index, .. } => {
-                self.type_arities.get(*type_index as usize).copied()
+        use Operator::*;
+
+        if let I32Const { value } = operator {
+            self.last_i32_const = Some(value as u32);
+        }
+
+        match operator {
+            MemoryFill { .. } => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                self.log_len_based("memory.fill", MEMORY_FILL_PER_BLOCK, 16);
+                self.charge_len_based(
+                    state,
+                    MEMORY_FILL_BASE,
+                    MEMORY_FILL_PER_BLOCK,
+                    LOG2_BYTE_BLOCK,
+                );
             }
+
+            MemoryCopy { .. } | MemoryInit { .. } => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                self.log_len_based("memory.copy/init", MEMORY_COPY_PER_BLOCK, 16);
+                self.charge_len_based(
+                    state,
+                    MEMORY_COPY_BASE,
+                    MEMORY_COPY_PER_BLOCK,
+                    LOG2_BYTE_BLOCK,
+                );
+            }
+
+            #[cfg(feature = "table-metering")]
+            TableCopy { .. } | TableInit { .. } => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                self.log_len_based("table.copy/init", TABLE_COPY_PER_ELEM, 1);
+                self.charge_len_based(state, TABLE_COPY_BASE, TABLE_COPY_PER_ELEM, LOG2_ELEM_BLOCK);
+            }
+
+            #[cfg(feature = "table-metering")]
+            TableFill { .. } => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                self.log_len_based("table.fill", TABLE_FILL_PER_ELEM, 1);
+                self.charge_len_based(state, TABLE_FILL_BASE, TABLE_FILL_PER_ELEM, LOG2_ELEM_BLOCK);
+            }
+
+            #[cfg(feature = "table-metering")]
+            TableGrow { .. } => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                self.log_len_based("table.grow", TABLE_GROW_PER_ELEM, 1);
+                self.charge_len_based(state, TABLE_GROW_BASE, TABLE_GROW_PER_ELEM, LOG2_ELEM_BLOCK);
+            }
+
+            _ => {}
+        }
+
+        let arity = match &operator {
+            CallIndirect { type_index, .. } => self.type_arities.get(*type_index as usize).copied(),
             _ => None,
         };
-
         self.accumulated_cost += (self.cost_function)(&operator, arity);
 
-        // Finalize the cost of the previous basic block and perform necessary checks.
         if is_accounting(&operator) && self.accumulated_cost > 0 {
+            let g = &self.global_indexes;
             state.extend(&[
-                // if unsigned(globals[remaining_points_index]) < unsigned(self.accumulated_cost) { throw(); }
-                Operator::GlobalGet {
-                    global_index: self.global_indexes.remaining_points().as_u32(),
+                GlobalGet {
+                    global_index: g.remaining.as_u32(),
                 },
-                Operator::I64Const {
+                I64Const {
                     value: self.accumulated_cost as i64,
                 },
-                Operator::I64LtU,
-                Operator::If {
+                I64LtU,
+                If {
                     blockty: WpTypeOrFuncType::Empty,
                 },
-                Operator::I32Const { value: 1 },
-                Operator::GlobalSet {
-                    global_index: self.global_indexes.points_exhausted().as_u32(),
+                I32Const { value: 1 },
+                GlobalSet {
+                    global_index: g.exhausted.as_u32(),
                 },
-                Operator::Unreachable,
-                Operator::End,
-                // globals[remaining_points_index] -= self.accumulated_cost;
-                Operator::GlobalGet {
-                    global_index: self.global_indexes.remaining_points().as_u32(),
+                Unreachable,
+                End,
+                GlobalGet {
+                    global_index: g.remaining.as_u32(),
                 },
-                Operator::I64Const {
+                I64Const {
                     value: self.accumulated_cost as i64,
                 },
-                Operator::I64Sub,
-                Operator::GlobalSet {
-                    global_index: self.global_indexes.remaining_points().as_u32(),
+                I64Sub,
+                GlobalSet {
+                    global_index: g.remaining.as_u32(),
                 },
             ]);
-
             self.accumulated_cost = 0;
         }
-        state.push_operator(operator);
 
+        state.push_operator(operator);
         Ok(())
     }
 }
@@ -432,8 +614,8 @@ mod tests {
 
     fn cost_function(operator: &Operator, _: Option<(u32, u32)>) -> u64 {
         match operator {
-            Operator::LocalGet { .. } | Operator::I32Const { .. } => 1,
-            Operator::I32Add { .. } => 2,
+            LocalGet { .. } | I32Const { .. } => 1,
+            I32Add { .. } => 2,
             _ => 0,
         }
     }
@@ -589,9 +771,9 @@ mod tests {
 
         fn cost(operator: &Operator, _: Option<(u32, u32)>) -> u64 {
             match operator {
-                Operator::Loop { .. } => 1000,
-                Operator::Br { .. } | Operator::BrIf { .. } => 10,
-                Operator::F64Const { .. } => 7,
+                Loop { .. } => 1000,
+                Br { .. } | BrIf { .. } => 10,
+                F64Const { .. } => 7,
                 _ => 0,
             }
         }

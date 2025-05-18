@@ -54,6 +54,25 @@ fn call_indirect_cost(type_arity: Option<(u32, u32)>) -> u64 {
     }
 }
 
+pub const MEMORY_FILL_BASE: u64 = 50_000;
+pub const MEMORY_FILL_PER_BLOCK: u64 = 30; // 16-byte block
+pub const MEMORY_COPY_BASE: u64 = 60_000;
+pub const MEMORY_COPY_PER_BLOCK: u64 = 60; // 16-byte block
+
+// If we ever enable the table feature.
+#[cfg(feature = "table-metering")]
+pub const TABLE_FILL_BASE: u64 = 65_000;
+#[cfg(feature = "table-metering")]
+pub const TABLE_FILL_PER_ELEM: u64 = 30;
+#[cfg(feature = "table-metering")]
+pub const TABLE_COPY_BASE: u64 = 70_000;
+#[cfg(feature = "table-metering")]
+pub const TABLE_COPY_PER_ELEM: u64 = 50;
+#[cfg(feature = "table-metering")]
+pub const TABLE_GROW_BASE: u64 = 4_000;
+#[cfg(feature = "table-metering")]
+pub const TABLE_GROW_PER_ELEM: u64 = 500;
+
 pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
     #[rustfmt::skip]
     let gas_cost = match operator {
@@ -96,7 +115,7 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         MemorySize { .. } => 3000,
         MemoryGrow { .. } => 8000,
         MemoryCopy { .. } => 1000,
-        MemoryFill { .. } => 1000,
+        MemoryFill { .. } => 0,
 
         BrTable { targets } => {
             2500 + 350 * targets.len() as u64
@@ -180,6 +199,43 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         MemoryAtomicWait32 { .. }       => memory_atomic_wait(32),
         MemoryAtomicWait64 { .. }       => memory_atomic_wait(64),
 
+        //----------------------------------------------------------------
+        //  TABLE  – only compiled when the feature is active
+        //----------------------------------------------------------------
+        #[cfg(feature = "table-metering")]
+        TableCopy { .. } => 0,
+        #[cfg(not(feature = "table-metering"))]
+        TableCopy { .. } => u64::MAX,
+
+        #[cfg(feature = "table-metering")]
+        TableFill { .. } => 0,
+        #[cfg(not(feature = "table-metering"))]
+        TableFill { .. } => u64::MAX,
+    
+        #[cfg(feature = "table-metering")]
+        TableGrow { .. } => 0,
+        #[cfg(not(feature = "table-metering"))]
+        TableGrow { .. } => u64::MAX,
+    
+        #[cfg(feature = "table-metering")]
+        TableInit { .. } => 0,
+        #[cfg(not(feature = "table-metering"))]
+        TableInit { .. } => u64::MAX,
+
+        #[cfg(feature = "table-metering")]
+        TableGet { .. }  => 900,
+        #[cfg(not(feature = "table-metering"))]
+        TableGet { .. }  => u64::MAX,
+
+        #[cfg(feature = "table-metering")]
+        TableSet { .. }  => 1_100,
+        #[cfg(not(feature = "table-metering"))]
+        TableSet { .. }  => u64::MAX,
+
+        #[cfg(feature = "table-metering")]
+        TableSize { .. } => 2_500,
+        #[cfg(not(feature = "table-metering"))]
+        TableSize { .. } => u64::MAX,
 
         Try { .. } | Catch { .. } | CatchAll { .. } | Delegate { .. } | Throw { .. } | Rethrow { .. } | ThrowRef { .. } | TryTable { .. }
 
@@ -189,8 +245,7 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
 
         | TypedSelect { .. } | ReturnCall { .. } | ReturnCallIndirect { .. }
 
-        | MemoryInit { .. } | DataDrop { .. } | TableInit { .. } | ElemDrop { .. }
-        | TableCopy { .. } | TableFill { .. } | TableGet { .. } | TableSet { .. } | TableGrow { .. } | TableSize { .. }
+        | MemoryInit { .. } | DataDrop { .. } | ElemDrop { .. }
 
         | MemoryDiscard { .. }
 

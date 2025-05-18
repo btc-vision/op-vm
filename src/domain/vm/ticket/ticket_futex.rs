@@ -1,4 +1,5 @@
-//! Tiny futex: one sequence counter + a Tokio `Notify`.
+#![cfg(feature = "contract-threading")]
+#![forbid(unsafe_code)]
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
