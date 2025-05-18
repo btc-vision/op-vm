@@ -1,15 +1,21 @@
-use crate::domain::runner::{MAX_MEMORY_SIZE, MAX_THREADS};
+use crate::domain::runner::MAX_MEMORY_SIZE;
+use crate::domain::vm::{get_remaining_points, set_remaining_points, MeteringPoints};
 use thiserror::Error;
 use wasmer::{AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError};
 use wasmer_types::Pages;
 
 #[cfg(feature = "contract-threading")]
+use crate::domain::runner::MAX_THREADS;
+
+#[cfg(feature = "contract-threading")]
 use crate::domain::vm::WaitQueue;
+
 #[cfg(feature = "contract-threading")]
 use crate::domain::vm::{get_points_atomic, get_total_threads, AtomicMeteringError, AtomicPoints};
-use crate::domain::vm::{get_remaining_points, set_remaining_points, MeteringPoints};
+
 #[cfg(feature = "contract-threading")]
 use dashmap::DashMap;
+
 #[cfg(feature = "contract-threading")]
 use std::sync::Arc;
 

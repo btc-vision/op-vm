@@ -23,15 +23,15 @@ const fn memory_atomic_wait(bytes: u64) -> u64 {
 }
 
 #[cfg(not(feature = "contract-threading"))]
-const fn atomic_load_cost(bytes: u32) -> u64 {
+const fn atomic_load_cost(_: u32) -> u64 {
     u64::MAX
 }
 #[cfg(not(feature = "contract-threading"))]
-const fn atomic_store_cost(bytes: u32) -> u64 {
+const fn atomic_store_cost(_: u32) -> u64 {
     u64::MAX
 }
 #[cfg(not(feature = "contract-threading"))]
-const fn atomic_rmw_cost(bytes: u32) -> u64 {
+const fn atomic_rmw_cost(_: u32) -> u64 {
     u64::MAX
 }
 #[cfg(not(feature = "contract-threading"))]
@@ -39,7 +39,7 @@ const fn memory_atomic_notify() -> u64 {
     u64::MAX
 }
 #[cfg(not(feature = "contract-threading"))]
-const fn memory_atomic_wait(bytes: u64) -> u64 {
+const fn memory_atomic_wait(_: u64) -> u64 {
     u64::MAX
 }
 

@@ -45,6 +45,7 @@ pub struct CustomEnv {
     pub transient_storage: TransientStorage,
     pub max_pages: u32,
 
+    #[allow(dead_code)]
     pub return_proofs: bool,
     pub proofs: Vec<ProvenState>,
 }

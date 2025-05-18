@@ -20,13 +20,18 @@ use crate::domain::runner::{
     ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_WASM_INIT,
 };
 
+use crate::domain::runner::MAX_MEMORY_COPY_SIZE;
+
+use crate::domain::vm::{
+    get_gas_cost, log_time_diff, ClampBulkMem, LimitingTunables, Metering, RejectFPMiddleware,
+};
+
 #[cfg(feature = "contract-threading")]
 use crate::domain::runner::MAX_GAS_WASM_INIT_ATOMIC;
-use crate::domain::runner::MAX_MEMORY_COPY_SIZE;
+#[cfg(feature = "contract-threading")]
 use crate::domain::vm::{
-    atomic_notify, atomic_wait32, atomic_wait64, default_cost_atomic, get_gas_cost, log_time_diff,
-    set_helper_index_atomic, thread_spawn, AtomicHelper, AtomicWaitMetering, ClampBulkMem,
-    GasConfig, LimitingTunables, Metering, RejectFPMiddleware,
+    atomic_notify, atomic_wait32, atomic_wait64, default_cost_atomic, set_helper_index_atomic,
+    thread_spawn, AtomicHelper, AtomicWaitMetering, GasConfig,
 };
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
