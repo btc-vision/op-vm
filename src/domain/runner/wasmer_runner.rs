@@ -72,9 +72,6 @@ impl WasmerRunner {
         compiler.canonicalize_nans(true);
 
         compiler.enable_verifier();
-        compiler.push_middleware(RejectFPMiddleware::new());
-        compiler.push_middleware(metering);
-
         #[cfg(feature = "contract-threading")]
         {
             let atomic_meter = AtomicWaitMetering::new(
@@ -89,6 +86,9 @@ impl WasmerRunner {
             );
             compiler.push_middleware(Arc::new(atomic_meter));
         }
+
+        compiler.push_middleware(RejectFPMiddleware::new());
+        compiler.push_middleware(metering);
 
         let engine = EngineBuilder::new(compiler)
             .set_features(Option::from(Self::get_features()))
