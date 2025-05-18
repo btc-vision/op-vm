@@ -114,8 +114,9 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
 
         MemorySize { .. } => 3000,
         MemoryGrow { .. } => 8000,
-        MemoryCopy { .. } => 1000,
-        MemoryFill { .. } => 0,
+    
+        MemoryCopy { .. } => 0,  // Done in metering directly.
+        MemoryFill { .. } => 0, // Done in metering directly.
 
         BrTable { targets } => {
             2500 + 350 * targets.len() as u64
@@ -203,22 +204,22 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         //  TABLE  – only compiled when the feature is active
         //----------------------------------------------------------------
         #[cfg(feature = "table-metering")]
-        TableCopy { .. } => 0,
+        TableCopy { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
         TableCopy { .. } => u64::MAX,
 
         #[cfg(feature = "table-metering")]
-        TableFill { .. } => 0,
+        TableFill { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
         TableFill { .. } => u64::MAX,
     
         #[cfg(feature = "table-metering")]
-        TableGrow { .. } => 0,
+        TableGrow { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
         TableGrow { .. } => u64::MAX,
     
         #[cfg(feature = "table-metering")]
-        TableInit { .. } => 0,
+        TableInit { .. } => 0,  // Done in metering directly.
         #[cfg(not(feature = "table-metering"))]
         TableInit { .. } => u64::MAX,
 
@@ -236,6 +237,8 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         TableSize { .. } => 2_500,
         #[cfg(not(feature = "table-metering"))]
         TableSize { .. } => u64::MAX,
+    
+        MemoryInit { .. } |
 
         Try { .. } | Catch { .. } | CatchAll { .. } | Delegate { .. } | Throw { .. } | Rethrow { .. } | ThrowRef { .. } | TryTable { .. }
 
@@ -245,7 +248,7 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
 
         | TypedSelect { .. } | ReturnCall { .. } | ReturnCallIndirect { .. }
 
-        | MemoryInit { .. } | DataDrop { .. } | ElemDrop { .. }
+        | DataDrop { .. } | ElemDrop { .. }
 
         | MemoryDiscard { .. }
 

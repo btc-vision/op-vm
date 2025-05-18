@@ -423,7 +423,8 @@ where
                 );
             }
 
-            MemoryCopy { .. } | MemoryInit { .. } => {
+            MemoryCopy { .. } => {
+                // | MemoryInit { .. } add it if we ever enable it.
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
