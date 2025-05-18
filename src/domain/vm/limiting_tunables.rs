@@ -1,10 +1,8 @@
 use std::ptr::NonNull;
-
-use wasmer::sys::VMConfig;
-use wasmer::{
-    vm::{self, MemoryError, MemoryStyle, TableStyle, VMMemoryDefinition, VMTableDefinition},
-    MemoryType, Pages, TableType, Tunables,
-};
+use wasmer::sys::vm;
+use wasmer::sys::vm::{VMConfig, VMMemoryDefinition, VMTableDefinition};
+use wasmer_compiler::Tunables;
+use wasmer_types::{MemoryError, MemoryStyle, MemoryType, Pages, TableStyle, TableType};
 
 /// A custom tunables that allows you to set a memory limit.
 ///
