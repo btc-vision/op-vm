@@ -103,6 +103,8 @@ pub struct Metering<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> {
 
     /// Vector holding (params, results) for each type index.
     type_arities: Mutex<Option<Arc<Vec<(u32, u32)>>>>,
+
+    clamp_max_len: u32,
 }
 
 /// The function-level metering middleware.
@@ -120,6 +122,8 @@ pub struct FunctionMetering<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send +
     accumulated_cost: u64,
 
     last_i32_const: Option<u32>,
+
+    max_len: u32,
 }
 
 /// Represents the type of the metering points, either `Remaining` or
@@ -147,12 +151,13 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> Metering<F> {
     /// When providing a cost function, you should consider that branching operations do
     /// additional work to track the metering points and probably need to have a higher cost.
     /// To find out which operations are affected by this, you can call [`is_accounting`].
-    pub fn new(initial_limit: u64, cost_function: F) -> Self {
+    pub fn new(initial_limit: u64, cost_function: F, clamp_max_len: u32) -> Self {
         Self {
             initial_limit,
             cost_function: Arc::new(cost_function),
             global_indexes: Mutex::new(None),
             type_arities: Mutex::new(None),
+            clamp_max_len,
         }
     }
 }
@@ -164,6 +169,7 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> fmt::Debug for M
             .field("cost_function", &"<function>")
             .field("global_indexes", &self.global_indexes)
             .field("type_arities", &self.type_arities)
+            .field("clamp_max_len", &self.clamp_max_len)
             .finish()
     }
 }
@@ -179,6 +185,7 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync + 'static> Module
             accumulated_cost: 0,
             type_arities: self.type_arities.lock().unwrap().clone().unwrap(),
             last_i32_const: None,
+            max_len: self.clamp_max_len,
         })
     }
 
@@ -316,6 +323,24 @@ where
         }
     }
 
+    #[inline(always)]
+    fn clamp_len(&self, state: &mut MiddlewareReaderState<'_>) {
+        state.extend(&[
+            GlobalGet {
+                global_index: self.global_indexes.scratch_len.as_u32(),
+            },
+            I32Const {
+                value: self.max_len as i32,
+            },
+            I32GtU,
+            If {
+                blockty: WpTypeOrFuncType::Empty,
+            },
+            Unreachable,
+            End,
+        ]);
+    }
+
     /// Injects `global.scratch_len`-based gas accounting.
     #[inline(always)]
     fn charge_len_based(
@@ -415,6 +440,7 @@ where
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
                 self.log_len_based("memory.fill", MEMORY_FILL_PER_BLOCK, 16);
+                self.clamp_len(state);
                 self.charge_len_based(
                     state,
                     MEMORY_FILL_BASE,
@@ -429,6 +455,7 @@ where
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
                 self.log_len_based("memory.copy/init", MEMORY_COPY_PER_BLOCK, 16);
+                self.clamp_len(state);
                 self.charge_len_based(
                     state,
                     MEMORY_COPY_BASE,
@@ -443,6 +470,7 @@ where
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
                 self.log_len_based("table.copy/init", TABLE_COPY_PER_ELEM, 1);
+                self.clamp_len(state);
                 self.charge_len_based(state, TABLE_COPY_BASE, TABLE_COPY_PER_ELEM, LOG2_ELEM_BLOCK);
             }
 
@@ -452,6 +480,7 @@ where
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
                 self.log_len_based("table.fill", TABLE_FILL_PER_ELEM, 1);
+                self.clamp_len(state);
                 self.charge_len_based(state, TABLE_FILL_BASE, TABLE_FILL_PER_ELEM, LOG2_ELEM_BLOCK);
             }
 
@@ -461,6 +490,7 @@ where
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
                 self.log_len_based("table.grow", TABLE_GROW_PER_ELEM, 1);
+                self.clamp_len(state);
                 self.charge_len_based(state, TABLE_GROW_BASE, TABLE_GROW_PER_ELEM, LOG2_ELEM_BLOCK);
             }
 
@@ -605,6 +635,7 @@ pub fn set_remaining_points(ctx: &mut impl AsStoreMut, instance: &Instance, poin
 mod tests {
     use super::*;
 
+    use crate::domain::runner::MAX_MEMORY_COPY_SIZE;
     use std::sync::Arc;
     use wasmer::sys::EngineBuilder;
     use wasmer::{
@@ -663,7 +694,7 @@ mod tests {
 
     #[test]
     fn get_remaining_points_works() {
-        let metering = Arc::new(Metering::new(10, cost_function));
+        let metering = Arc::new(Metering::new(10, cost_function, MAX_MEMORY_COPY_SIZE));
         let mut compiler_config = Cranelift::default();
         compiler_config.push_middleware(metering);
         let mut store = Store::new(EngineBuilder::new(compiler_config));
@@ -711,7 +742,7 @@ mod tests {
 
     #[test]
     fn set_remaining_points_works() {
-        let metering = Arc::new(Metering::new(10, cost_function));
+        let metering = Arc::new(Metering::new(10, cost_function, MAX_MEMORY_COPY_SIZE));
         let mut compiler_config = Cranelift::default();
         compiler_config.push_middleware(metering);
         let mut store = Store::new(EngineBuilder::new(compiler_config));
@@ -781,7 +812,7 @@ mod tests {
 
         // Short loop
 
-        let metering = Arc::new(Metering::new(INITIAL_POINTS, cost));
+        let metering = Arc::new(Metering::new(INITIAL_POINTS, cost, MAX_MEMORY_COPY_SIZE));
         let mut compiler_config = Cranelift::default();
         compiler_config.push_middleware(metering);
         let mut store = Store::new(EngineBuilder::new(compiler_config));
@@ -809,7 +840,7 @@ mod tests {
 
         // Infinite loop
 
-        let metering = Arc::new(Metering::new(INITIAL_POINTS, cost));
+        let metering = Arc::new(Metering::new(INITIAL_POINTS, cost, MAX_MEMORY_COPY_SIZE));
         let mut compiler_config = Cranelift::default();
         compiler_config.push_middleware(metering);
 

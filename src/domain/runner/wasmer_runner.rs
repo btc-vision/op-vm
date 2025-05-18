@@ -20,14 +20,13 @@ use crate::domain::runner::{
     ValidateBitcoinAddressImport, VerifySchnorrImport, MAX_GAS_WASM_INIT,
 };
 
-use crate::domain::runner::MAX_MEMORY_COPY_SIZE;
-
 use crate::domain::vm::{
-    get_gas_cost, log_time_diff, ClampBulkMem, LimitingTunables, Metering, RejectFPMiddleware,
+    get_gas_cost, log_time_diff, LimitingTunables, Metering, RejectFPMiddleware,
 };
 
 #[cfg(feature = "contract-threading")]
 use crate::domain::runner::MAX_GAS_WASM_INIT_ATOMIC;
+use crate::domain::runner::MAX_MEMORY_COPY_SIZE;
 #[cfg(feature = "contract-threading")]
 use crate::domain::vm::{
     atomic_notify, atomic_wait32, atomic_wait64, default_cost_atomic, set_helper_index_atomic,
@@ -66,15 +65,15 @@ impl WasmerRunner {
     }
 
     fn create_engine(max_pages: u32) -> anyhow::Result<Store> {
-        let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost);
+        let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost, MAX_MEMORY_COPY_SIZE);
         let metering = Arc::new(meter);
 
         let mut compiler = Singlepass::default();
         compiler.canonicalize_nans(true);
 
         compiler.enable_verifier();
+        compiler.push_middleware(metering);
         compiler.push_middleware(RejectFPMiddleware::new());
-        compiler.push_middleware(ClampBulkMem::new(MAX_MEMORY_COPY_SIZE));
 
         #[cfg(feature = "contract-threading")]
         {
@@ -90,8 +89,6 @@ impl WasmerRunner {
             );
             compiler.push_middleware(Arc::new(atomic_meter));
         }
-
-        compiler.push_middleware(metering);
 
         let engine = EngineBuilder::new(compiler)
             .set_features(Option::from(Self::get_features()))
