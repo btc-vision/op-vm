@@ -1,6 +1,7 @@
 #![cfg(feature = "zk-snark")]
 #![forbid(unsafe_code)]
 
+use crate::domain::vm::vdf::fixed_cha_cha::FixedChaCha;
 use anyhow::{Context, Result};
 use ark_bls12_381::{Bls12_381, Fr};
 use ark_crypto_primitives::crh::CRHSchemeGadget;
@@ -18,23 +19,21 @@ use ark_ff::{BigInteger, PrimeField, UniformRand, Zero};
 use ark_groth16::{prepare_verifying_key, Groth16, Proof, ProvingKey, VerifyingKey};
 use ark_r1cs_std::{fields::fp::FpVar, prelude::*};
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
-use ark_std::{
-    rand::{rngs::StdRng, SeedableRng},
-    vec::Vec,
-};
+use ark_std::vec::Vec;
 use once_cell::sync::Lazy;
+use rand_core::SeedableRng;
 use sha2::{Digest, Sha256};
 use wasmer::RuntimeError;
 
 pub const OUTPUT_LEN: usize = 32;
 pub type Output = [u8; 32];
 
-fn seeded_rng() -> StdRng {
+fn seeded_rng() -> FixedChaCha {
     const CTX: &[u8] = b"OPNET_POSEIDON_BLS12_381_WIDTH3_RF8_RP57_V1";
     let hash = Sha256::digest(CTX);
     let mut lo = [0u8; 8];
     lo.copy_from_slice(&hash[..8]);
-    StdRng::seed_from_u64(u64::from_le_bytes(lo))
+    FixedChaCha::seed_from_u64(u64::from_le_bytes(lo))
 }
 
 fn build_poseidon_params() -> PoseidonConfig<Fr> {
@@ -113,7 +112,8 @@ fn gen_keys(t: u64) -> Result<(ProvingKey<Bls12_381>, VerifyingKey<Bls12_381>)> 
         iterations: t,
         pub_hash_fr: Fr::zero(),
     };
-    let mut rng = StdRng::seed_from_u64(42);
+
+    let mut rng = FixedChaCha::seed_from_u64(42);
     let pk = Groth16::<Bls12_381>::generate_random_parameters_with_reduction(dummy, &mut rng)
         .context("Groth16 parameter generation failed")?;
     Ok((pk.clone(), pk.vk))
@@ -140,9 +140,9 @@ pub fn prove(
         iterations: t,
         pub_hash_fr,
     };
-    let (pk, vk) = gen_keys(t)?;
 
-    let mut rng = StdRng::seed_from_u64(99);
+    let (pk, vk) = gen_keys(t)?;
+    let mut rng = FixedChaCha::seed_from_u64(99);
     let proof = Groth16::<Bls12_381>::create_random_proof_with_reduction(circ, &pk, &mut rng)
         .context("Groth16 proving failed")?;
 

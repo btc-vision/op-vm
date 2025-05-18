@@ -13,5 +13,6 @@ mod snark;
 #[cfg(feature = "vdf")]
 mod vdf;
 
+mod fixed_cha_cha;
 #[cfg(feature = "vdf-zk-snark")]
 mod vdf_zk_snark;
