@@ -101,15 +101,17 @@ fn little_endian_u64(x: u64) -> [u8; 8] {
     buf
 }
 
-async fn deterministic_delay(seed: u64, diff: u64) {
-    let mut vdf = VdfState::new(&little_endian_u64(seed));
+async fn deterministic_delay(seed: u64, diff: u64) -> Result<(), RuntimeError> {
+    let mut vdf = VdfState::new(&little_endian_u64(seed))?;
     for n in 0..diff {
-        prove_one_step(&mut vdf);
+        prove_one_step(&mut vdf)?;
 
         if n & 0xFF == 0 {
             tokio::task::yield_now().await;
         }
     }
+
+    Ok(())
 }
 
 #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
@@ -205,7 +207,16 @@ where
                     }
                 };
 
-                if !verify(&little_endian_u64(seed), &y, &proof, &vk) {
+                let verified = verify(&little_endian_u64(seed), &y, &proof, vk).map_err(|e| {
+                    println!("Error verifying proof: {}", e);
+                    RuntimeError::new("verification failed")
+                });
+
+                if verified.is_err() {
+                    return Ok(FAULT);
+                }
+
+                if !verified? {
                     return Ok(NOT_AUTHORIZED);
                 }
             }
