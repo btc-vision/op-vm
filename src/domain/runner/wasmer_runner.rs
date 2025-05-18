@@ -72,8 +72,8 @@ impl WasmerRunner {
         compiler.canonicalize_nans(true);
 
         compiler.enable_verifier();
-        compiler.push_middleware(metering);
         compiler.push_middleware(RejectFPMiddleware::new());
+        compiler.push_middleware(metering);
 
         #[cfg(feature = "contract-threading")]
         {
