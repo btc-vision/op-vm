@@ -26,7 +26,7 @@ use wasmer::{
 use wasmer_types::{GlobalIndex, ModuleInfo};
 
 const MAX_U64_COST: u64 = u64::MAX;
-const MAX_ACCUM: u64 = MAX_U64_COST - 1;
+pub const MAX_ACCUM: u64 = MAX_U64_COST - 1;
 //const FLUSH_THRESHOLD: u64 = 8;
 
 #[derive(Clone)]
