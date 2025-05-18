@@ -959,8 +959,8 @@ mod tests {
 
     fn div_cost2(op: &Operator, _: Option<(u32, u32)>) -> u64 {
         match op {
-            Operator::LocalGet { .. } | Operator::I32Const { .. } => 1,
-            Operator::I32DivU { .. } => 2,
+            LocalGet { .. } | I32Const { .. } => 1,
+            I32DivU { .. } => 2,
             _ => 0,
         }
     }
