@@ -26,6 +26,16 @@ use once_cell::sync::Lazy;
 
 pub const OUTPUT_LEN: usize = 32;
 
+fn seeded_rng() -> StdRng {
+    use sha2::{Digest, Sha256};
+
+    const CONTEXT: &[u8] = b"OPNET_POSEIDON_BLS12_381_WIDTH3_RF8_RP57_V1";
+
+    let hash = Sha256::digest(CONTEXT);
+    let seed = u64::from_le_bytes(hash[0..8].try_into().unwrap());
+    StdRng::seed_from_u64(seed)
+}
+
 pub fn build_poseidon_params() -> PoseidonConfig<Fr> {
     const WIDTH: usize = 3; // rate = 2, capacity = 1
     const FULL_ROUNDS: usize = 8;
@@ -33,7 +43,7 @@ pub fn build_poseidon_params() -> PoseidonConfig<Fr> {
     const ALPHA: u64 = 5; // S-box x^5
 
     let total_rounds = FULL_ROUNDS + PARTIAL_ROUNDS;
-    let mut rng = StdRng::seed_from_u64(0xA11CE);
+    let mut rng = seeded_rng();
 
     let ark: Vec<Vec<Fr>> = (0..total_rounds)
         .map(|_| (0..WIDTH).map(|_| Fr::rand(&mut rng)).collect())
