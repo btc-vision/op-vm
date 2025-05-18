@@ -105,8 +105,17 @@ impl WasmerRunner {
         // DoS: MUST BE DISABLED FEATURES
         features.tail_call = false; // Turns infinite self-tail recursion into a single metered opcode; impossible to bound with stack-depth limits.
 
+        #[cfg(feature = "contract-threading")]
+        {
+            features.threads = true; // TODO: atomic.wait + infinite timeout and scheduler starvation. Must set timeout to 0.
+        }
+
+        #[cfg(not(feature = "contract-threading"))]
+        {
+            features.threads = false;
+        }
+
         // DoS possible if enabled like it is.
-        features.threads = true; // TODO: atomic.wait + infinite timeout and scheduler starvation. Must set timeout to 0.
         features.reference_types = false; // TODO: Add length-aware gas on TableGrow. Enables table.grow/externref which can allocate millions of funcref slots in one opcode. https://github.com/WebAssembly/spec/blob/main/proposals/reference-types/Overview.md
         features.multi_memory = false; // TODO: Multiple memories break the single-meter assumption. Support must be added.
         features.exceptions = false; // Gas free operation. Not in metering. Can be used to bypass gas limits. Separate opcodes for catch and throw.
@@ -312,41 +321,6 @@ impl WasmerRunner {
 
         Ok(imp)
     }
-
-    /*fn fill_atomic_idx_globals(
-        store: &mut Store,
-        instance: &Instance,
-        module: &Module,
-    ) -> anyhow::Result<()> {
-        let mut idx_wait32 = u32::MAX;
-        let mut idx_wait64 = u32::MAX;
-        let mut idx_notify = u32::MAX;
-        let mut idx_spawn = u32::MAX;
-
-        for (i, (key, _)) in module.info().imports.iter().enumerate() {
-            match (key.module.as_str(), key.field.as_str()) {
-                ("env", "atomic_wait32") => idx_wait32 = i as u32,
-                ("env", "atomic_wait64") => idx_wait64 = i as u32,
-                ("env", "atomic_notify") => idx_notify = i as u32,
-                ("env", "thread_spawn") => idx_spawn = i as u32,
-                _ => {}
-            }
-        }
-
-        macro_rules! set {
-            ($name:literal, $val:expr) => {
-                instance
-                    .exports
-                    .get_global($name)?
-                    .set(store, ($val as i32).into())?;
-            };
-        }
-        set!("atomic_wait32_idx", idx_wait32);
-        set!("atomic_wait64_idx", idx_wait64);
-        set!("atomic_notify_idx", idx_notify);
-        set!("thread_spawn_idx", idx_spawn);
-        Ok(())
-    }*/
 
     fn calculate_remaining_gas(used_gas: u64, max_gas: u64) -> anyhow::Result<u64> {
         if MAX_GAS_WASM_INIT > max_gas {

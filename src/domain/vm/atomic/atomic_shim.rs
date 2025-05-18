@@ -28,10 +28,9 @@ use crate::domain::vm::prove;
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use ark_bls12_381::Bls12_381;
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
-use ark_groth16::Proof;
-use ark_groth16::VerifyingKey;
+use ark_groth16::{Proof, VerifyingKey};
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use ark_serialize::{Compress, Validate};
-
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use {crate::domain::vm::prove, ark_serialize::CanonicalDeserialize};
 
@@ -341,9 +340,7 @@ macro_rules! impl_wait_fn {
                         Err(_) => return FAULT,
                     };
 
-                    let mut buf =
-                        Vec::with_capacity(OUTPUT_LEN + proof.serialized_size(Compress::Yes));
-
+                    let mut buf = Vec::with_capacity(proof.serialized_size(Compress::Yes));
                     let mut vk_compressed = Vec::with_capacity(vk.serialized_size(Compress::Yes));
                     if vk
                         .serialize_compressed(&mut Cursor::new(&mut vk_compressed))
@@ -353,8 +350,6 @@ macro_rules! impl_wait_fn {
                         return FAULT;
                     }
 
-                    buf.extend_from_slice(&y);
-
                     if proof
                         .serialize_compressed(&mut Cursor::new(&mut buf))
                         .is_err()
@@ -363,14 +358,14 @@ macro_rules! impl_wait_fn {
                         return FAULT;
                     }
 
+                    let output_proof = [&y[..], &buf[..]].concat();
                     env.proofs.push(ProvenState {
-                        proof: buf,
+                        proof: output_proof,
                         vk: vk_compressed,
                     });
                 }
             }
 
-            /* ------------------ push caller-supplied proof ----------- */
             if env.return_proofs && !raw_proof.is_empty() && !want_proof {
                 env.proofs.push(ProvenState {
                     proof: raw_proof,
