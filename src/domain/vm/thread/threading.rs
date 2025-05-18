@@ -11,7 +11,7 @@ pub fn thread_spawn(mut ctx: FunctionEnvMut<'_, CustomEnv>) -> Result<i32, Runti
         .cloned()
         .ok_or_else(|| RuntimeError::new("no instance"))?;
 
-    Ok(0) // TODO: Implement thread spawning logic
+    Err(RuntimeError::new("Thread spawn not implemented yet"))
 
     /*let mem = InstanceWrapper::get_memory(&instance.instance)
         .map_err(|_| RuntimeError::new("no memory"))?;
