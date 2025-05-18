@@ -48,7 +48,7 @@ env_logger = { version = "0.11.8", optional = true }
 napi-build = "2.2.0"
 
 [features]
-default = ["debug-metering", "reference-types"]
+default = ["reference-types"]
 debug-metering = ["env_logger"]
 table-metering = []
 reference-types = ["table-metering"]
