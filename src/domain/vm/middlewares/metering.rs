@@ -27,6 +27,7 @@ use wasmer_types::{GlobalIndex, ModuleInfo};
 
 const MAX_U64_COST: u64 = u64::MAX;
 const MAX_ACCUM: u64 = MAX_U64_COST - 1;
+//const FLUSH_THRESHOLD: u64 = 8;
 
 #[derive(Clone)]
 struct MeteringGlobalIndexes {
@@ -254,6 +255,21 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync + 'static> Module
     }
 }
 
+#[inline(always)]
+fn is_trap_arith(op: &Operator) -> bool {
+    matches!(
+        op,
+        I32DivU { .. }
+            | I32DivS { .. }
+            | I64DivU { .. }
+            | I64DivS { .. }
+            | I32RemU { .. }
+            | I32RemS { .. }
+            | I64RemU { .. }
+            | I64RemS { .. }
+    )
+}
+
 /// Returns `true` if and only if the given operator is an accounting operator.
 /// Accounting operators do additional work to track the metering points.
 pub fn is_accounting(operator: &Operator) -> bool {
@@ -296,7 +312,7 @@ pub fn is_accounting(operator: &Operator) -> bool {
             | I32TruncF32S { .. } | I32TruncF32U { .. }
             | I32TruncF64S { .. } | I32TruncF64U { .. }
             | I64TruncF32S { .. } | I64TruncF32U { .. }
-            | I64TruncF64S { .. } | I64TruncF64U { .. }*/
+            | I64TruncF64S { .. } | I64TruncF64U { .. }
 
             // memory traps
             | I32Load { .. } | I64Load { .. } | F32Load { .. } | F64Load { .. }
@@ -312,7 +328,7 @@ pub fn is_accounting(operator: &Operator) -> bool {
 
             // table traps
             | TableGet { .. } | TableSet { .. } | TableGrow { .. }
-            | TableFill { .. } | TableCopy { .. } | TableInit { .. }
+            | TableFill { .. } | TableCopy { .. } | TableInit { .. }*/
 
             // Always-trap op
             | Unreachable
@@ -332,6 +348,44 @@ impl<F> FunctionMetering<F>
 where
     F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync,
 {
+    /// flush accumulated gas to the global counter
+    #[inline(always)]
+    fn flush_accumulated_cost(&mut self, state: &mut MiddlewareReaderState<'_>) {
+        if self.accumulated_cost == 0 {
+            return;
+        }
+        let g = &self.global_indexes;
+        state.extend(&[
+            GlobalGet {
+                global_index: g.remaining.as_u32(),
+            },
+            I64Const {
+                value: self.accumulated_cost as i64,
+            },
+            I64LtU,
+            If {
+                blockty: WpTypeOrFuncType::Empty,
+            },
+            I32Const { value: 1 },
+            GlobalSet {
+                global_index: g.exhausted.as_u32(),
+            },
+            Unreachable,
+            End,
+            GlobalGet {
+                global_index: g.remaining.as_u32(),
+            },
+            I64Const {
+                value: self.accumulated_cost as i64,
+            },
+            I64Sub,
+            GlobalSet {
+                global_index: g.remaining.as_u32(),
+            },
+        ]);
+        self.accumulated_cost = 0;
+    }
+
     #[inline(always)]
     fn log_len_based(&mut self, op: &'static str, per_block: u64, block: u32) {
         #[cfg(feature = "debug-metering")]
@@ -537,7 +591,14 @@ where
         let cost = (self.cost_function)(&operator, arity).min(MAX_ACCUM);
         self.accumulated_cost = self.accumulated_cost.saturating_add(cost);
 
-        if is_accounting(&operator) && self.accumulated_cost > 0 {
+        // micro-batch flush
+        if is_accounting(&operator) && self.accumulated_cost > 0 || is_trap_arith(&operator)
+        //self.accumulated_cost >= FLUSH_THRESHOLD
+        {
+            self.flush_accumulated_cost(state);
+        }
+
+        /*if is_accounting(&operator) && self.accumulated_cost > 0 {
             let g = &self.global_indexes;
             state.extend(&[
                 GlobalGet {
@@ -568,7 +629,7 @@ where
                 },
             ]);
             self.accumulated_cost = 0;
-        }
+        }*/
 
         state.push_operator(operator);
         Ok(())
