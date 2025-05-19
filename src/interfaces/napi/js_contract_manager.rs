@@ -1,4 +1,5 @@
 use crate::domain::runner;
+use crate::domain::runner::ExitData;
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -10,16 +11,17 @@ use crate::interfaces::{AccountTypeResponse, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
 use napi::bindgen_prelude::BufferSlice;
-use napi::bindgen_prelude::{BigInt, Buffer, Function, Promise};
+use napi::bindgen_prelude::{BigInt, Buffer, Function, Promise, PromiseRaw};
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
-use napi::{Error, JsNumber};
+use napi::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 #[napi]
 #[allow(dead_code)]
 pub const NEW_STORAGE_SLOT_GAS_COST: u64 = runner::NEW_STORAGE_SLOT_GAS_COST;
+
 #[napi]
 #[allow(dead_code)]
 pub const UPDATED_STORAGE_SLOT_GAS_COST: u64 = runner::UPDATED_STORAGE_SLOT_GAS_COST;
@@ -59,15 +61,17 @@ macro_rules! build_tsfn {
   (@queue $q:expr) => { $q };
 }
 
-/*macro_rules! abort_tsfn {
-    ($id:expr, $env:expr) => {
-        if !$id.aborted() {
-            $id.clone().abort()?;
-        }
+/*pub struct IntArrayResponse {
+    contract: Arc<JsContract>,
+    values: Box<[Value]>,
+}
 
-        $id.unref(&$env)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-    };
+impl ToNapiValue for IntArrayResponse {
+    unsafe fn to_napi_value(env_raw: napi_env, val: Self) -> napi::Result<napi_value> {
+        let env = Env::from_raw(env_raw);
+        let js_array = val.contract.convert_values_to_js_array(&env, val.values)?;
+        Ok(js_array.into_raw())
+    }
 }*/
 
 #[napi(js_name = "ContractManager")]
@@ -462,11 +466,8 @@ impl ContractManager {
         let length = exit_data.proofs.len() as u32;
         let mut array = env.create_array(length)?;
         for (_, proof) in exit_data.proofs.iter().enumerate() {
-            let proof_buffer = env
-                .create_buffer_with_data(proof.proof.to_vec())?
-                .into_raw();
-
-            let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+            let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+            let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
             let mut object = env.create_object()?;
             object.set_named_property("proof", proof_buffer)?;
@@ -528,7 +529,7 @@ impl ContractManager {
         contract.set_environment_variables(environment_variables)
     }
 
-    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn on_deploy(
         &self,
         env: Env,
@@ -582,11 +583,8 @@ impl ContractManager {
                 let length = exit_data.proofs.len() as u32;
                 let mut array = env.create_array(length)?;
                 for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let proof_buffer = env
-                        .create_buffer_with_data(proof.proof.to_vec())?
-                        .into_raw();
-
-                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+                    let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+                    let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
                     let mut object = env.create_object()?;
                     object.set_named_property("proof", proof_buffer)?;
@@ -602,9 +600,48 @@ impl ContractManager {
         )?;
 
         Ok(promise)
-    }
+    }*/
 
     #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    pub fn on_deploy<'env>(
+        &self,
+        env: &'env Env,
+        id: BigInt,
+        calldata: Buffer,
+    ) -> napi::Result<PromiseRaw<'env, ExitData>> {
+        let id = id.get_u64().1;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason("Contract not found"))?
+            .clone();
+
+        let fut = async move {
+            let raw = tokio::task::spawn_blocking(move || contract.on_deploy(calldata.to_vec()))
+                .await
+                .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
+
+            /*ExitData {
+                status: raw.status,
+                data: raw.data.to_vec(),
+                gas_used: raw.gas_used,
+                proofs: raw
+                    .proofs
+                    .into_iter()
+                    .map(|p| ProvenState {
+                        proof: p.proof.to_vec(),
+                        vk: p.vk.to_vec(),
+                    })
+                    .collect(),
+            }*/
+
+            Ok::<_, Error>(raw)
+        };
+
+        env.spawn_future(fut)
+    }
+
+    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn execute(&self, env: Env, id: BigInt, calldata: Buffer) -> napi::Result<napi::JsObject> {
         let id_u64 = id.get_u64().1;
         let contract_arc = self
@@ -658,11 +695,8 @@ impl ContractManager {
                 let length = exit_data.proofs.len() as u32;
                 let mut array = env.create_array(length)?;
                 for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let proof_buffer = env
-                        .create_buffer_with_data(proof.proof.to_vec())?
-                        .into_raw();
-
-                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+                    let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+                    let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
                     let mut object = env.create_object()?;
                     object.set_named_property("proof", proof_buffer)?;
@@ -678,9 +712,48 @@ impl ContractManager {
         )?;
 
         Ok(promise)
+    }*/
+
+    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    pub fn execute<'env>(
+        &self,
+        env: &'env Env,
+        id: BigInt,
+        calldata: Buffer,
+    ) -> napi::Result<PromiseRaw<'env, ExitData>> {
+        let id = id.get_u64().1;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason("Contract not found"))?
+            .clone();
+
+        let fut = async move {
+            let raw = tokio::task::spawn_blocking(move || contract.execute(calldata.to_vec()))
+                .await
+                .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
+
+            /*ExitData {
+                status: raw.status,
+                data: raw.data.to_vec(),
+                gas_used: raw.gas_used,
+                proofs: raw
+                    .proofs
+                    .into_iter()
+                    .map(|p| ProvenState {
+                        proof: p.proof.to_vec(),
+                        vk: p.vk.to_vec(),
+                    })
+                    .collect(),
+            }*/
+
+            Ok::<_, Error>(raw)
+        };
+
+        env.spawn_future(fut)
     }
 
-    #[napi(ts_return_type = "Promise<number[]>")]
+    /*#[napi(ts_return_type = "Promise<number[]>")]
     pub fn call_export_by_name(
         &self,
         env: Env,
@@ -734,7 +807,44 @@ impl ContractManager {
         )?;
 
         Ok(promise)
-    }
+    }*/
+
+    /*#[napi(ts_return_type = "Promise<number[]>")]
+    pub fn call_export_by_name<'env>(
+        &self,
+        env: &'env Env,
+        id: BigInt,
+        function_name: String,
+        params: Vec<JsNumber>,
+    ) -> napi::Result<PromiseRaw<'env, IntArrayResponse>> {
+        let id_u64 = id.get_u64().1;
+        let contract = self
+            .contracts
+            .get(&id_u64)
+            .ok_or_else(|| Error::from_reason("Contract not found"))?
+            .clone();
+
+        let int_params = params
+            .into_iter()
+            .map(|n| n.get_int32())
+            .collect::<napi::Result<Vec<i32>>>()?;
+
+        let fut = async move {
+            let fn_name = function_name; // moved into async block
+            let values_boxed = tokio::task::spawn_blocking(move || {
+                contract.call_export_by_name(&fn_name, &int_params)
+            })
+            .await
+            .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
+
+            Ok::<_, Error>(IntArrayResponse {
+                contract,
+                values: values_boxed,
+            })
+        };
+
+        env.spawn_future(fut)
+    }*/
 
     #[napi]
     pub fn length(&self) -> Result<BigInt, Error> {

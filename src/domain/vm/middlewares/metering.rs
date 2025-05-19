@@ -386,26 +386,24 @@ where
         self.accumulated_cost = 0;
     }
 
+    #[cfg(feature = "debug-metering")]
     #[inline(always)]
     fn log_len_based(&mut self, op: &'static str, per_block: u64, block: u32) {
-        #[cfg(feature = "debug-metering")]
-        {
-            if let Some(len) = self.last_i32_const.take() {
-                let blocks = (len as u64 + block as u64 - 1) / block as u64;
-                let charged = per_block * blocks;
-                log::info!(
-                    "instrumenting {}: constant len = {} → +{} gas",
-                    op,
-                    len,
-                    charged
-                );
-            } else {
-                log::info!(
-                    "instrumenting {}: dynamic len → +{}·blocks gas",
-                    op,
-                    per_block
-                );
-            }
+        if let Some(len) = self.last_i32_const.take() {
+            let blocks = (len as u64 + block as u64 - 1) / block as u64;
+            let charged = per_block * blocks;
+            log::info!(
+                "instrumenting {}: constant len = {} → +{} gas",
+                op,
+                len,
+                charged
+            );
+        } else {
+            log::info!(
+                "instrumenting {}: dynamic len → +{}·blocks gas",
+                op,
+                per_block
+            );
         }
     }
 
@@ -525,6 +523,7 @@ where
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
+                #[cfg(feature = "debug-metering")]
                 self.log_len_based("memory.fill", MEMORY_FILL_PER_BLOCK, 16);
                 self.clamp_len(state);
                 self.charge_len_based(
@@ -540,6 +539,7 @@ where
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
+                #[cfg(feature = "debug-metering")]
                 self.log_len_based("memory.copy/init", MEMORY_COPY_PER_BLOCK, 16);
                 self.clamp_len(state);
                 self.charge_len_based(
@@ -555,6 +555,7 @@ where
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
+                #[cfg(feature = "debug-metering")]
                 self.log_len_based("table.copy/init", TABLE_COPY_PER_ELEM, 1);
                 self.clamp_len(state);
                 self.charge_len_based(state, TABLE_COPY_BASE, TABLE_COPY_PER_ELEM, LOG2_ELEM_BLOCK);
@@ -565,6 +566,7 @@ where
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
+                #[cfg(feature = "debug-metering")]
                 self.log_len_based("table.fill", TABLE_FILL_PER_ELEM, 1);
                 self.clamp_len(state);
                 self.charge_len_based(state, TABLE_FILL_BASE, TABLE_FILL_PER_ELEM, LOG2_ELEM_BLOCK);
@@ -575,6 +577,7 @@ where
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
+                #[cfg(feature = "debug-metering")]
                 self.log_len_based("table.grow", TABLE_GROW_PER_ELEM, 1);
                 self.clamp_len(state);
                 self.charge_len_based(state, TABLE_GROW_BASE, TABLE_GROW_PER_ELEM, LOG2_ELEM_BLOCK);

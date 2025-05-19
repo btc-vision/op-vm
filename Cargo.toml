@@ -48,8 +48,9 @@ env_logger = { version = "0.11.8", optional = true }
 napi-build = "2.2.0"
 
 [features]
-default = ["reference-types"]
+default = ["reference-types", "transient-storage"]
 debug-metering = ["env_logger"]
+transient-storage = []
 table-metering = []
 reference-types = ["table-metering"]
 vdf-zk-snark = ["zk-snark"]

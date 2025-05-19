@@ -1,5 +1,5 @@
 use crate::domain::runner::{ExitData, ProvenStateWrapped};
-use napi::bindgen_prelude::{BigInt, ToNapiValue};
+use napi::bindgen_prelude::BigInt;
 
 #[napi(object)]
 pub struct ExitDataResponse {

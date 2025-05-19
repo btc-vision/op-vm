@@ -212,8 +212,6 @@ impl WasmerRunner {
                 "calldata" => import!(GetCalldataImport),
                 "load" => import!(StorageLoadImport),
                 "store" => import!(StorageStoreImport),
-                // "tload" => import!(TransientLoadImport),
-                // "tstore" => import!(TransientStoreImport),
                 "call" => import!(CallOtherContractImport),
                 "callResult" => import!(GetCallResultImport),
                 "deployFromAddress" => import!(DeployFromAddressImport),
@@ -230,6 +228,12 @@ impl WasmerRunner {
                 "verifySchnorrSignature" => import!(VerifySchnorrImport),
             },
         };
+
+        #[cfg(feature = "transient-storage")]
+        {
+            import_object.define("env", "tload", import!(TransientLoadImport));
+            import_object.define("env", "tstore", import!(TransientStoreImport));
+        }
 
         #[cfg(feature = "contract-threading")]
         {

@@ -18,7 +18,7 @@ use napi::bindgen_prelude::{Array, BigInt, Buffer};
 use napi::Env;
 use napi::Error;
 use napi::JsUnknown;
-use std::sync::{Arc, Mutex, TryLockError};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use tokio::runtime::Runtime;
 use wasmer::Value;
 
@@ -65,12 +65,12 @@ impl JsContract {
             .get_runtime()
             .ok_or_else(|| Error::from_reason("No available runtimes in the pool".to_string()))?;
 
-            if params.memory_pages_used >= MAX_PAGES {
-                return Err(Error::from_reason("No more memory pages available"));
-            }
+        if params.memory_pages_used >= MAX_PAGES {
+            return Err(Error::from_reason("No more memory pages available"));
+        }
 
-            let max_pages = MAX_PAGES - params.memory_pages_used;
-            let return_proofs = params.return_proofs;
+        let max_pages = MAX_PAGES - params.memory_pages_used;
+        let return_proofs = params.return_proofs;
 
         //let runtime = Arc::new(Runtime::new()?);
         let custom_env: CustomEnv = CustomEnv::new(
@@ -139,14 +139,7 @@ impl JsContract {
     ) -> Result<()> {
         let contract = self.contract.clone();
 
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
+        let mut contract = contract.try_lock().map_err(Self::contract_error_lock())?;
         contract
             .set_environment_variables(environment_variables.into())
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
@@ -197,6 +190,7 @@ impl JsContract {
         result
     }
 
+    #[allow(dead_code)]
     pub fn call_export_by_name(
         &self,
         function_name: &str,
@@ -263,14 +257,7 @@ impl JsContract {
         let contract = self.contract.clone();
 
         let result = {
-            let contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
+            let contract = contract.try_lock().map_err(Self::contract_error_lock())?;
             contract.read_memory(offset, length)
         };
 
@@ -284,14 +271,7 @@ impl JsContract {
         let offset = offset.get_u64().1;
         let contract = self.contract.clone();
 
-        let contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
+        let contract = contract.try_lock().map_err(Self::contract_error_lock())?;
         contract
             .write_memory(offset, &data)
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
@@ -302,14 +282,7 @@ impl JsContract {
     pub fn get_used_gas(&self) -> Result<BigInt> {
         let contract = self.contract.clone();
         let gas = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
+            let mut contract = contract.try_lock().map_err(Self::contract_error_lock())?;
             contract.get_used_gas()
         };
 
@@ -319,37 +292,35 @@ impl JsContract {
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
         let gas = gas.get_u64().1;
         let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
+        let mut contract = contract.try_lock().map_err(Self::contract_error_lock())?;
+        contract.use_gas(gas);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn contract_error_lock() -> fn(TryLockError<MutexGuard<ContractService>>) -> Error {
+        |e| match e {
             TryLockError::Poisoned(_) => {
                 Error::from_reason("Contract mutex is poisoned".to_string())
             }
             TryLockError::WouldBlock => {
                 Error::from_reason("Contract mutex is already locked".to_string())
             }
-        })?;
-        contract.use_gas(gas);
-
-        Ok(())
+        }
     }
 
     pub fn get_exit_data(&self) -> Result<ExitDataResponse> {
         let contract = self.contract.clone();
         let result: ExitDataResponse = {
-            let contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
+            let contract = contract.try_lock().map_err(Self::contract_error_lock())?;
             contract.get_exit_data().into()
         };
 
         Ok(result)
     }
 
-    /// Convert raw Wasmer `Value`s into a JS Array in the current Env
+    #[allow(dead_code)]
     pub fn convert_values_to_js_array(&self, env: &Env, values: Box<[Value]>) -> Result<Array> {
         Self::box_values_to_js_array(env, values)
     }
@@ -365,6 +336,7 @@ impl Drop for JsContract {
 }
 
 impl JsContract {
+    #[allow(dead_code)]
     fn value_to_js(env: &Env, value: &Value) -> Result<JsUnknown> {
         match value {
             Value::I32(v) => {
@@ -405,6 +377,7 @@ impl JsContract {
         }
     }
 
+    #[allow(dead_code)]
     pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
         let vals: Vec<Value> = values.clone().into_vec();
         let mut js_array = env.create_array(vals.len() as u32)?;
