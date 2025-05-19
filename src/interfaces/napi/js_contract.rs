@@ -178,8 +178,8 @@ impl JsContract {
             // TODO: LEAVE LIKE THIS FOR NOW, SEE IF WE CAN STOP THE ERROR: ERROR: ERROR EVENTUALLY
             // FIXED THE MASSIVE ERROR OVERFLOW OF ERROR USING ROOT_CAUSE
             Err(e) => {
-                println!("Error: {:?}", e);
-                println!("Root cause: {:?}", e.root_cause());
+                //println!("Error: {:?}", e);
+                //println!("Root cause: {:?}", e.root_cause());
 
                 Err(Error::from_reason(e.root_cause().to_string()))
             }

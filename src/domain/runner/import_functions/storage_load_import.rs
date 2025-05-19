@@ -28,12 +28,7 @@ impl StorageLoadImport {
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        println!("Loading storage with key: {:?}", key);
-
         let response = env.storage_load_external.execute(&key, &env.runtime)?;
-
-        println!("Storage load response: {:?}", response);
-
         let value = response[0..32]
             .try_into()
             .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?;

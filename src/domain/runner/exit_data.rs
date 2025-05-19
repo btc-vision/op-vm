@@ -31,8 +31,6 @@ impl ExitData {
 
 impl ToNapiValue for ExitData {
     unsafe fn to_napi_value(env_raw: sys::napi_env, val: Self) -> NapiResult<sys::napi_value> {
-        println!("ExitData::to_napi_value");
-
         let env = Env::from_raw(env_raw);
 
         let mut obj = env.create_object()?;
