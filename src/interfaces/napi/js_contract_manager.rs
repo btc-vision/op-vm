@@ -198,44 +198,50 @@ impl ContractManager {
     #[napi(constructor)]
     pub fn new(
         max_idling_runtimes: u32,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        //)]
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+        )]
         storage_load_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        //)]
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+        )]
         storage_store_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        //)]
-        call_other_contract_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        //)]
-        deploy_from_address_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
-        //#[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+        )]
+        call_other_contract_js_function: Function<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+        >,
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+        )]
+        deploy_from_address_js_function: Function<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+        >,
+        #[napi(ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<void>")]
         console_log_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
-        //#[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        #[napi(ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<void>")]
         emit_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        //)]
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+        )]
         inputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
-        //)]
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+        )]
         outputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
-        //)]
+        #[napi(
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
+        )]
         account_type_js_function: Function<
             ThreadSafeJsImportResponse,
             Promise<AccountTypeResponse>,
         >,
-        //#[napi(
-        //    ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
-        //)]
+        #[napi(
+            ts_arg_type = "(err: Error, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
+        )]
         block_hash_js_function: Function<BlockHashRequest, Promise<JsBlockHashResponse>>,
     ) -> Result<Self, Error> {
         let storage_load_tsfn = build_tsfn!(

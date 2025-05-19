@@ -63,20 +63,15 @@ impl ExternalFunction for GenericExternalFunction<Promise<Buffer>> {
             );
 
             let promise = tsfn.call_async(Ok(request)).await;
-
             let promise = match promise {
                 Ok(promise) => promise,
                 Err(e) => {
-                    println!("{:?}", e);
-                    println!("Error calling tsfn function: {}", e);
                     return Err(RuntimeError::new(e.reason));
                 }
             };
 
-            let buffer = promise.await.map_err(|e| {
-                println!("Error awaiting promise: {}", e);
-                RuntimeError::new(e.reason)
-            })?;
+            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+
             Ok(buffer.to_vec())
         };
 
