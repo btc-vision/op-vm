@@ -21,8 +21,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         println!("Panic occurred: {:?}", e);
     }));
 
-    println!("Hello from main");
-
     // Create JS functions
     let new_storag_slot_gas_cost = JsBigInt::from_u64(&mut cx, NEW_STORAGE_SLOT_GAS_COST);
     let updated_storage_slot_gas_cost = JsBigInt::from_u64(&mut cx, UPDATED_STORAGE_SLOT_GAS_COST);
@@ -108,8 +106,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         "UPDATED_STORAGE_SLOT_GAS_COST",
         updated_storage_slot_gas_cost,
     )?;
-
-    println!("Rust initialized");
 
     Ok(())
 }

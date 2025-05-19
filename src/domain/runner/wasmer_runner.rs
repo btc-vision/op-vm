@@ -270,21 +270,16 @@ impl WasmerRunner {
         max_gas: u64,
     ) -> anyhow::Result<Box<[Value]>> {
         response.map_err(|e| {
-            if e.to_string().contains("unreachable") {
-                let gas_used = self.get_remaining_gas();
-                if gas_used == 0 {
-                    anyhow::anyhow!("out of gas (consumed: {})", max_gas)
-                } else {
-                    let out_of_memory = self.is_out_of_memory().unwrap_or(false);
-
-                    if out_of_memory {
-                        anyhow::anyhow!("out of memory")
-                    } else {
-                        anyhow::anyhow!(e)
-                    }
-                }
+            let gas_used = self.get_remaining_gas();
+            if gas_used == 0 {
+                anyhow::anyhow!("out of gas (consumed: {})", max_gas)
             } else {
-                anyhow::anyhow!(e)
+                let out_of_memory = self.is_out_of_memory().unwrap_or(false);
+                if out_of_memory {
+                    anyhow::anyhow!("out of memory")
+                } else {
+                    anyhow::anyhow!(e)
+                }
             }
         })
     }

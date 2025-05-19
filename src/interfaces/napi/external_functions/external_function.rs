@@ -50,86 +50,54 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
         AS: AsArguments + Send + Sync + 'static,
         R: FromJsObject + 'static,
     {
-        println!("External handle: {}", self.name());
         let (sender, mut receiver) = std::sync::mpsc::channel::<Result<R, RuntimeError>>();
         let handle = self.handle();
         let channel = self.channel();
         let success = sender.clone();
         let failure = success.clone();
 
-        std::thread::spawn(move || {
-            channel.send(move |mut cx| {
-                println!("Hello handle 22!!!");
-                let this = cx.undefined();
-                let console = cx
-                    .global_object()
-                    .get::<JsObject, _, _>(&mut cx, "console")?;
-                let log = console.get::<JsFunction, _, _>(&mut cx, "log")?;
-                println!("Promise in channel 1 ");
-                let callback = handle.to_inner(&mut cx);
-                let args = args.as_arguments(&mut cx)?;
-                let msg = cx.string("Message from callback");
-                log.call(&mut cx, this, vec![msg.upcast()])?;
-                println!("Promise in channel 2 ");
+        channel.send(move |mut cx| {
+            let this = cx.undefined();
+            let callback = handle.to_inner(&mut cx);
+            let args = args.as_arguments(&mut cx)?;
 
-                let result: Result<(), Throw> = {
-                    println!("Promise in channel - registering 1");
-                    let call = callback.call(&mut cx, this, args)?;
-                    println!("Promise in channel - registering 2");
-                    let promise: Handle<JsPromise> = call.downcast_or_throw(&mut cx)?;
+            let result: Result<(), Throw> = {
+                let call = callback.call(&mut cx, this, args)?;
+                let promise: Handle<JsPromise> = call.downcast_or_throw(&mut cx)?;
+                let success = JsFunction::new(&mut cx, move |mut cx| {
+                    let result = cx.argument::<JsValue>(0)?;
+                    let _ = success.send(Ok(R::from_js_object(&mut cx, result)
+                        .or_else(|err| cx.throw_error(err.to_string()))?));
 
-                    // Register promise callbacks
-                    // promise.then(succes(value), failure(value));
-                    println!("Promise in channel - registering 3");
+                    Ok(cx.undefined())
+                })?;
 
-                    let then = promise.get::<JsFunction, _, _>(&mut cx, "then")?;
+                let failure = JsFunction::new(&mut cx, move |mut cx| {
+                    let result = cx.argument::<JsError>(0)?;
+                    let msg = result.to_string(&mut cx).unwrap().value(&mut cx);
+                    let _ = failure.send(Err(RuntimeError::new(msg)));
+                    Ok(cx.undefined())
+                })?;
 
-                    println!("Promise in channel - registering - success");
-                    let success = JsFunction::new(&mut cx, move |mut cx| {
-                        let result = cx.argument::<JsValue>(0)?;
+                let then = promise.get::<JsFunction, _, _>(&mut cx, "then")?;
+                then.call(&mut cx, promise, vec![success.upcast(), failure.upcast()])?;
+                Ok(())
+            };
 
-                        println!("Success promise");
-                        let _ = success.send(Ok(R::from_js_object(&mut cx, result)
-                            .or_else(|err| cx.throw_error(err.to_string()))?));
+            // Notice error
+            if let Err(err) = result {
+                let _ = sender.send(Err(RuntimeError::new(err.to_string())));
 
-                        Ok(cx.undefined())
-                    })?;
-                    println!("Promise in channel - registering - failure");
-                    let failure = JsFunction::new(&mut cx, move |mut cx| {
-                        let result = cx.argument::<JsValue>(0)?;
-                        let msg = result.to_string(&mut cx).unwrap().value(&mut cx);
-                        println!("failure promise: {}", msg);
-                        let _ = failure.send(Err(RuntimeError::new(msg)));
-                        Ok(cx.undefined())
-                    })?;
-
-                    println!("register callbacks - pre call");
-                    then.call(&mut cx, promise, vec![success.upcast(), failure.upcast()])?;
-                    println!("register callbacks - done");
-                    Ok(())
-                };
-
-                // Notice error
-                if let Err(err) = result {
-                    println!("Error occurred during registering callbacks");
-                    let _ = sender.send(Err(RuntimeError::new(err.to_string())));
-
-                    cx.throw_error(err.to_string())
-                } else {
-                    Ok(())
-                }
-            });
+                cx.throw_error(err.to_string())
+            } else {
+                Ok(())
+            }
         });
-
-        println!("Waing on block on");
-
-        let result = if let Ok(value) = receiver.recv_timeout(Duration::from_secs(1)) {
+        let result = if let Ok(value) = receiver.recv_timeout(Duration::from_secs(100)) {
             value
         } else {
             Err(RuntimeError::new("Problem to getting result from JS"))
         };
-
-        println!("Waing on block on - done");
 
         result
     }

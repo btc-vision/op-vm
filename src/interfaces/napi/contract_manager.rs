@@ -3,7 +3,7 @@ use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::Contract;
 use crate::interfaces::napi::contract::ContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
-use crate::interfaces::napi::runtime_pool::RuntimePool;
+use crate::interfaces::napi::runtime_pool::{self, RuntimePool};
 use bytes::Bytes;
 use neon::prelude::*;
 use neon::types::buffer::TypedArray;
@@ -38,7 +38,6 @@ type BoxedContractManager = JsBox<Arc<Mutex<ContractManager>>>;
 /// JS wrapped functions
 impl ContractManager {
     pub fn js_constructor<'a>(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        println!("Hello from constructor");
         let this: Handle<'_, JsObject> = cx.this::<JsObject>()?;
 
         let max_idling_runtimes = cx.argument::<JsNumber>(0)?.value(&mut cx) as u32;
@@ -83,7 +82,6 @@ impl ContractManager {
     }
 
     pub fn js_instantiate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        println!("Instantiate");
         let this = cx.this::<JsObject>()?;
         let inner = this.get::<BoxedContractManager, _, _>(&mut cx, INNER)?;
         let mut manager = inner
@@ -114,8 +112,6 @@ impl ContractManager {
         // BitcoinNetworkRequest::try_from(network_number).or_else(|e| cx.throw_range_error(e))?;
         let network = BitcoinNetworkRequest::Testnet;
         let is_debug_mode = cx.argument::<JsBoolean>(7)?.value(&mut cx);
-
-        println!("Instantiate arguments parsed");
 
         let mut params = ContractParameter {
             bytecode: None,
@@ -237,7 +233,6 @@ impl ContractManager {
             .get_exit_data(contract_id)
             .or_else(|err| cx.throw_error(err.to_string()))?;
 
-        // TODO: To JsObject?
         Ok(data.to_js_object(&mut cx)?)
     }
 
@@ -255,8 +250,6 @@ impl ContractManager {
         let gas = manager
             .get_used_gas(contract_id)
             .or_else(|err| cx.throw_error(err.to_string()))?;
-
-        println!("Returning gas: {}", gas);
 
         Ok(JsBigInt::from_u64(&mut cx, gas))
     }
@@ -330,18 +323,14 @@ impl ContractManager {
             .set_environment_variables(contract_id, environment_variables)
             .or_else(|err| cx.throw_error(err.to_string()))?;
 
-        println!("Set invironment variable");
-
         Ok(cx.undefined())
     }
 
     pub fn js_on_deploy(mut cx: FunctionContext) -> JsResult<JsPromise> {
-        println!("Hello from on deploy js");
-
         let this = cx.this::<JsObject>()?;
         let inner: Handle<'_, BoxedContractManager> =
             this.get::<BoxedContractManager, _, _>(&mut cx, INNER)?;
-        let manager = Arc::clone(&inner);
+        let inner = Arc::clone(&inner);
 
         let contract_id = cx
             .argument::<JsBigInt>(0)?
@@ -352,10 +341,15 @@ impl ContractManager {
         let channel = cx.channel();
 
         // Call task on background
-        let runtime = manager.lock().unwrap().runtime_pool.get_runtime().unwrap();
-        runtime.spawn_blocking(move || {
-            let manager = manager.lock().unwrap();
-            let result = manager.on_deploy(contract_id, calldata);
+        let contract = inner
+            .lock()
+            .unwrap()
+            .get_contract(contract_id)
+            .unwrap()
+            .clone();
+
+        std::thread::spawn(move || {
+            let result = contract.on_deploy(calldata);
 
             // Sync with main JS thread
             channel.send(move |mut cx| match result {
@@ -375,11 +369,10 @@ impl ContractManager {
     }
 
     pub fn js_execute(mut cx: FunctionContext) -> JsResult<JsPromise> {
-        println!("Hello from execute JS");
         let this = cx.this::<JsObject>()?;
         let inner: Handle<'_, BoxedContractManager> =
             this.get::<BoxedContractManager, _, _>(&mut cx, INNER)?;
-        let manager = Arc::clone(&inner);
+        let inner = Arc::clone(&inner);
 
         let contract_id = cx
             .argument::<JsBigInt>(0)?
@@ -388,25 +381,28 @@ impl ContractManager {
         let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
         let (deferred, promise) = cx.promise();
         let channel = cx.channel();
+        let contract = inner
+            .lock()
+            .unwrap()
+            .get_contract(contract_id)
+            .unwrap()
+            .clone();
+
         std::thread::spawn(move || {
-            let result = manager.lock().unwrap().execute(contract_id, calldata);
+            let result = contract.execute(calldata);
 
             // Sync with main JS thread
-            channel.send(move |mut cx| {
-                println!("Hello from execute - done 1");
-                match result {
-                    Ok(exit_data) => {
-                        let result = exit_data.to_js_object(&mut cx).unwrap();
-                        Ok(deferred.resolve(&mut cx, result))
-                    }
-                    Err(err) => {
-                        let string = err.to_string();
-                        let error = cx.error(string.clone())?;
-                        let value = cx.string(string);
+            channel.send(move |mut cx| match result {
+                Ok(exit_data) => {
+                    let result = exit_data.to_js_object(&mut cx).unwrap();
+                    Ok(deferred.resolve(&mut cx, result))
+                }
+                Err(err) => {
+                    let string = err.to_string();
+                    let error = cx.error(string.clone())?;
 
-                        deferred.reject(&mut cx, error);
-                        Ok(())
-                    }
+                    deferred.reject(&mut cx, error);
+                    Ok(())
                 }
             })
         });
@@ -560,14 +556,11 @@ impl ContractManager {
     }
 
     pub fn on_deploy(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
-        println!("Hello from on deploy");
         self.get_contract(contract_id)?.on_deploy(calldata)
     }
 
     pub fn execute(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
-        println!("Hello from execute");
         let result = self.get_contract(contract_id)?.execute(calldata);
-        println!("Hello from execute - done");
         result
     }
 

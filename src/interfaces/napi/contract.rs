@@ -32,6 +32,7 @@ pub struct ContractParameter {
     pub(crate) is_debug_mode: bool,
 }
 
+#[derive(Clone)]
 pub struct Contract {
     runner: Arc<Mutex<WasmerRunner>>,
     contract: Arc<Mutex<ContractService>>,
@@ -193,13 +194,11 @@ impl Contract {
 
     pub fn on_deploy(&self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         // Lock the contract and call
-        println!("Ondeploy contract inside");
         let mut contract = self
             .contract
             .lock()
             .or_else(|e| Err(anyhow!(e.to_string())))?;
 
-        println!("Ondeploy contract inside - unlocked");
         let call_result = contract.on_deploy(calldata);
 
         match call_result {
@@ -209,7 +208,6 @@ impl Contract {
     }
 
     pub fn execute(&self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
-        println!("Execute contract inside");
         let time = Local::now();
         // Lock the contract and call
         let mut contract = self
@@ -217,23 +215,10 @@ impl Contract {
             .lock()
             .or_else(|err| Err(anyhow::anyhow!(err.to_string())))?;
 
-        println!("Execute contract inside - unlocked");
-
         let call_result = contract.execute(calldata);
-
-        println!("Execute contract inside - done");
-
-        let result = match call_result {
-            Ok(values) => Ok(values),
-
-            // TODO: LEAVE LIKE THIS FOR NOW, SEE IF WE CAN STOP THE ERROR: ERROR: ERROR EVENTUALLY
-            // FIXED THE MASSIVE ERROR OVERFLOW OF ERROR USING ROOT_CAUSE
-            Err(e) => Err(anyhow::anyhow!(e.root_cause().to_string())),
-        };
-
         log_time_diff(&time, "JsContract::execute");
 
-        result
+        call_result
     }
 
     pub async fn call_export_by_name(

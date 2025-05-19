@@ -1205,18 +1205,18 @@ dependencies = [
 
 [[package]]
 name = "linkme"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22d227772b5999ddc0690e733f734f95ca05387e329c4084fe65678c51198ffe"
+checksum = "a1b1703c00b2a6a70738920544aa51652532cacddfec2e162d2e29eae01e665c"
 dependencies = [
  "linkme-impl",
 ]
 
 [[package]]
 name = "linkme-impl"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71a98813fa0073a317ed6a8055dcd4722a49d9b862af828ee68449adb799b6be"
+checksum = "04d55ca5d5a14363da83bf3c33874b8feaa34653e760d5216d7ef9829c88001a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1363,9 +1363,9 @@ dependencies = [
 
 [[package]]
 name = "neon"
-version = "1.1.0-alpha.1"
+version = "1.1.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd61d11347a66a4b5d10bf413169a99de37cf7b11191fac0c6f0b242878fa889"
+checksum = "dc81ad718d7f9a9bb937ad630c088ac85ebf92d04c0f97e0586e68c24c3560a2"
 dependencies = [
  "either",
  "getrandom 0.2.15",
@@ -1376,14 +1376,13 @@ dependencies = [
  "semver",
  "send_wrapper",
  "smallvec",
- "tokio",
 ]
 
 [[package]]
 name = "neon-macros"
-version = "1.1.0-alpha.1"
+version = "1.1.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ef6445e861d1eeaf27de82311abc6e16e660c1d3afebf2b62ef9a2909cd86d0"
+checksum = "e769ae03a4c633352f5bf5c89465abd85145a9b1458cc078bdd4adccf0a6ddb4"
 dependencies = [
  "proc-macro2",
  "quote",

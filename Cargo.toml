@@ -13,7 +13,7 @@ wasmer-middlewares = "5.0.4"
 wasmer-types = "5.0.4"
 wasmer-compiler = "5.0.4"
 anyhow = "1.0.97"
-neon = {version="1.1.0-alpha.1", features=["napi-8", "futures"]}
+neon = {version="1.1.0-alpha.2"}
 tokio = {version="1.44.2", features=["rt","rt-multi-thread", "macros", "time", "sync"]}
 chrono = "0.4.40"
 sha2 = "0.10.8"

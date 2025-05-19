@@ -108,9 +108,7 @@ impl GenericExternalFunction {
             contract_id: self.contract_id,
         };
 
-        Ok(self
-            .call(runtime, args)
-            .or_else(|err| Err(RuntimeError::new(err.to_string())))?)
+        self.call(runtime, args)
     }
 
     pub fn execute_empty_request(&self, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
@@ -118,9 +116,7 @@ impl GenericExternalFunction {
             contract_id: self.contract_id,
         };
 
-        Ok(self
-            .call(runtime, args)
-            .or_else(|err| Err(RuntimeError::new(err.to_string())))?)
+        self.call(runtime, args)
     }
 
     pub fn execute_no_response(
@@ -133,8 +129,6 @@ impl GenericExternalFunction {
             contract_id: self.contract_id,
         };
 
-        Ok(self
-            .call(runtime, args)
-            .or_else(|err| Err(RuntimeError::new(err.to_string())))?)
+        self.call(runtime, args)
     }
 }
