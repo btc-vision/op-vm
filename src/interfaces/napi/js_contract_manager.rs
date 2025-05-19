@@ -535,7 +535,7 @@ impl ContractManager {
         contract.set_environment_variables(environment_variables)
     }
 
-    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn on_deploy(
         &self,
         env: Env,
@@ -606,9 +606,9 @@ impl ContractManager {
         )?;
 
         Ok(promise)
-    }
+    }*/
 
-    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn on_deploy<'env>(
         &self,
         env: &'env Env,
@@ -645,9 +645,9 @@ impl ContractManager {
         };
 
         env.spawn_future(fut)
-    }*/
+    }
 
-    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn execute(&self, env: Env, id: BigInt, calldata: Buffer) -> napi::Result<napi::JsObject> {
         let id_u64 = id.get_u64().1;
         let contract_arc = self
@@ -714,9 +714,9 @@ impl ContractManager {
         )?;
 
         Ok(promise)
-    }
+    }*/
 
-    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn execute<'env>(
         &self,
         env: &'env Env,
@@ -753,7 +753,7 @@ impl ContractManager {
         };
 
         env.spawn_future(fut)
-    }*/
+    }
 
     /*#[napi(ts_return_type = "Promise<number[]>")]
     pub fn call_export_by_name(
