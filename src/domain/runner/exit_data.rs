@@ -2,7 +2,10 @@ use crate::domain::runner::ProvenState;
 use bitcoin::hex::DisplayHex;
 use napi::bindgen_prelude::{BufferSlice, ToNapiValue};
 use napi::Result as NapiResult;
-use napi::{sys, Env, NapiRaw};
+use napi::{
+    bindgen_prelude::{FromNapiValue, JsObjectValue, JsValue, Object},
+    sys, Env,
+};
 use std::fmt::Display;
 
 #[derive(Clone, Debug, Default)]
@@ -33,14 +36,14 @@ impl ToNapiValue for ExitData {
     unsafe fn to_napi_value(env_raw: sys::napi_env, val: Self) -> NapiResult<sys::napi_value> {
         let env = Env::from_raw(env_raw);
 
-        let mut obj = env.create_object()?;
-        obj.set_named_property("status", env.create_uint32(val.status))?;
+        let mut obj = Object::new(&env)?;
+        obj.set_named_property("status", val.status)?;
         obj.set_named_property("data", BufferSlice::from_data(&env, val.data)?)?;
-        obj.set_named_property("gasUsed", env.create_bigint_from_u64(val.gas_used))?;
+        obj.set_named_property("gasUsed", val.gas_used)?;
 
         let mut arr = env.create_array(val.proofs.len() as u32)?;
         for (idx, p) in val.proofs.into_iter().enumerate() {
-            let mut proof_obj = env.create_object()?;
+            let mut proof_obj = Object::new(&env)?;
             proof_obj.set_named_property("proof", BufferSlice::from_data(&env, p.proof)?)?;
             proof_obj.set_named_property("vk", BufferSlice::from_data(&env, p.vk)?)?;
 
@@ -50,6 +53,27 @@ impl ToNapiValue for ExitData {
         obj.set_named_property("proofs", arr)?;
 
         Ok(obj.raw())
+    }
+}
+
+impl FromNapiValue for ExitData {
+    unsafe fn from_napi_value(env_raw: sys::napi_env, value: sys::napi_value) -> NapiResult<Self> {
+        let obj = Object::from_raw(env_raw, value);
+        let proofs: Vec<Object> = obj.get_named_property("proofs")?;
+        Ok(ExitData::new(
+            obj.get_named_property("status")?,
+            obj.get_named_property::<u32>("gasUsed")? as u64,
+            obj.get_named_property("data")?,
+            proofs
+                .into_iter()
+                .map(|p| {
+                    Ok(ProvenState {
+                        proof: p.get_named_property::<BufferSlice>("proof")?.to_vec(),
+                        vk: p.get_named_property::<BufferSlice>("vk")?.to_vec(),
+                    })
+                })
+                .collect::<NapiResult<Vec<_>>>()?,
+        ))
     }
 }
 

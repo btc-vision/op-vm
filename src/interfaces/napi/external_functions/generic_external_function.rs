@@ -9,7 +9,7 @@ use crate::interfaces::{ExternalFunction, ExternalFunctionNoData, ExternalFuncti
 
 /// Generic wrapper around a `ThreadsafeFunction` whose JavaScript promise
 /// resolves to any N-API value `R` (`Buffer`, `()`, …).
-pub struct GenericExternalFunction<Return: 'static + FromNapiValue = Unknown> {
+pub struct GenericExternalFunction<Return: 'static + FromNapiValue = Unknown<'static>> {
     tsfn: Arc<
         ThreadsafeFunction<
             ThreadSafeJsImportResponse,
@@ -58,15 +58,17 @@ impl ExternalFunction for GenericExternalFunction<Promise<Buffer>> {
 
         let fut = async move {
             let promise = tsfn.call_async(Ok(request)).await;
+
             let promise = match promise {
                 Ok(promise) => promise,
                 Err(e) => {
-                    return Err(RuntimeError::new(e.reason));
+                    return Err(RuntimeError::new(e.reason.clone()));
                 }
             };
 
-            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
+            let buffer = promise
+                .await
+                .map_err(|e| RuntimeError::new(e.reason.clone()))?;
             Ok(buffer.to_vec())
         };
 
@@ -83,9 +85,9 @@ impl ExternalFunctionNoData for GenericExternalFunction<Promise<Buffer>> {
             let promise = tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason))?;
+                .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
-            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason.clone()))?;
             Ok(buffer.to_vec())
         };
 
@@ -102,9 +104,12 @@ impl ExternalFunctionNoResponse for GenericExternalFunction<Promise<()>> {
             let promise = tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason))?;
+                .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
-            promise.await.map_err(|e| RuntimeError::new(e.reason))
+            promise.await.map_err(|e| {
+                println!("Error awaiting promise: {}", e);
+                RuntimeError::new(e.reason.clone())
+            })
         };
 
         runtime.block_on(fut)

@@ -63,11 +63,13 @@ impl AccountTypeExternalFunction {
                 .tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason));
+                .map_err(|e| RuntimeError::new(e.reason.clone()));
 
             let promise = response?;
 
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            let data = promise
+                .await
+                .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
             Ok(data)
         };

@@ -13,8 +13,8 @@ wasmer-compiler-singlepass = "6.0.1"
 wasmer-types = "6.0.1"
 wasmer-compiler = "6.0.1"
 anyhow = "1.0.98"
-napi = { version = "3.0.0-alpha.33", default-features = false, features = ["napi9", "tokio_rt", "async", "tokio_io_std"] }
-napi-derive = "3.0.0-alpha.29"
+napi = { version = "3.0.0-beta.2", default-features = false, features = ["napi9", "tokio_rt", "async", "tokio_io_std"] }
+napi-derive = "3.0.0-beta.2"
 tokio = { version = "1.45.0", features = ["time"] }
 chrono = "0.4.41"
 sha2 = "0.10.8"
@@ -61,6 +61,3 @@ zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-
 [profile.release]
 lto = true
 strip = "symbols"
-
-[patch.crates-io]
-napi = { git = "https://github.com/btc-vision/napi-rs.git", rev = "8dbdc15375e3b3e5a07a683a015864d58010509f" }
