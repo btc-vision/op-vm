@@ -298,7 +298,10 @@ impl WasmerRunner {
 
         let gas_used_by_start_function = imp.get_remaining_gas();
         if gas_used_by_start_function > remaining_gas {
-            return Err(anyhow::anyhow!("out of gas (consumed: {})", max_gas));
+            return Err(anyhow::anyhow!(
+                "out of gas (consumed: {})",
+                gas_used_by_start_function
+            ));
         }
 
         let remaining_gas = remaining_gas - gas_used_by_start_function;
