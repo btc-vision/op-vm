@@ -14,10 +14,9 @@ use crate::interfaces::{
 use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
-use napi::bindgen_prelude::{Array, BigInt, Buffer};
+use napi::bindgen_prelude::{BigInt, Buffer};
 use napi::Env;
 use napi::Error;
-use napi::JsUnknown;
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use tokio::runtime::Runtime;
 use wasmer::Value;
@@ -321,7 +320,11 @@ impl JsContract {
     }
 
     #[allow(dead_code)]
-    pub fn convert_values_to_js_array(&self, env: &Env, values: Box<[Value]>) -> Result<Array> {
+    pub fn convert_values_to_js_array<'env>(
+        &self,
+        env: &'env Env,
+        values: Box<[Value]>,
+    ) -> Result<Array<'env>> {
         Self::box_values_to_js_array(env, values)
     }
 }
@@ -337,38 +340,39 @@ impl Drop for JsContract {
 
 impl JsContract {
     #[allow(dead_code)]
-    fn value_to_js(env: &Env, value: &Value) -> Result<JsUnknown> {
+    fn value_to_js<'a>(env: &'a Env, value: &'a Value) -> Result<Unknown<'a>> {
+        let raw_env = env.raw();
         match value {
             Value::I32(v) => {
-                let js_value = env.create_int32(*v)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
             Value::I64(v) => {
-                let js_value = env.create_int64(*v)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
 
             Value::F32(v) => {
-                let js_value = env.create_double(*v as f64)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v as f64)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
 
             Value::F64(v) => {
-                let js_value = env.create_double(*v)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v as f64)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
 
             Value::V128(v) => {
-                let js_value = env.create_bigint_from_u128(*v)?;
-                let unknown = js_value.into_unknown()?;
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
@@ -378,9 +382,8 @@ impl JsContract {
     }
 
     #[allow(dead_code)]
-    pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
-        let vals: Vec<Value> = values.clone().into_vec();
-        let mut js_array = env.create_array(vals.len() as u32)?;
+    pub fn box_values_to_js_array<'a>(env: &'a Env, values: Box<[Value]>) -> Result<Array<'a>> {
+        let mut js_array = env.create_array(values.len() as u32)?;
 
         for value in values.iter() {
             let js_value = JsContract::value_to_js(env, value)?;

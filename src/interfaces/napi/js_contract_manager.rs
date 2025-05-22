@@ -10,8 +10,9 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 use crate::interfaces::{AccountTypeResponse, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::BufferSlice;
-use napi::bindgen_prelude::{BigInt, Buffer, Function, Promise, PromiseRaw};
+use napi::bindgen_prelude::{
+    BigInt, Buffer, BufferSlice, Function, JsObjectValue, Object, Promise, PromiseRaw,
+};
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
 use napi::Error;
@@ -445,7 +446,7 @@ impl ContractManager {
     }
 
     #[napi(ts_return_type = "ExitDataResponse")]
-    pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<napi::JsObject, Error> {
+    pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<Object, Error> {
         let id = contract_id.get_u64().1;
 
         let contract = self
@@ -455,8 +456,8 @@ impl ContractManager {
 
         let exit_data = contract.get_exit_data()?;
 
-        let mut js_object = env.create_object()?;
-        js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
+        let mut js_object = Object::new(&env)?;
+        js_object.set_named_property("status", exit_data.status)?;
         js_object.set_named_property(
             "data",
             BufferSlice::from_data(&env, exit_data.data.to_vec())?,
@@ -469,7 +470,7 @@ impl ContractManager {
             let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
             let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
-            let mut object = env.create_object()?;
+            let mut object = Object::new(&env)?;
             object.set_named_property("proof", proof_buffer)?;
             object.set_named_property("vk", vk_buffer)?;
 
