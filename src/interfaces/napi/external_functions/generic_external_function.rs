@@ -87,7 +87,9 @@ impl ExternalFunctionNoData for GenericExternalFunction<Promise<Buffer>> {
                 .await
                 .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
-            let buffer = promise.await.map_err(|e| RuntimeError::new(e.reason.clone()))?;
+            let buffer = promise
+                .await
+                .map_err(|e| RuntimeError::new(e.reason.clone()))?;
             Ok(buffer.to_vec())
         };
 
@@ -106,10 +108,9 @@ impl ExternalFunctionNoResponse for GenericExternalFunction<Promise<()>> {
                 .await
                 .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
-            promise.await.map_err(|e| {
-                println!("Error awaiting promise: {}", e);
-                RuntimeError::new(e.reason.clone())
-            })
+            promise
+                .await
+                .map_err(|e| RuntimeError::new(e.reason.clone()))
         };
 
         runtime.block_on(fut)
