@@ -1,16 +1,27 @@
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use crate::interfaces::{ExternalFunctionNoResponse, GenericExternalFunction};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::bindgen_prelude::Promise;
+use napi::threadsafe_function::ThreadsafeFunction;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 pub struct EmitExternalFunction {
-    external_function: GenericExternalFunction,
+    external_function: GenericExternalFunction<Promise<()>>,
 }
 
 impl EmitExternalFunction {
     pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        tsfn: Arc<
+            ThreadsafeFunction<
+                ThreadSafeJsImportResponse,
+                Promise<()>,
+                ThreadSafeJsImportResponse,
+                true,
+                false,
+                128,
+            >,
+        >,
         id: u64,
     ) -> Self {
         Self {

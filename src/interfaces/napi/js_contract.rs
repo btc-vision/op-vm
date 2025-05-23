@@ -14,12 +14,10 @@ use crate::interfaces::{
 use bytes::Bytes;
 use chrono::Local;
 use napi::bindgen_prelude::*;
-use napi::bindgen_prelude::{Array, BigInt, Buffer};
+use napi::bindgen_prelude::{BigInt, Buffer};
 use napi::Env;
 use napi::Error;
-use napi::JsUnknown;
-use std::panic::catch_unwind;
-use std::sync::{Arc, Mutex, TryLockError};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use tokio::runtime::Runtime;
 use wasmer::Value;
 
@@ -32,70 +30,82 @@ pub struct JsContract {
 
 impl JsContract {
     pub fn from(params: JsContractParameter, manager: &ContractManager, id: u64) -> Result<Self> {
-        catch_unwind(|| {
-            let time = Local::now();
+        //catch_unwind(|| {
+        let time = Local::now();
 
-            let storage_load_tsfn = manager.storage_load_tsfn.clone();
-            let storage_store_tsfn = manager.storage_store_tsfn.clone();
-            let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
-            let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
-            let console_log_tsfn = manager.console_log_tsfn.clone();
-            let emit_tsfn = manager.emit_tsfn.clone();
-            let inputs_tsfn = manager.inputs_tsfn.clone();
-            let outputs_tsfn = manager.outputs_tsfn.clone();
-            let account_type_tsfn = manager.account_type_tsfn.clone();
-            let block_hash_tsfn = manager.block_hash_tsfn.clone();
+        let storage_load_tsfn = manager.storage_load_tsfn.clone();
+        let storage_store_tsfn = manager.storage_store_tsfn.clone();
+        let call_other_contract_tsfn = manager.call_other_contract_tsfn.clone();
+        let deploy_from_address_tsfn = manager.deploy_from_address_tsfn.clone();
+        let console_log_tsfn = manager.console_log_tsfn.clone();
+        let emit_tsfn = manager.emit_tsfn.clone();
+        let inputs_tsfn = manager.inputs_tsfn.clone();
+        let outputs_tsfn = manager.outputs_tsfn.clone();
+        let account_type_tsfn = manager.account_type_tsfn.clone();
+        let block_hash_tsfn = manager.block_hash_tsfn.clone();
 
-            // Create ExternalFunction instances with contract_id
-            let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
-            let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
-            let call_other_contract_external =
-                CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
-            let deploy_from_address_external =
-                DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
-            let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
-            let emit_external = EmitExternalFunction::new(emit_tsfn, id);
-            let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
-            let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
-            let account_type_external = AccountTypeExternalFunction::new(account_type_tsfn, id);
-            let block_hash_external = BlockHashExternalFunction::new(block_hash_tsfn, id);
+        // Create ExternalFunction instances with contract_id
+        let storage_load_external = StorageLoadExternalFunction::new(storage_load_tsfn, id);
+        let storage_store_external = StorageStoreExternalFunction::new(storage_store_tsfn, id);
+        let call_other_contract_external =
+            CallOtherContractExternalFunction::new(call_other_contract_tsfn, id);
+        let deploy_from_address_external =
+            DeployFromAddressExternalFunction::new(deploy_from_address_tsfn, id);
+        let console_log_external = ConsoleLogExternalFunction::new(console_log_tsfn, id);
+        let emit_external = EmitExternalFunction::new(emit_tsfn, id);
+        let inputs_external = InputsExternalFunction::new(inputs_tsfn, id);
+        let outputs_external = OutputsExternalFunction::new(outputs_tsfn, id);
+        let account_type_external = AccountTypeExternalFunction::new(account_type_tsfn, id);
+        let block_hash_external = BlockHashExternalFunction::new(block_hash_tsfn, id);
 
-            // Obtain a Runtime from the pool
-            let runtime = manager.runtime_pool.get_runtime().ok_or_else(|| {
-                Error::from_reason("No available runtimes in the pool".to_string())
-            })?;
+        // Obtain a Runtime from the pool
+        let runtime = manager
+            .runtime_pool
+            .get_runtime()
+            .ok_or_else(|| Error::from_reason("No available runtimes in the pool".to_string()))?;
 
-            if params.memory_pages_used >= MAX_PAGES {
-                return Err(Error::from_reason("No more memory pages available"));
-            }
+        if params.memory_pages_used >= MAX_PAGES {
+            return Err(Error::from_reason("No more memory pages available"));
+        }
 
-            let max_pages = MAX_PAGES - params.memory_pages_used;
-            let return_proofs = params.return_proofs;
+        let max_pages = MAX_PAGES - params.memory_pages_used;
+        let return_proofs = params.return_proofs;
 
-            //let runtime = Arc::new(Runtime::new()?);
-            let custom_env: CustomEnv = CustomEnv::new(
-                params.network.into(),
-                storage_load_external,
-                storage_store_external,
-                call_other_contract_external,
-                deploy_from_address_external,
-                console_log_external,
-                emit_external,
-                inputs_external,
-                outputs_external,
-                account_type_external,
-                block_hash_external,
-                runtime.clone(),
+        //let runtime = Arc::new(Runtime::new()?);
+        let custom_env: CustomEnv = CustomEnv::new(
+            params.network.into(),
+            storage_load_external,
+            storage_store_external,
+            call_other_contract_external,
+            deploy_from_address_external,
+            console_log_external,
+            emit_external,
+            inputs_external,
+            outputs_external,
+            account_type_external,
+            block_hash_external,
+            runtime.clone(),
+            max_pages,
+            return_proofs,
+        )
+        .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
+
+        let runner: WasmerRunner;
+
+        if let Some(bytecode) = params.bytecode {
+            runner = WasmerRunner::from_bytecode(
+                &bytecode,
+                params.used_gas,
+                params.max_gas,
                 max_pages,
-                return_proofs,
+                custom_env,
+                params.is_debug_mode,
             )
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-
-            let runner: WasmerRunner;
-
-            if let Some(bytecode) = params.bytecode {
-                runner = WasmerRunner::from_bytecode(
-                    &bytecode,
+        } else if let Some(serialized) = params.serialized {
+            unsafe {
+                runner = WasmerRunner::from_serialized(
+                    serialized,
                     params.used_gas,
                     params.max_gas,
                     max_pages,
@@ -103,34 +113,23 @@ impl JsContract {
                     params.is_debug_mode,
                 )
                 .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-            } else if let Some(serialized) = params.serialized {
-                unsafe {
-                    runner = WasmerRunner::from_serialized(
-                        serialized,
-                        params.used_gas,
-                        params.max_gas,
-                        max_pages,
-                        custom_env,
-                        params.is_debug_mode,
-                    )
-                    .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-                }
-            } else {
-                return Err(Error::from_reason("No bytecode or serialized data"));
             }
+        } else {
+            return Err(Error::from_reason("No bytecode or serialized data"));
+        }
 
-            let contract = JsContract::from_runner(
-                runner,
-                params.max_gas,
-                runtime.clone(),
-                manager.runtime_pool.clone(),
-            )?;
+        let contract = JsContract::from_runner(
+            runner,
+            params.max_gas,
+            runtime.clone(),
+            manager.runtime_pool.clone(),
+        )?;
 
-            log_time_diff(&time, "JsContract::from");
+        log_time_diff(&time, "JsContract::from");
 
-            Ok(contract)
-        })
-        .unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
+        Ok(contract)
+        //})
+        //.unwrap_or_else(|e| Err(Error::from_reason(format!("{:?}", e))))
     }
 
     pub fn set_environment_variables(
@@ -139,14 +138,7 @@ impl JsContract {
     ) -> Result<()> {
         let contract = self.contract.clone();
 
-        let mut contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
+        let mut contract = contract.try_lock().map_err(Self::contract_error_lock())?;
         contract
             .set_environment_variables(environment_variables.into())
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
@@ -154,7 +146,7 @@ impl JsContract {
         Ok(())
     }
 
-    pub fn on_deploy(&self, calldata: Buffer) -> Result<ExitData> {
+    pub fn on_deploy(&self, calldata: Vec<u8>) -> Result<ExitData> {
         // Lock the contract and call
         let mut contract = self
             .contract
@@ -169,7 +161,7 @@ impl JsContract {
         }
     }
 
-    pub fn execute(&self, calldata: Buffer) -> Result<ExitData> {
+    pub fn execute(&self, calldata: Vec<u8>) -> Result<ExitData> {
         let time = Local::now();
         // Lock the contract and call
         let mut contract = self
@@ -192,6 +184,7 @@ impl JsContract {
         result
     }
 
+    #[allow(dead_code)]
     pub fn call_export_by_name(
         &self,
         function_name: &str,
@@ -258,14 +251,7 @@ impl JsContract {
         let contract = self.contract.clone();
 
         let result = {
-            let contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
+            let contract = contract.try_lock().map_err(Self::contract_error_lock())?;
             contract.read_memory(offset, length)
         };
 
@@ -279,14 +265,7 @@ impl JsContract {
         let offset = offset.get_u64().1;
         let contract = self.contract.clone();
 
-        let contract = contract.try_lock().map_err(|e| match e {
-            TryLockError::Poisoned(_) => {
-                Error::from_reason("Contract mutex is poisoned".to_string())
-            }
-            TryLockError::WouldBlock => {
-                Error::from_reason("Contract mutex is already locked".to_string())
-            }
-        })?;
+        let contract = contract.try_lock().map_err(Self::contract_error_lock())?;
         contract
             .write_memory(offset, &data)
             .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
@@ -297,14 +276,7 @@ impl JsContract {
     pub fn get_used_gas(&self) -> Result<BigInt> {
         let contract = self.contract.clone();
         let gas = {
-            let mut contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
+            let mut contract = contract.try_lock().map_err(Self::contract_error_lock())?;
             contract.get_used_gas()
         };
 
@@ -314,38 +286,40 @@ impl JsContract {
     pub fn use_gas(&self, gas: BigInt) -> Result<()> {
         let gas = gas.get_u64().1;
         let contract = self.contract.clone();
-        let mut contract = contract.try_lock().map_err(|e| match e {
+        let mut contract = contract.try_lock().map_err(Self::contract_error_lock())?;
+        contract.use_gas(gas);
+
+        Ok(())
+    }
+
+    #[inline]
+    fn contract_error_lock() -> fn(TryLockError<MutexGuard<ContractService>>) -> Error {
+        |e| match e {
             TryLockError::Poisoned(_) => {
                 Error::from_reason("Contract mutex is poisoned".to_string())
             }
             TryLockError::WouldBlock => {
                 Error::from_reason("Contract mutex is already locked".to_string())
             }
-        })?;
-        contract.use_gas(gas);
-
-        Ok(())
+        }
     }
 
     pub fn get_exit_data(&self) -> Result<ExitDataResponse> {
         let contract = self.contract.clone();
         let result: ExitDataResponse = {
-            let contract = contract.try_lock().map_err(|e| match e {
-                TryLockError::Poisoned(_) => {
-                    Error::from_reason("Contract mutex is poisoned".to_string())
-                }
-                TryLockError::WouldBlock => {
-                    Error::from_reason("Contract mutex is already locked".to_string())
-                }
-            })?;
+            let contract = contract.try_lock().map_err(Self::contract_error_lock())?;
             contract.get_exit_data().into()
         };
 
         Ok(result)
     }
 
-    /// Convert raw Wasmer `Value`s into a JS Array in the current Env
-    pub fn convert_values_to_js_array(&self, env: &Env, values: Box<[Value]>) -> Result<Array> {
+    #[allow(dead_code)]
+    pub fn convert_values_to_js_array<'env>(
+        &self,
+        env: &'env Env,
+        values: Box<[Value]>,
+    ) -> Result<Array<'env>> {
         Self::box_values_to_js_array(env, values)
     }
 }
@@ -360,38 +334,40 @@ impl Drop for JsContract {
 }
 
 impl JsContract {
-    fn value_to_js(env: &Env, value: &Value) -> Result<JsUnknown> {
+    #[allow(dead_code)]
+    fn value_to_js<'a>(env: &'a Env, value: &'a Value) -> Result<Unknown<'a>> {
+        let raw_env = env.raw();
         match value {
             Value::I32(v) => {
-                let js_value = env.create_int32(*v)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
             Value::I64(v) => {
-                let js_value = env.create_int64(*v)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
 
             Value::F32(v) => {
-                let js_value = env.create_double(*v as f64)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v as f64)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
 
             Value::F64(v) => {
-                let js_value = env.create_double(*v)?;
-                let unknown = js_value.into_unknown();
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v as f64)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
 
             Value::V128(v) => {
-                let js_value = env.create_bigint_from_u128(*v)?;
-                let unknown = js_value.into_unknown()?;
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
+                let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
             }
@@ -400,9 +376,9 @@ impl JsContract {
         }
     }
 
-    pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
-        let vals: Vec<Value> = values.clone().into_vec();
-        let mut js_array = env.create_array(vals.len() as u32)?;
+    #[allow(dead_code)]
+    pub fn box_values_to_js_array<'a>(env: &'a Env, values: Box<[Value]>) -> Result<Array<'a>> {
+        let mut js_array = env.create_array(values.len() as u32)?;
 
         for value in values.iter() {
             let js_value = JsContract::value_to_js(env, value)?;
