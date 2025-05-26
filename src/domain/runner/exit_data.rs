@@ -1,6 +1,7 @@
 use crate::domain::runner::ProvenState;
+use crate::domain::vm::vec_to_hex;
 use bitcoin::hex::DisplayHex;
-use napi::bindgen_prelude::{BufferSlice, ToNapiValue};
+use napi::bindgen_prelude::ToNapiValue;
 use napi::Result as NapiResult;
 use napi::{
     bindgen_prelude::{FromNapiValue, JsObjectValue, JsValue, Object},
@@ -37,14 +38,29 @@ impl ToNapiValue for ExitData {
 
         let mut obj = Object::new(&env)?;
         obj.set_named_property("status", val.status)?;
+
+        #[cfg(not(feature = "use-strings-instead-of-buffers"))]
         obj.set_named_property("data", BufferSlice::from_data(&env, val.data)?)?;
+
+        #[cfg(feature = "use-strings-instead-of-buffers")]
+        obj.set_named_property("data", vec_to_hex(&val.data))?;
+
         obj.set_named_property("gasUsed", val.gas_used)?;
 
         let mut arr = env.create_array(val.proofs.len() as u32)?;
         for (idx, p) in val.proofs.into_iter().enumerate() {
             let mut proof_obj = Object::new(&env)?;
-            proof_obj.set_named_property("proof", BufferSlice::from_data(&env, p.proof)?)?;
-            proof_obj.set_named_property("vk", BufferSlice::from_data(&env, p.vk)?)?;
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
+            {
+                proof_obj.set_named_property("proof", BufferSlice::from_data(&env, p.proof)?)?;
+                proof_obj.set_named_property("vk", BufferSlice::from_data(&env, p.vk)?)?;
+            }
+
+            #[cfg(feature = "use-strings-instead-of-buffers")]
+            {
+                proof_obj.set_named_property("proof", vec_to_hex(&p.proof))?;
+                proof_obj.set_named_property("vk", vec_to_hex(&p.vk))?;
+            }
 
             arr.insert(idx as u32)?;
         }
@@ -66,10 +82,33 @@ impl FromNapiValue for ExitData {
             proofs
                 .into_iter()
                 .map(|p| {
-                    Ok(ProvenState {
-                        proof: p.get_named_property::<BufferSlice>("proof")?.to_vec(),
-                        vk: p.get_named_property::<BufferSlice>("vk")?.to_vec(),
-                    })
+                    #[cfg(feature = "use-strings-instead-of-buffers")]
+                    {
+                        let proof = p.get_named_property::<String>("proof")?;
+                        let vk = p.get_named_property::<String>("vk")?;
+                        Ok(ProvenState {
+                            proof: hex::decode(proof).map_err(|e| {
+                                napi::Error::new(
+                                    napi::Status::InvalidArg,
+                                    format!("Failed to decode proof: {}", e),
+                                )
+                            })?,
+                            vk: hex::decode(vk).map_err(|e| {
+                                napi::Error::new(
+                                    napi::Status::InvalidArg,
+                                    format!("Failed to decode vk: {}", e),
+                                )
+                            })?,
+                        })
+                    }
+
+                    #[cfg(not(feature = "use-strings-instead-of-buffers"))]
+                    {
+                        Ok(ProvenState {
+                            proof: p.get_named_property::<BufferSlice>("proof")?.to_vec(),
+                            vk: p.get_named_property::<BufferSlice>("vk")?.to_vec(),
+                        })
+                    }
                 })
                 .collect::<NapiResult<Vec<_>>>()?,
         ))
