@@ -1,3 +1,4 @@
+#![cfg(feature = "use-strings-instead-of-buffers")]
 use wasmer::RuntimeError;
 
 /// Convert a `Vec<u8>` into a lowercase hexadecimal `String`.

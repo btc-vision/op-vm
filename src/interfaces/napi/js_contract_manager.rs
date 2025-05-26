@@ -1,6 +1,5 @@
 use crate::domain::runner;
 use crate::domain::runner::ExitData;
-use crate::domain::vm::hex_to_vec;
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -13,8 +12,14 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use napi::bindgen_prelude::{BigInt, Function, JsObjectValue, Object, Promise, PromiseRaw};
 
+#[cfg(feature = "use-strings-instead-of-buffers")]
+use napi::bindgen_prelude::JsValuesTupleIntoVec;
+
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 use napi::bindgen_prelude::{Buffer, BufferSlice};
+
+#[cfg(feature = "use-strings-instead-of-buffers")]
+use crate::domain::vm::hex_to_vec;
 
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
@@ -593,6 +598,10 @@ impl ContractManager {
             .clone();
 
         let fut = async move {
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
+            let data: Vec<u8> = calldata.to_vec();
+
+            #[cfg(feature = "use-strings-instead-of-buffers")]
             let data = hex_to_vec(calldata)
                 .map_err(|e| Error::from_reason(format!("[deploy] Hex to vec error: {e:?}")))?
                 .to_vec();
@@ -705,6 +714,10 @@ impl ContractManager {
             .clone();
 
         let fut = async move {
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
+            let data: Vec<u8> = calldata.to_vec();
+
+            #[cfg(feature = "use-strings-instead-of-buffers")]
             let data = hex_to_vec(calldata)
                 .map_err(|e| Error::from_reason(format!("[execute] Hex to vec error: {e:?}")))?
                 .to_vec();

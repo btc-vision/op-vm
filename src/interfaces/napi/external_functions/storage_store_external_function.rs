@@ -3,6 +3,9 @@ use napi::bindgen_prelude::Promise;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
+use napi::bindgen_prelude::Buffer;
+
 pub struct StorageStoreExternalFunction {
     #[cfg(not(feature = "use-strings-instead-of-buffers"))]
     external_function: GenericExternalFunction<Promise<Buffer>>,

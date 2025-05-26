@@ -6,7 +6,9 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
+#[cfg(feature = "use-strings-instead-of-buffers")]
 use crate::domain::vm::hex_to_vec;
+
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 use napi::bindgen_prelude::Buffer;
 
@@ -89,7 +91,11 @@ impl BlockHashExternalFunction {
                 .await
                 .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
+            #[cfg(feature = "use-strings-instead-of-buffers")]
             let block_hash = hex_to_vec(data.block_hash)?;
+
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
+            let block_hash = data.block_hash;
 
             Ok(BlockHashResponse {
                 block_hash: block_hash.into(),

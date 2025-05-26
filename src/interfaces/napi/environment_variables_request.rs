@@ -1,7 +1,10 @@
 use crate::domain::common::Address;
 use crate::domain::runner::EnvironmentVariables;
-use crate::domain::vm::hex_to_vec;
+
 use napi::bindgen_prelude::BigInt;
+
+#[cfg(feature = "use-strings-instead-of-buffers")]
+use crate::domain::vm::hex_to_vec;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 use napi::bindgen_prelude::Uint8Array;

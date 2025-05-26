@@ -1,5 +1,4 @@
 use crate::domain::runner::ProvenState;
-use crate::domain::vm::vec_to_hex;
 use bitcoin::hex::DisplayHex;
 use napi::bindgen_prelude::ToNapiValue;
 use napi::Result as NapiResult;
@@ -8,6 +7,9 @@ use napi::{
     sys, Env,
 };
 use std::fmt::Display;
+
+#[cfg(feature = "use-strings-instead-of-buffers")]
+use crate::domain::vm::vec_to_hex;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 use napi::bindgen_prelude::BufferSlice;

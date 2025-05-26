@@ -1,4 +1,6 @@
+#[cfg(feature = "use-strings-instead-of-buffers")]
 use crate::domain::vm::vec_to_hex;
+
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use napi::bindgen_prelude::{BigInt, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;

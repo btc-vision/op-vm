@@ -1,4 +1,6 @@
-use crate::domain::vm::hex_to_vec;
+#[cfg(feature = "use-strings-instead-of-buffers")]
+use crate::domain::vm::vec_to_hex;
+
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use crate::interfaces::{ExternalFunction, ExternalFunctionNoData, ExternalFunctionNoResponse};
 use napi::bindgen_prelude::{BigInt, FromNapiValue, Promise, Unknown};
@@ -8,13 +10,16 @@ use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
+use napi::bindgen_prelude::Buffer;
+
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
 pub type GenericFunction = Arc<
     ThreadsafeFunction<
         ThreadSafeJsImportResponse,
         Promise<Buffer>,
         ThreadSafeJsImportResponse,
         true,
-        false,
+        true,
         128,
     >,
 >;

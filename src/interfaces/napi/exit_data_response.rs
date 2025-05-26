@@ -1,6 +1,8 @@
 use crate::domain::runner::{ExitData, ProvenStateWrapped};
-use crate::domain::vm::vec_to_hex;
 use napi::bindgen_prelude::BigInt;
+
+#[cfg(feature = "use-strings-instead-of-buffers")]
+use crate::domain::vm::vec_to_hex;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 #[napi(object)]
