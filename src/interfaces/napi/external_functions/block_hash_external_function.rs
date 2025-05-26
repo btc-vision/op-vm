@@ -10,7 +10,7 @@ use wasmer::RuntimeError;
 use crate::domain::vm::hex_to_vec;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::Uint8Array;
 
 #[napi(object)]
 pub struct BlockHashRequest {
@@ -21,7 +21,7 @@ pub struct BlockHashRequest {
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 #[napi(object, js_name = "BlockHashResponse")]
 pub struct JsBlockHashResponse {
-    pub block_hash: Buffer,
+    pub block_hash: Uint8Array,
     pub is_block_warm: bool,
 }
 
@@ -98,7 +98,7 @@ impl BlockHashExternalFunction {
             let block_hash = data.block_hash;
 
             Ok(BlockHashResponse {
-                block_hash: block_hash.into(),
+                block_hash: block_hash.to_vec(),
                 is_block_warm: data.is_block_warm,
             })
         };

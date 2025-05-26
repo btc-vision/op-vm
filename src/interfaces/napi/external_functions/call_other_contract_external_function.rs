@@ -6,11 +6,11 @@ use crate::interfaces::napi::external_functions::GenericExternalFunction;
 use crate::interfaces::{ExternalFunction, GenericFunction};
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::Uint8Array;
 
 pub struct CallOtherContractExternalFunction {
     #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-    external_function: GenericExternalFunction<Promise<Buffer>>,
+    external_function: GenericExternalFunction<Promise<Uint8Array>>,
     #[cfg(feature = "use-strings-instead-of-buffers")]
     external_function: GenericExternalFunction<Promise<String>>,
 }

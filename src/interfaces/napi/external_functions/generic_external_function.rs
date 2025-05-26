@@ -10,13 +10,13 @@ use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::Buffer;
+use napi::bindgen_prelude::Uint8Array;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 pub type GenericFunction = Arc<
     ThreadsafeFunction<
         ThreadSafeJsImportResponse,
-        Promise<Buffer>,
+        Promise<Uint8Array>,
         ThreadSafeJsImportResponse,
         true,
         true,
@@ -90,7 +90,7 @@ where
 }
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-impl ExternalFunction for GenericExternalFunction<Promise<Buffer>> {
+impl ExternalFunction for GenericExternalFunction<Promise<Uint8Array>> {
     fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         let tsfn = self.tsfn.clone();
         let request = self.make_request(data.to_vec());
@@ -116,7 +116,7 @@ impl ExternalFunction for GenericExternalFunction<Promise<Buffer>> {
 }
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-impl ExternalFunctionNoData for GenericExternalFunction<Promise<Buffer>> {
+impl ExternalFunctionNoData for GenericExternalFunction<Promise<Uint8Array>> {
     fn execute_no_data(&self, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
         let tsfn = self.tsfn.clone();
         let request = self.make_request(Vec::new());

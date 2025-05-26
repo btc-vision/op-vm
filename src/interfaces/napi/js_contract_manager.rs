@@ -16,7 +16,7 @@ use napi::bindgen_prelude::{BigInt, Function, JsObjectValue, Object, Promise, Pr
 use napi::bindgen_prelude::JsValuesTupleIntoVec;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::{Buffer, BufferSlice};
+use napi::bindgen_prelude::{BufferSlice, Uint8Array};
 
 #[cfg(feature = "use-strings-instead-of-buffers")]
 use crate::domain::vm::hex_to_vec;
@@ -87,7 +87,7 @@ impl ToNapiValue for IntArrayResponse {
 type JsData = String;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-type JsData = Buffer;
+type JsData = Uint8Array;
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
@@ -160,17 +160,17 @@ impl ContractManager {
     pub fn new(
         max_idling_runtimes: u32,
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Uint8Array>"
         )]
         storage_load_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
 
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Uint8Array>"
         )]
         storage_store_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
 
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Uint8Array>"
         )]
         call_other_contract_js_function: Function<
             ThreadSafeJsImportResponse,
@@ -178,7 +178,7 @@ impl ContractManager {
         >,
 
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Uint8Array>"
         )]
         deploy_from_address_js_function: Function<
             ThreadSafeJsImportResponse,
@@ -192,12 +192,12 @@ impl ContractManager {
         emit_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
 
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Uint8Array>"
         )]
         inputs_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
 
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Uint8Array>"
         )]
         outputs_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
 
@@ -588,7 +588,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        #[napi(ts_arg_type = "string | Buffer")] calldata: JsData,
+        #[napi(ts_arg_type = "string | Uint8Array")] calldata: JsData,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
@@ -704,7 +704,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        #[napi(ts_arg_type = "string | Buffer")] calldata: JsData,
+        #[napi(ts_arg_type = "string | Uint8Array")] calldata: JsData,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self

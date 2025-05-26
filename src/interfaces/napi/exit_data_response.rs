@@ -8,11 +8,11 @@ use crate::domain::vm::vec_to_hex;
 #[napi(object)]
 pub struct ExitDataResponse {
     pub status: u32,
-    #[napi(ts_type = "Buffer")]
+    #[napi(ts_type = "Uint8Array")]
     pub data: Vec<u8>,
     #[napi(ts_type = "bigint")]
     pub gas_used: BigInt,
-    #[napi(ts_type = "Array<{ proof: Buffer, vk: Buffer }>")]
+    #[napi(ts_type = "Array<{ proof: Uint8Array, vk: Uint8Array }>")]
     pub proofs: Vec<ProvenStateWrapped>,
 }
 
