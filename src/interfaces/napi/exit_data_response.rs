@@ -18,7 +18,7 @@ pub struct ExitDataResponse {
 #[napi(object)]
 pub struct ExitDataResponse {
     pub status: u32,
-    #[napi(ts_type = "String")]
+    #[napi(ts_type = "string")]
     pub data: String,
     #[napi(ts_type = "bigint")]
     pub gas_used: BigInt,
