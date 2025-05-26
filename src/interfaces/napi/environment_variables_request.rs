@@ -7,20 +7,20 @@ use napi::bindgen_prelude::BigInt;
 use crate::domain::vm::hex_to_vec;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::Uint8Array;
+use napi::bindgen_prelude::Buffer;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
 #[napi(object)]
 pub struct EnvironmentVariablesRequest {
-    pub block_hash: Uint8Array,
+    pub block_hash: Buffer,
     pub block_number: BigInt,
     pub block_median_time: BigInt,
-    pub tx_id: Uint8Array,
-    pub tx_hash: Uint8Array,
-    pub contract_address: Uint8Array,
-    pub contract_deployer: Uint8Array,
-    pub caller: Uint8Array,
-    pub origin: Uint8Array,
+    pub tx_id: Buffer,
+    pub tx_hash: Buffer,
+    pub contract_address: Buffer,
+    pub contract_deployer: Buffer,
+    pub caller: Buffer,
+    pub origin: Buffer,
 }
 
 #[cfg(feature = "use-strings-instead-of-buffers")]
