@@ -574,7 +574,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        #[napi(ts_arg_type = "calldata: string | Buffer")] calldata: JsData,
+        #[napi(ts_arg_type = "string | Buffer")] calldata: JsData,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
@@ -686,7 +686,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        #[napi(ts_arg_type = "calldata: string | Buffer")] calldata: JsData,
+        #[napi(ts_arg_type = "string | Buffer")] calldata: JsData,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
