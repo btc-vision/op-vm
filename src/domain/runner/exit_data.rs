@@ -12,7 +12,7 @@ use std::fmt::Display;
 use crate::domain::vm::vec_to_hex;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::BufferSlice;
+use napi::bindgen_prelude::Uint8ArraySlice;
 
 #[derive(Clone, Debug, Default)]
 pub struct ExitData {
@@ -45,7 +45,7 @@ impl ToNapiValue for ExitData {
         obj.set_named_property("status", val.status)?;
 
         #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-        obj.set_named_property("data", BufferSlice::from_data(&env, val.data)?)?;
+        obj.set_named_property("data", Uint8ArraySlice::from_data(&env, val.data)?)?;
 
         #[cfg(feature = "use-strings-instead-of-buffers")]
         obj.set_named_property("data", vec_to_hex(&val.data))?;
@@ -57,8 +57,9 @@ impl ToNapiValue for ExitData {
             let mut proof_obj = Object::new(&env)?;
             #[cfg(not(feature = "use-strings-instead-of-buffers"))]
             {
-                proof_obj.set_named_property("proof", BufferSlice::from_data(&env, p.proof)?)?;
-                proof_obj.set_named_property("vk", BufferSlice::from_data(&env, p.vk)?)?;
+                proof_obj
+                    .set_named_property("proof", Uint8ArraySlice::from_data(&env, p.proof)?)?;
+                proof_obj.set_named_property("vk", Uint8ArraySlice::from_data(&env, p.vk)?)?;
             }
 
             #[cfg(feature = "use-strings-instead-of-buffers")]
@@ -110,8 +111,8 @@ impl FromNapiValue for ExitData {
                     #[cfg(not(feature = "use-strings-instead-of-buffers"))]
                     {
                         Ok(ProvenState {
-                            proof: p.get_named_property::<BufferSlice>("proof")?.to_vec(),
-                            vk: p.get_named_property::<BufferSlice>("vk")?.to_vec(),
+                            proof: p.get_named_property::<Uint8ArraySlice>("proof")?.to_vec(),
+                            vk: p.get_named_property::<Uint8ArraySlice>("vk")?.to_vec(),
                         })
                     }
                 })

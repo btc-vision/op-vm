@@ -16,7 +16,7 @@ use napi::bindgen_prelude::{BigInt, Function, JsObjectValue, Object, Promise, Pr
 use napi::bindgen_prelude::JsValuesTupleIntoVec;
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::{BufferSlice, Uint8Array};
+use napi::bindgen_prelude::{Uint8Array, Uint8ArraySlice};
 
 #[cfg(feature = "use-strings-instead-of-buffers")]
 use crate::domain::vm::hex_to_vec;
@@ -429,7 +429,7 @@ impl ContractManager {
         #[cfg(not(feature = "use-strings-instead-of-buffers"))]
         js_object.set_named_property(
             "data",
-            BufferSlice::from_data(&env, exit_data.data.to_vec())?,
+            Uint8ArraySlice::from_data(&env, exit_data.data.to_vec())?,
         )?;
 
         #[cfg(feature = "use-strings-instead-of-buffers")]
@@ -441,9 +441,9 @@ impl ContractManager {
         let mut array = env.create_array(length)?;
         for (_, proof) in exit_data.proofs.iter().enumerate() {
             #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-            let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+            let proof_buffer = Uint8ArraySlice::from_data(&env, proof.proof.to_vec())?;
             #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-            let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
+            let vk_buffer = Uint8ArraySlice::from_data(&env, proof.vk.to_vec())?;
 
             #[cfg(feature = "use-strings-instead-of-buffers")]
             let proof_buffer = proof.proof.clone();
