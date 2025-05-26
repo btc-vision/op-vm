@@ -594,7 +594,7 @@ impl ContractManager {
 
         let fut = async move {
             let data = hex_to_vec(calldata)
-                .map_err(|e| Error::from_reason(format!("Hex to vec error: {e:?}")))?
+                .map_err(|e| Error::from_reason(format!("[deploy] Hex to vec error: {e:?}")))?
                 .to_vec();
 
             let raw = tokio::task::spawn_blocking(move || contract.on_deploy(data))
@@ -706,7 +706,7 @@ impl ContractManager {
 
         let fut = async move {
             let data = hex_to_vec(calldata)
-                .map_err(|e| Error::from_reason(format!("Hex to vec error: {e:?}")))?
+                .map_err(|e| Error::from_reason(format!("[execute] Hex to vec error: {e:?}")))?
                 .to_vec();
 
             let raw = tokio::task::spawn_blocking(move || contract.execute(data))

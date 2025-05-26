@@ -9,6 +9,9 @@ use napi::{
 };
 use std::fmt::Display;
 
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
+use napi::bindgen_prelude::BufferSlice;
+
 #[derive(Clone, Debug, Default)]
 pub struct ExitData {
     pub status: u32,
