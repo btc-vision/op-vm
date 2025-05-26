@@ -18,7 +18,7 @@ impl EmitExternalFunction {
                 Promise<()>,
                 ThreadSafeJsImportResponse,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

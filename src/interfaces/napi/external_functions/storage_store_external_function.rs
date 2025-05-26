@@ -1,29 +1,18 @@
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::{ExternalFunction, GenericExternalFunction};
-use napi::bindgen_prelude::{Buffer, Promise};
-use napi::threadsafe_function::ThreadsafeFunction;
-use std::sync::Arc;
+use crate::interfaces::{ExternalFunction, GenericExternalFunction, GenericFunction};
+use napi::bindgen_prelude::Promise;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 pub struct StorageStoreExternalFunction {
+    #[cfg(not(feature = "use-strings-instead-of-buffers"))]
     external_function: GenericExternalFunction<Promise<Buffer>>,
+
+    #[cfg(feature = "use-strings-instead-of-buffers")]
+    external_function: GenericExternalFunction<Promise<String>>,
 }
 
 impl StorageStoreExternalFunction {
-    pub fn new(
-        tsfn: Arc<
-            ThreadsafeFunction<
-                ThreadSafeJsImportResponse,
-                Promise<Buffer>,
-                ThreadSafeJsImportResponse,
-                true,
-                false,
-                128,
-            >,
-        >,
-        id: u64,
-    ) -> Self {
+    pub fn new(tsfn: GenericFunction, id: u64) -> Self {
         Self {
             external_function: GenericExternalFunction::new(tsfn, id),
         }

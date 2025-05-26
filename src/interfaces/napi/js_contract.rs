@@ -359,7 +359,7 @@ impl JsContract {
             }
 
             Value::F64(v) => {
-                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v as f64)? };
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
                 let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)

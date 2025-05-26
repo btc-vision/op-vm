@@ -1,4 +1,3 @@
-use napi::bindgen_prelude::Buffer;
 use napi::{
     bindgen_prelude::{BigInt, Promise},
     threadsafe_function::ThreadsafeFunction,
@@ -7,15 +6,27 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
+use crate::domain::vm::hex_to_vec;
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
+use napi::bindgen_prelude::Buffer;
+
 #[napi(object)]
 pub struct BlockHashRequest {
     pub block_number: BigInt,
     pub contract_id: BigInt,
 }
 
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
 #[napi(object, js_name = "BlockHashResponse")]
 pub struct JsBlockHashResponse {
     pub block_hash: Buffer,
+    pub is_block_warm: bool,
+}
+
+#[cfg(feature = "use-strings-instead-of-buffers")]
+#[napi(object, js_name = "BlockHashResponse")]
+pub struct JsBlockHashResponse {
+    pub block_hash: String,
     pub is_block_warm: bool,
 }
 
@@ -31,7 +42,7 @@ pub struct BlockHashExternalFunction {
             Promise<JsBlockHashResponse>,
             BlockHashRequest,
             true,
-            false,
+            true,
             128,
         >,
     >,
@@ -46,7 +57,7 @@ impl BlockHashExternalFunction {
                 Promise<JsBlockHashResponse>,
                 BlockHashRequest,
                 true,
-                false,
+                true,
                 128,
             >,
         >,
@@ -78,8 +89,10 @@ impl BlockHashExternalFunction {
                 .await
                 .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
+            let block_hash = hex_to_vec(data.block_hash)?;
+
             Ok(BlockHashResponse {
-                block_hash: data.block_hash.into(),
+                block_hash: block_hash.into(),
                 is_block_warm: data.is_block_warm,
             })
         };

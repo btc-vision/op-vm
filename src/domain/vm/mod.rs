@@ -8,6 +8,7 @@ pub use self::middlewares::*;
 pub use self::thread::*;
 #[cfg(feature = "contract-threading")]
 pub use self::ticket::*;
+pub use self::utils::*;
 #[cfg(any(feature = "vdf", feature = "vdf-zk-snark"))]
 pub use self::vdf::*;
 
@@ -21,5 +22,6 @@ mod middlewares;
 mod thread;
 #[cfg(feature = "contract-threading")]
 mod ticket;
+mod utils;
 #[cfg(any(feature = "vdf", feature = "vdf-zk-snark"))]
 mod vdf;

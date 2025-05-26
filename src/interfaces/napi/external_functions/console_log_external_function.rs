@@ -18,7 +18,7 @@ impl ConsoleLogExternalFunction {
                 Promise<()>,
                 ThreadSafeJsImportResponse,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

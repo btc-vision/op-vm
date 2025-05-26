@@ -1,31 +1,20 @@
-use napi::bindgen_prelude::{Buffer, Promise};
-use napi::threadsafe_function::ThreadsafeFunction;
-use std::sync::Arc;
+use napi::bindgen_prelude::Promise;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
 use crate::interfaces::napi::external_functions::GenericExternalFunction;
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::ExternalFunction;
+use crate::interfaces::{ExternalFunction, GenericFunction};
 
 pub struct DeployFromAddressExternalFunction {
+    #[cfg(not(feature = "use-strings-instead-of-buffers"))]
     external_function: GenericExternalFunction<Promise<Buffer>>,
+
+    #[cfg(feature = "use-strings-instead-of-buffers")]
+    external_function: GenericExternalFunction<Promise<String>>,
 }
 
 impl DeployFromAddressExternalFunction {
-    pub fn new(
-        tsfn: Arc<
-            ThreadsafeFunction<
-                ThreadSafeJsImportResponse,
-                Promise<Buffer>,
-                ThreadSafeJsImportResponse,
-                true,
-                false,
-                128,
-            >,
-        >,
-        id: u64,
-    ) -> Self {
+    pub fn new(tsfn: GenericFunction, id: u64) -> Self {
         Self {
             external_function: GenericExternalFunction::new(tsfn, id),
         }

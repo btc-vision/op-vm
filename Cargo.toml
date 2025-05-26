@@ -48,8 +48,9 @@ env_logger = { version = "0.11.8", optional = true }
 napi-build = "2.2.0"
 
 [features]
-default = ["reference-types", "transient-storage"]
+default = ["reference-types", "transient-storage", "use-strings-instead-of-buffers"]
 debug-metering = ["env_logger"]
+use-strings-instead-of-buffers = [] # https://github.com/nodejs/node/issues/55706#issuecomment-2907895374
 transient-storage = []
 table-metering = []
 reference-types = ["table-metering"]

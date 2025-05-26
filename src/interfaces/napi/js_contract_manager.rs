@@ -7,7 +7,7 @@ use crate::interfaces::napi::external_functions::BlockHashRequest;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::{AccountTypeResponse, JsBlockHashResponse};
+use crate::interfaces::{AccountTypeResponse, GenericFunction, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
 use napi::bindgen_prelude::{
@@ -46,13 +46,13 @@ macro_rules! build_tsfn {
       $ret,
       $resp,
       true,
-      false,
+      true,
       Q,
     >> = Arc::new($fn_ident
       .build_threadsafe_function()
       .max_queue_size::<Q>()
       .callee_handled::<true>()
-      .weak::<false>()
+      .weak::<true>()
       .build()?);
     tsfn
   }};
@@ -75,6 +75,12 @@ impl ToNapiValue for IntArrayResponse {
     }
 }*/
 
+#[cfg(feature = "use-strings-instead-of-buffers")]
+type JsData = String;
+
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
+type JsData = Buffer;
+
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
     contracts: HashMap<u64, Arc<JsContract>>,
@@ -83,49 +89,13 @@ pub struct ContractManager {
     #[napi(skip)]
     pub runtime_pool: Arc<RuntimePool>,
     #[napi(skip)]
-    pub storage_load_tsfn: Arc<
-        ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            Promise<Buffer>,
-            ThreadSafeJsImportResponse,
-            true,
-            false,
-            128,
-        >,
-    >,
+    pub storage_load_tsfn: GenericFunction,
     #[napi(skip)]
-    pub storage_store_tsfn: Arc<
-        ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            Promise<Buffer>,
-            ThreadSafeJsImportResponse,
-            true,
-            false,
-            128,
-        >,
-    >,
+    pub storage_store_tsfn: GenericFunction,
     #[napi(skip)]
-    pub call_other_contract_tsfn: Arc<
-        ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            Promise<Buffer>,
-            ThreadSafeJsImportResponse,
-            true,
-            false,
-            128,
-        >,
-    >,
+    pub call_other_contract_tsfn: GenericFunction,
     #[napi(skip)]
-    pub deploy_from_address_tsfn: Arc<
-        ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            Promise<Buffer>,
-            ThreadSafeJsImportResponse,
-            true,
-            false,
-            128,
-        >,
-    >,
+    pub deploy_from_address_tsfn: GenericFunction,
     #[napi(skip)]
     pub console_log_tsfn: Arc<
         ThreadsafeFunction<
@@ -133,7 +103,7 @@ pub struct ContractManager {
             Promise<()>,
             ThreadSafeJsImportResponse,
             true,
-            false,
+            true,
             128,
         >,
     >,
@@ -144,32 +114,14 @@ pub struct ContractManager {
             Promise<()>,
             ThreadSafeJsImportResponse,
             true,
-            false,
+            true,
             128,
         >,
     >,
     #[napi(skip)]
-    pub inputs_tsfn: Arc<
-        ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            Promise<Buffer>,
-            ThreadSafeJsImportResponse,
-            true,
-            false,
-            128,
-        >,
-    >,
+    pub inputs_tsfn: GenericFunction,
     #[napi(skip)]
-    pub outputs_tsfn: Arc<
-        ThreadsafeFunction<
-            ThreadSafeJsImportResponse,
-            Promise<Buffer>,
-            ThreadSafeJsImportResponse,
-            true,
-            false,
-            128,
-        >,
-    >,
+    pub outputs_tsfn: GenericFunction,
     #[napi(skip)]
     pub account_type_tsfn: Arc<
         ThreadsafeFunction<
@@ -177,7 +129,7 @@ pub struct ContractManager {
             Promise<AccountTypeResponse>,
             ThreadSafeJsImportResponse,
             true,
-            false,
+            true,
             128,
         >,
     >,
@@ -188,7 +140,7 @@ pub struct ContractManager {
             Promise<JsBlockHashResponse>,
             BlockHashRequest,
             true,
-            false,
+            true,
             128,
         >,
     >,
@@ -200,39 +152,47 @@ impl ContractManager {
     pub fn new(
         max_idling_runtimes: u32,
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
         )]
-        storage_load_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        storage_load_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
+
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
         )]
-        storage_store_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        storage_store_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
+
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
         )]
         call_other_contract_js_function: Function<
             ThreadSafeJsImportResponse,
-            Promise<Buffer>,
+            Promise<JsData>,
         >,
+
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
         )]
         deploy_from_address_js_function: Function<
             ThreadSafeJsImportResponse,
-            Promise<Buffer>,
+            Promise<JsData>,
         >,
+
         #[napi(ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<void>")]
         console_log_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
+
         #[napi(ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<void>")]
         emit_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
+
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
         )]
-        inputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        inputs_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
+
         #[napi(
-            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<string | Buffer>"
         )]
-        outputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
+        outputs_js_function: Function<ThreadSafeJsImportResponse, Promise<JsData>>,
+
         #[napi(
             ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
         )]
@@ -240,6 +200,7 @@ impl ContractManager {
             ThreadSafeJsImportResponse,
             Promise<AccountTypeResponse>,
         >,
+
         #[napi(
             ts_arg_type = "(err: Error, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
         )]
@@ -248,25 +209,25 @@ impl ContractManager {
         let storage_load_tsfn = build_tsfn!(
             storage_load_js_function,
             ThreadSafeJsImportResponse,
-            Promise<Buffer>
+            Promise<JsData>
         );
 
         let storage_store_tsfn = build_tsfn!(
             storage_store_js_function,
             ThreadSafeJsImportResponse,
-            Promise<Buffer>
+            Promise<JsData>
         );
 
         let call_other_contract_tsfn = build_tsfn!(
             call_other_contract_js_function,
             ThreadSafeJsImportResponse,
-            Promise<Buffer>
+            Promise<JsData>
         );
 
         let deploy_from_address_tsfn = build_tsfn!(
             deploy_from_address_js_function,
             ThreadSafeJsImportResponse,
-            Promise<Buffer>
+            Promise<JsData>
         );
 
         let console_log_tsfn = build_tsfn!(
@@ -280,13 +241,13 @@ impl ContractManager {
         let inputs_tsfn = build_tsfn!(
             inputs_js_function,
             ThreadSafeJsImportResponse,
-            Promise<Buffer>
+            Promise<JsData>
         );
 
         let outputs_tsfn = build_tsfn!(
             outputs_js_function,
             ThreadSafeJsImportResponse,
-            Promise<Buffer>
+            Promise<JsData>
         );
 
         let account_type_tsfn = build_tsfn!(

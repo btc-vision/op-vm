@@ -1,10 +1,10 @@
+use crate::domain::vm::vec_to_hex;
+use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 use napi::bindgen_prelude::{BigInt, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
-
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
 
 #[napi(object)]
 pub struct AccountTypeResponse {
@@ -19,7 +19,7 @@ pub struct AccountTypeExternalFunction {
             Promise<AccountTypeResponse>,
             ThreadSafeJsImportResponse,
             true,
-            false,
+            true,
             128,
         >,
     >,
@@ -34,7 +34,7 @@ impl AccountTypeExternalFunction {
                 Promise<AccountTypeResponse>,
                 ThreadSafeJsImportResponse,
                 true,
-                false,
+                true,
                 128,
             >,
         >,
@@ -54,7 +54,10 @@ impl AccountTypeExternalFunction {
         runtime: &Runtime,
     ) -> Result<AccountTypeResponse, RuntimeError> {
         let request = ThreadSafeJsImportResponse {
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
             buffer: address_hash.to_vec(),
+            #[cfg(feature = "use-strings-instead-of-buffers")]
+            buffer: vec_to_hex(address_hash),
             contract_id: BigInt::from(self.contract_id),
         };
 
