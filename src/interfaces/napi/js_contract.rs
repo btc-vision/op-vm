@@ -245,6 +245,7 @@ impl JsContract {
         Ok(serialized)
     }
 
+    #[allow(dead_code)]
     pub fn read_memory(&self, offset: BigInt, length: BigInt) -> Result<Buffer> {
         let offset = offset.get_u64().1;
         let length = length.get_u64().1;
@@ -260,6 +261,7 @@ impl JsContract {
         Ok(Buffer::from(resp))
     }
 
+    #[allow(dead_code)]
     pub fn write_memory(&self, offset: BigInt, data: Buffer) -> Result<()> {
         let data: Vec<u8> = data.into();
         let offset = offset.get_u64().1;

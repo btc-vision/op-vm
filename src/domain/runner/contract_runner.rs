@@ -12,7 +12,9 @@ pub trait ContractRunner: Send + Sync {
         params: &[Value],
         max_gas: u64,
     ) -> anyhow::Result<Box<[Value]>>;
+    #[allow(dead_code)]
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError>;
+    #[allow(dead_code)]
     fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), ExtendedMemoryAccessError>;
     fn get_remaining_gas(&mut self) -> u64;
     fn get_used_gas(&mut self) -> u64;

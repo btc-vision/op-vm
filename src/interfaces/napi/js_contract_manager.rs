@@ -11,10 +11,10 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 use crate::interfaces::{AccountTypeResponse, GenericFunction, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::{BigInt, Buffer, Function, JsObjectValue, Object, Promise, PromiseRaw};
+use napi::bindgen_prelude::{BigInt, Function, JsObjectValue, Object, Promise, PromiseRaw};
 
 #[cfg(not(feature = "use-strings-instead-of-buffers"))]
-use napi::bindgen_prelude::BufferSlice;
+use napi::bindgen_prelude::{Buffer, BufferSlice};
 
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
@@ -298,7 +298,7 @@ impl ContractManager {
         &mut self,
         reserved_id: BigInt,
         address: String,
-        bytecode: Option<Buffer>,
+        bytecode: Option<JsData>,
         used_gas: BigInt,
         max_gas: BigInt,
         memory_pages_used: BigInt,
@@ -325,9 +325,18 @@ impl ContractManager {
         if let Some(serialized) = self.contract_cache.get(&address) {
             params.serialized = Some(serialized.clone());
         } else {
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
             let bc = bytecode
                 .ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?
                 .to_vec();
+
+            #[cfg(feature = "use-strings-instead-of-buffers")]
+            let bc =
+                hex_to_vec(bytecode.ok_or_else(|| {
+                    Error::from_reason(anyhow!("Bytecode is required").to_string())
+                })?)
+                .map_err(|e| Error::from_reason(format!("Hex to vec error: {e:?}")))?;
+
             should_cache = true;
             params.bytecode = Some(bc);
         }
@@ -458,7 +467,7 @@ impl ContractManager {
         contract.get_used_gas()
     }
 
-    #[napi]
+    /*#[napi]
     pub fn write_memory(&self, id: BigInt, offset: BigInt, data: Buffer) -> Result<(), Error> {
         let id = id.get_u64().1;
 
@@ -478,7 +487,7 @@ impl ContractManager {
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
         contract.read_memory(offset, length)
-    }
+    }*/
 
     #[napi]
     pub fn set_environment_variables(

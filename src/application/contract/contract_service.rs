@@ -91,6 +91,7 @@ impl ContractService {
         runner.use_gas(gas);
     }
 
+    #[allow(dead_code)]
     pub fn read_memory(
         &self,
         offset: u64,
@@ -100,6 +101,7 @@ impl ContractService {
         runner.read_memory(offset, length)
     }
 
+    #[allow(dead_code)]
     pub fn write_memory(&self, offset: u64, data: &[u8]) -> Result<(), ExtendedMemoryAccessError> {
         let runner = self.runner.lock().unwrap();
         runner.write_memory(offset, data)
