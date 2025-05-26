@@ -13,7 +13,6 @@ pub struct ExitData {
     pub status: u32,
     pub data: Vec<u8>,
     pub gas_used: u64,
-
     pub proofs: Vec<ProvenState>,
 }
 
@@ -81,10 +80,9 @@ impl Display for ExitData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "status: {}, gas_used: {}, data: {}, proofs: {}",
+            "status: {}, gas_used: {}, proofs: {}",
             self.status,
             self.gas_used,
-            self.data.to_lower_hex_string(),
             self.proofs
                 .iter()
                 .map(|p| format!(

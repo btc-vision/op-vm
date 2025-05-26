@@ -1,5 +1,6 @@
 use crate::domain::runner;
 use crate::domain::runner::ExitData;
+use crate::domain::vm::hex_to_vec;
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -10,9 +11,11 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 use crate::interfaces::{AccountTypeResponse, GenericFunction, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::{
-    BigInt, Buffer, BufferSlice, Function, JsObjectValue, Object, Promise, PromiseRaw,
-};
+use napi::bindgen_prelude::{BigInt, Buffer, Function, JsObjectValue, Object, Promise, PromiseRaw};
+
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
+use napi::bindgen_prelude::BufferSlice;
+
 use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
 use napi::Error;
@@ -353,22 +356,6 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn destroy(&mut self, _env: Env) -> Result<(), Error> {
-        /*abort_tsfn!(self.storage_load_tsfn, &env);
-        abort_tsfn!(self.storage_store_tsfn, &env);
-        abort_tsfn!(self.call_other_contract_tsfn, &env);
-        abort_tsfn!(self.deploy_from_address_tsfn, &env);
-        abort_tsfn!(self.console_log_tsfn, &env);
-        abort_tsfn!(self.emit_tsfn, &env);
-        abort_tsfn!(self.inputs_tsfn, &env);
-        abort_tsfn!(self.outputs_tsfn, &env);
-        abort_tsfn!(self.account_type_tsfn, &env);
-        abort_tsfn!(self.block_hash_tsfn, &env);*/
-
-        Ok(())
-    }
-
-    #[napi]
     pub fn destroy_cache(&mut self) -> () {
         self.contract_cache.clear();
 
@@ -425,17 +412,29 @@ impl ContractManager {
 
         let mut js_object = Object::new(&env)?;
         js_object.set_named_property("status", exit_data.status)?;
+        #[cfg(not(feature = "use-strings-instead-of-buffers"))]
         js_object.set_named_property(
             "data",
             BufferSlice::from_data(&env, exit_data.data.to_vec())?,
         )?;
+
+        #[cfg(feature = "use-strings-instead-of-buffers")]
+        js_object.set_named_property("data", exit_data.data)?;
+
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
 
         let length = exit_data.proofs.len() as u32;
         let mut array = env.create_array(length)?;
         for (_, proof) in exit_data.proofs.iter().enumerate() {
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
             let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+            #[cfg(not(feature = "use-strings-instead-of-buffers"))]
             let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
+
+            #[cfg(feature = "use-strings-instead-of-buffers")]
+            let proof_buffer = proof.proof.clone();
+            #[cfg(feature = "use-strings-instead-of-buffers")]
+            let vk_buffer = proof.vk.clone();
 
             let mut object = Object::new(&env)?;
             object.set_named_property("proof", proof_buffer)?;
@@ -575,7 +574,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        calldata: Buffer,
+        calldata: String,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
@@ -585,7 +584,11 @@ impl ContractManager {
             .clone();
 
         let fut = async move {
-            let raw = tokio::task::spawn_blocking(move || contract.on_deploy(calldata.to_vec()))
+            let data = hex_to_vec(calldata)
+                .map_err(|e| Error::from_reason(format!("Hex to vec error: {e:?}")))?
+                .to_vec();
+
+            let raw = tokio::task::spawn_blocking(move || contract.on_deploy(data))
                 .await
                 .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
 
@@ -683,7 +686,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        calldata: Buffer,
+        calldata: String,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
@@ -693,7 +696,11 @@ impl ContractManager {
             .clone();
 
         let fut = async move {
-            let raw = tokio::task::spawn_blocking(move || contract.execute(calldata.to_vec()))
+            let data = hex_to_vec(calldata)
+                .map_err(|e| Error::from_reason(format!("Hex to vec error: {e:?}")))?
+                .to_vec();
+
+            let raw = tokio::task::spawn_blocking(move || contract.execute(data))
                 .await
                 .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
 

@@ -17,6 +17,14 @@ pub struct ProvenState {
     pub vk: Vec<u8>,
 }
 
+#[cfg(feature = "use-strings-instead-of-buffers")]
+#[napi(object)]
+pub struct ProvenStateWrapped {
+    pub proof: String,
+    pub vk: String,
+}
+
+#[cfg(not(feature = "use-strings-instead-of-buffers"))]
 #[napi(object)]
 pub struct ProvenStateWrapped {
     pub proof: Vec<u8>,
