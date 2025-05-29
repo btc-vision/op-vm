@@ -229,6 +229,12 @@ impl WasmerRunner {
             },
         };
 
+        #[cfg(feature = "transient-storage")]
+        {
+            import_object.define("env", "tload", import!(TransientLoadImport));
+            import_object.define("env", "tstore", import!(TransientStoreImport));
+        }
+
         #[cfg(feature = "contract-threading")]
         {
             import_object.define(
@@ -468,6 +474,7 @@ impl ContractRunner for WasmerRunner {
             },
         };
 
+        // TODO HANDLE RUST ERRORS HERE, WONT RETURN EXIT DATA.
         let result = self.handle_errors(response, max_gas)?;
 
         let status = result

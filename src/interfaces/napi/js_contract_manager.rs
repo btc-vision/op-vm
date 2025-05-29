@@ -1,4 +1,5 @@
 use crate::domain::runner;
+use crate::domain::runner::ExitData;
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::JsContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -6,38 +7,73 @@ use crate::interfaces::napi::external_functions::BlockHashRequest;
 use crate::interfaces::napi::js_contract::JsContract;
 use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
+use crate::interfaces::{AccountTypeResponse, JsBlockHashResponse};
 use anyhow::anyhow;
 use bytes::Bytes;
-use napi::bindgen_prelude::{BigInt, Buffer};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::bindgen_prelude::{
+    BigInt, Buffer, BufferSlice, Function, JsObjectValue, Object, Promise, PromiseRaw,
+};
+use napi::threadsafe_function::ThreadsafeFunction;
 use napi::Env;
-use napi::{Error, JsFunction, JsNumber};
+use napi::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 #[napi]
 #[allow(dead_code)]
 pub const NEW_STORAGE_SLOT_GAS_COST: u64 = runner::NEW_STORAGE_SLOT_GAS_COST;
+
 #[napi]
 #[allow(dead_code)]
 pub const UPDATED_STORAGE_SLOT_GAS_COST: u64 = runner::UPDATED_STORAGE_SLOT_GAS_COST;
 
-macro_rules! create_tsfn {
-    ($id:ident) => {
-        $id.create_threadsafe_function(10, |ctx| Ok(vec![ctx.value]))?
-    };
+/// Turns a `JsFunction` into a `ThreadsafeFunction` whose second tuple
+/// element (the “response” coming from the JS side) is decided by the caller.
+///
+/// Usage:
+///
+/// ```rust
+/// let tsfn = build_tsfn!(storage_load_js_function, ThreadSafeJsImportResponse);
+/// let tsfn = build_tsfn!(storage_load_js_function, MyResponse, 256); // queue = 256
+/// ```
+#[macro_export]
+macro_rules! build_tsfn {
+  // main entry
+  ( $fn_ident:expr, $resp:ty, $ret:ty $( , $queue:expr )? ) => {{
+    const Q: usize = build_tsfn!(@queue $( $queue )?);
+    let tsfn: Arc<ThreadsafeFunction<
+      $resp,
+      $ret,
+      $resp,
+      true,
+      false,
+      Q,
+    >> = Arc::new($fn_ident
+      .build_threadsafe_function()
+      .max_queue_size::<Q>()
+      .callee_handled::<true>()
+      .weak::<false>()
+      .build()?);
+    tsfn
+  }};
+
+  // handle the optional queue literal
+  (@queue) => { 128 };
+  (@queue $q:expr) => { $q };
 }
 
-macro_rules! abort_tsfn {
-    ($id:expr, $env:expr) => {
-        if !$id.aborted() {
-            $id.clone().abort()?;
-        }
-
-        $id.unref(&$env)
-            .map_err(|e| Error::from_reason(format!("{:?}", e)))?;
-    };
+/*pub struct IntArrayResponse {
+    contract: Arc<JsContract>,
+    values: Box<[Value]>,
 }
+
+impl ToNapiValue for IntArrayResponse {
+    unsafe fn to_napi_value(env_raw: napi_env, val: Self) -> napi::Result<napi_value> {
+        let env = Env::from_raw(env_raw);
+        let js_array = val.contract.convert_values_to_js_array(&env, val.values)?;
+        Ok(js_array.into_raw())
+    }
+}*/
 
 #[napi(js_name = "ContractManager")]
 pub struct ContractManager {
@@ -47,85 +83,223 @@ pub struct ContractManager {
     #[napi(skip)]
     pub runtime_pool: Arc<RuntimePool>,
     #[napi(skip)]
-    pub storage_load_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_load_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub storage_store_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub storage_store_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub call_other_contract_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub call_other_contract_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub deploy_from_address_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub deploy_from_address_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub console_log_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub console_log_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<()>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub emit_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub emit_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<()>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub inputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub inputs_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub outputs_tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub outputs_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub account_type_tsfn:
-        ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    pub account_type_tsfn: Arc<
+        ThreadsafeFunction<
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>,
+            ThreadSafeJsImportResponse,
+            true,
+            false,
+            128,
+        >,
+    >,
     #[napi(skip)]
-    pub block_hash_tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+    pub block_hash_tsfn: Arc<
+        ThreadsafeFunction<
+            BlockHashRequest,
+            Promise<JsBlockHashResponse>,
+            BlockHashRequest,
+            true,
+            false,
+            128,
+        >,
+    >,
 }
 
-#[napi] //noinspection RsCompileErrorMacro
+#[napi] // noinspection RsCompileErrorMacro
 impl ContractManager {
     #[napi(constructor)]
     pub fn new(
         max_idling_runtimes: u32,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
-        storage_load_js_function: JsFunction,
+        storage_load_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
-        storage_store_js_function: JsFunction,
+        storage_store_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
-        call_other_contract_js_function: JsFunction,
+        call_other_contract_js_function: Function<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+        >,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
-        deploy_from_address_js_function: JsFunction,
-        #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
-        console_log_js_function: JsFunction,
-        #[napi(ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<void>")]
-        emit_js_function: JsFunction,
+        deploy_from_address_js_function: Function<
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>,
+        >,
+        #[napi(ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        console_log_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
+        #[napi(ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<void>")]
+        emit_js_function: Function<ThreadSafeJsImportResponse, Promise<()>>,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
-        inputs_js_function: JsFunction,
+        inputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<Buffer | Uint8Array>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<Buffer>"
         )]
-        outputs_js_function: JsFunction,
+        outputs_js_function: Function<ThreadSafeJsImportResponse, Promise<Buffer>>,
         #[napi(
-            ts_arg_type = "(_: never, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
+            ts_arg_type = "(err: Error, result: ThreadSafeJsImportResponse) => Promise<AccountTypeResponse>"
         )]
-        account_type_js_function: JsFunction,
+        account_type_js_function: Function<
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>,
+        >,
         #[napi(
-            ts_arg_type = "(_: never, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
+            ts_arg_type = "(err: Error, result: BlockHashRequest) => Promise<JsBlockHashResponse>"
         )]
-        block_hash_js_function: JsFunction,
+        block_hash_js_function: Function<BlockHashRequest, Promise<JsBlockHashResponse>>,
     ) -> Result<Self, Error> {
-        let storage_load_tsfn = create_tsfn!(storage_load_js_function);
-        let storage_store_tsfn = create_tsfn!(storage_store_js_function);
-        let call_other_contract_tsfn = create_tsfn!(call_other_contract_js_function);
-        let deploy_from_address_tsfn = create_tsfn!(deploy_from_address_js_function);
-        let console_log_tsfn = create_tsfn!(console_log_js_function);
-        let emit_tsfn = create_tsfn!(emit_js_function);
-        let inputs_tsfn = create_tsfn!(inputs_js_function);
-        let outputs_tsfn = create_tsfn!(outputs_js_function);
-        let account_type_tsfn = create_tsfn!(account_type_js_function);
-        let block_hash_tsfn = create_tsfn!(block_hash_js_function);
+        let storage_load_tsfn = build_tsfn!(
+            storage_load_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let storage_store_tsfn = build_tsfn!(
+            storage_store_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let call_other_contract_tsfn = build_tsfn!(
+            call_other_contract_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let deploy_from_address_tsfn = build_tsfn!(
+            deploy_from_address_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let console_log_tsfn = build_tsfn!(
+            console_log_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<()>
+        );
+
+        let emit_tsfn = build_tsfn!(emit_js_function, ThreadSafeJsImportResponse, Promise<()>);
+
+        let inputs_tsfn = build_tsfn!(
+            inputs_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let outputs_tsfn = build_tsfn!(
+            outputs_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<Buffer>
+        );
+
+        let account_type_tsfn = build_tsfn!(
+            account_type_js_function,
+            ThreadSafeJsImportResponse,
+            Promise<AccountTypeResponse>
+        );
+
+        let block_hash_tsfn = build_tsfn!(
+            block_hash_js_function,
+            BlockHashRequest,
+            Promise<JsBlockHashResponse>
+        );
 
         let max_idling_runtimes = max_idling_runtimes as usize;
         let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
@@ -218,8 +392,8 @@ impl ContractManager {
     }
 
     #[napi]
-    pub fn destroy(&mut self, env: Env) -> Result<(), Error> {
-        abort_tsfn!(self.storage_load_tsfn, &env);
+    pub fn destroy(&mut self, _env: Env) -> Result<(), Error> {
+        /*abort_tsfn!(self.storage_load_tsfn, &env);
         abort_tsfn!(self.storage_store_tsfn, &env);
         abort_tsfn!(self.call_other_contract_tsfn, &env);
         abort_tsfn!(self.deploy_from_address_tsfn, &env);
@@ -228,7 +402,7 @@ impl ContractManager {
         abort_tsfn!(self.inputs_tsfn, &env);
         abort_tsfn!(self.outputs_tsfn, &env);
         abort_tsfn!(self.account_type_tsfn, &env);
-        abort_tsfn!(self.block_hash_tsfn, &env);
+        abort_tsfn!(self.block_hash_tsfn, &env);*/
 
         Ok(())
     }
@@ -278,7 +452,7 @@ impl ContractManager {
     }
 
     #[napi(ts_return_type = "ExitDataResponse")]
-    pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<napi::JsObject, Error> {
+    pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<Object, Error> {
         let id = contract_id.get_u64().1;
 
         let contract = self
@@ -288,25 +462,21 @@ impl ContractManager {
 
         let exit_data = contract.get_exit_data()?;
 
-        let mut js_object = env.create_object()?;
-        js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
+        let mut js_object = Object::new(&env)?;
+        js_object.set_named_property("status", exit_data.status)?;
         js_object.set_named_property(
             "data",
-            env.create_buffer_with_data(exit_data.data.to_vec())?
-                .into_raw(),
+            BufferSlice::from_data(&env, exit_data.data.to_vec())?,
         )?;
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
 
         let length = exit_data.proofs.len() as u32;
         let mut array = env.create_array(length)?;
         for (_, proof) in exit_data.proofs.iter().enumerate() {
-            let proof_buffer = env
-                .create_buffer_with_data(proof.proof.to_vec())?
-                .into_raw();
+            let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+            let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
-            let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
-
-            let mut object = env.create_object()?;
+            let mut object = Object::new(&env)?;
             object.set_named_property("proof", proof_buffer)?;
             object.set_named_property("vk", vk_buffer)?;
 
@@ -366,7 +536,7 @@ impl ContractManager {
         contract.set_environment_variables(environment_variables)
     }
 
-    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn on_deploy(
         &self,
         env: Env,
@@ -382,8 +552,7 @@ impl ContractManager {
 
         // We must clone the Arc for background usage and for final JS creation:
         let arc_for_bg = contract_arc.clone();
-
-        let calldata_for_bg = calldata.clone();
+        let calldata_for_bg = calldata.to_vec();
 
         // The future to run in the background:
         let future = async move {
@@ -411,8 +580,7 @@ impl ContractManager {
                 js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
                 js_object.set_named_property(
                     "data",
-                    env.create_buffer_with_data(exit_data.data.to_vec())?
-                        .into_raw(),
+                    BufferSlice::from_data(&env, exit_data.data.to_vec())?,
                 )?;
                 js_object.set_named_property(
                     "gasUsed",
@@ -422,11 +590,8 @@ impl ContractManager {
                 let length = exit_data.proofs.len() as u32;
                 let mut array = env.create_array(length)?;
                 for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let proof_buffer = env
-                        .create_buffer_with_data(proof.proof.to_vec())?
-                        .into_raw();
-
-                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+                    let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+                    let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
                     let mut object = env.create_object()?;
                     object.set_named_property("proof", proof_buffer)?;
@@ -442,9 +607,48 @@ impl ContractManager {
         )?;
 
         Ok(promise)
-    }
+    }*/
 
     #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    pub fn on_deploy<'env>(
+        &self,
+        env: &'env Env,
+        id: BigInt,
+        calldata: Buffer,
+    ) -> napi::Result<PromiseRaw<'env, ExitData>> {
+        let id = id.get_u64().1;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason("Contract not found"))?
+            .clone();
+
+        let fut = async move {
+            let raw = tokio::task::spawn_blocking(move || contract.on_deploy(calldata.to_vec()))
+                .await
+                .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
+
+            /*ExitData {
+                status: raw.status,
+                data: raw.data.to_vec(),
+                gas_used: raw.gas_used,
+                proofs: raw
+                    .proofs
+                    .into_iter()
+                    .map(|p| ProvenState {
+                        proof: p.proof.to_vec(),
+                        vk: p.vk.to_vec(),
+                    })
+                    .collect(),
+            }*/
+
+            Ok::<_, Error>(raw)
+        };
+
+        env.spawn_future(fut)
+    }
+
+    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn execute(&self, env: Env, id: BigInt, calldata: Buffer) -> napi::Result<napi::JsObject> {
         let id_u64 = id.get_u64().1;
         let contract_arc = self
@@ -456,21 +660,21 @@ impl ContractManager {
         // We must clone the Arc for background usage and for final JS creation:
         let arc_for_bg = contract_arc.clone();
 
-        let calldata_for_bg = calldata.clone();
+        let calldata_for_bg = calldata.to_vec();
 
         // The future to run in the background:
         let future = async move {
             // Inside spawn_blocking to avoid blocking async runtime
             let exit_data = tokio::task::spawn_blocking(move || {
                 // The heavy-lifting synchronous call
-                arc_for_bg.execute(calldata_for_bg)
+                let resp = arc_for_bg.execute(calldata_for_bg);
+                resp
             })
             .await
             .map_err(|join_err| {
                 Error::from_reason(format!("Tokio join error: {:?}", join_err))
             })??;
 
-            // Return the result to the next closure
             Ok(exit_data)
         };
 
@@ -478,15 +682,14 @@ impl ContractManager {
         let promise = env.execute_tokio_future(
             future,
             // This closure is run on the main thread to convert Rust data to JS objects
-            move |&mut env, exit_data| {
-                // use the second Arc to build a JS array
+            move |env, exit_data| {
                 let mut js_object = env.create_object()?;
                 js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
                 js_object.set_named_property(
                     "data",
-                    env.create_buffer_with_data(exit_data.data.to_vec())?
-                        .into_raw(),
+                    BufferSlice::from_data(&env, exit_data.data.to_vec())?,
                 )?;
+
                 js_object.set_named_property(
                     "gasUsed",
                     env.create_bigint_from_u64(exit_data.gas_used),
@@ -495,11 +698,8 @@ impl ContractManager {
                 let length = exit_data.proofs.len() as u32;
                 let mut array = env.create_array(length)?;
                 for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let proof_buffer = env
-                        .create_buffer_with_data(proof.proof.to_vec())?
-                        .into_raw();
-
-                    let vk_buffer = env.create_buffer_with_data(proof.vk.to_vec())?.into_raw();
+                    let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
+                    let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
 
                     let mut object = env.create_object()?;
                     object.set_named_property("proof", proof_buffer)?;
@@ -515,9 +715,48 @@ impl ContractManager {
         )?;
 
         Ok(promise)
+    }*/
+
+    #[napi(ts_return_type = "Promise<ExitDataResponse>")]
+    pub fn execute<'env>(
+        &self,
+        env: &'env Env,
+        id: BigInt,
+        calldata: Buffer,
+    ) -> napi::Result<PromiseRaw<'env, ExitData>> {
+        let id = id.get_u64().1;
+        let contract = self
+            .contracts
+            .get(&id)
+            .ok_or_else(|| Error::from_reason("Contract not found"))?
+            .clone();
+
+        let fut = async move {
+            let raw = tokio::task::spawn_blocking(move || contract.execute(calldata.to_vec()))
+                .await
+                .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
+
+            /*ExitData {
+                status: raw.status,
+                data: raw.data.to_vec(),
+                gas_used: raw.gas_used,
+                proofs: raw
+                    .proofs
+                    .into_iter()
+                    .map(|p| ProvenState {
+                        proof: p.proof.to_vec(),
+                        vk: p.vk.to_vec(),
+                    })
+                    .collect(),
+            }*/
+
+            Ok::<_, Error>(raw)
+        };
+
+        env.spawn_future(fut)
     }
 
-    #[napi(ts_return_type = "Promise<number[]>")]
+    /*#[napi(ts_return_type = "Promise<number[]>")]
     pub fn call_export_by_name(
         &self,
         env: Env,
@@ -571,7 +810,44 @@ impl ContractManager {
         )?;
 
         Ok(promise)
-    }
+    }*/
+
+    /*#[napi(ts_return_type = "Promise<number[]>")]
+    pub fn call_export_by_name<'env>(
+        &self,
+        env: &'env Env,
+        id: BigInt,
+        function_name: String,
+        params: Vec<JsNumber>,
+    ) -> napi::Result<PromiseRaw<'env, IntArrayResponse>> {
+        let id_u64 = id.get_u64().1;
+        let contract = self
+            .contracts
+            .get(&id_u64)
+            .ok_or_else(|| Error::from_reason("Contract not found"))?
+            .clone();
+
+        let int_params = params
+            .into_iter()
+            .map(|n| n.get_int32())
+            .collect::<napi::Result<Vec<i32>>>()?;
+
+        let fut = async move {
+            let fn_name = function_name; // moved into async block
+            let values_boxed = tokio::task::spawn_blocking(move || {
+                contract.call_export_by_name(&fn_name, &int_params)
+            })
+            .await
+            .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
+
+            Ok::<_, Error>(IntArrayResponse {
+                contract,
+                values: values_boxed,
+            })
+        };
+
+        env.spawn_future(fut)
+    }*/
 
     #[napi]
     pub fn length(&self) -> Result<BigInt, Error> {

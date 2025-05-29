@@ -29,10 +29,10 @@ impl StorageLoadImport {
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
         let response = env.storage_load_external.execute(&key, &env.runtime)?;
+        let value = response[0..32]
+            .try_into()
+            .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?;
 
-        let value = response[0..32].try_into().map_err(|e| {
-            RuntimeError::new(format!("Cannot map result to data: {:?}", e))
-        })?;
         let is_slot_warm = response[32] == 1;
 
         let gas_cost = if is_slot_warm {
