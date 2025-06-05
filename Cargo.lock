@@ -1806,13 +1806,12 @@ dependencies = [
 
 [[package]]
 name = "napi"
-version = "3.0.0-beta.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e0d1af803835267849e6816cc15ae1d53370e6bf8e1c721363ad50ca2ae1637"
+version = "3.0.0-beta.7"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#a29db7eb693b7878c301c58009f8a0c234acc861"
 dependencies = [
  "bitflags 2.6.0",
  "ctor",
- "napi-build 3.0.0-beta.0",
+ "napi-build 2.2.1",
  "napi-sys",
  "nohash-hasher",
  "rustc-hash 2.1.1",
@@ -1827,9 +1826,8 @@ checksum = "03acbfa4f156a32188bfa09b86dc11a431b5725253fc1fc6f6df5bed273382c4"
 
 [[package]]
 name = "napi-build"
-version = "3.0.0-beta.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42908a235da4c4a18c481eb5a8bb38570daa18581a68c508ca8efab662e38bc6"
+version = "2.2.1"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#a29db7eb693b7878c301c58009f8a0c234acc861"
 
 [[package]]
 name = "napi-derive"
@@ -1861,8 +1859,7 @@ dependencies = [
 [[package]]
 name = "napi-sys"
 version = "3.0.0-alpha.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4401c63f866b42d673a8b213d5662c84a0701b0f6c3acff7e2b9fc439f1675d"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#a29db7eb693b7878c301c58009f8a0c234acc861"
 dependencies = [
  "libloading",
 ]

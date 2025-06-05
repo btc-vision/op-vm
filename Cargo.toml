@@ -61,3 +61,6 @@ zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-
 [profile.release]
 lto = true
 strip = "symbols"
+
+[patch.crates-io]
+napi = { git = "https://github.com/btc-vision/napi3-rs.git", branch = "main" }
