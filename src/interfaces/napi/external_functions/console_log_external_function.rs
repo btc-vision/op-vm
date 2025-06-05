@@ -20,7 +20,7 @@ impl ConsoleLogExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

@@ -20,7 +20,7 @@ impl StorageStoreExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

@@ -22,7 +22,7 @@ impl CallOtherContractExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

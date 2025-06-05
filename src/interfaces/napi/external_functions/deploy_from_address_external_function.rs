@@ -22,7 +22,7 @@ impl DeployFromAddressExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

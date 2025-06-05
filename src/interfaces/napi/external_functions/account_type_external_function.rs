@@ -1,7 +1,7 @@
 use napi::bindgen_prelude::{BigInt, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;
-use std::sync::Arc;
 use napi::Status;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -21,7 +21,7 @@ pub struct AccountTypeExternalFunction {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            false,
+            true,
             128,
         >,
     >,
@@ -37,7 +37,7 @@ impl AccountTypeExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                false,
+                true,
                 128,
             >,
         >,

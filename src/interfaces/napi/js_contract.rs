@@ -359,7 +359,7 @@ impl JsContract {
             }
 
             Value::F64(v) => {
-                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v as f64)? };
+                let js_value = unsafe { ToNapiValue::to_napi_value(raw_env, *v)? };
                 let unknown = unsafe { Unknown::from_raw_unchecked(raw_env, js_value) };
 
                 Ok(unknown)
@@ -377,7 +377,7 @@ impl JsContract {
     }
 
     #[allow(dead_code)]
-    pub fn box_values_to_js_array<'a>(env: &'a Env, values: Box<[Value]>) -> Result<Array<'a>> {
+    pub fn box_values_to_js_array(env: &Env, values: Box<[Value]>) -> Result<Array> {
         let mut js_array = env.create_array(values.len() as u32)?;
 
         for value in values.iter() {
