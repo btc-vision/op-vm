@@ -466,8 +466,8 @@ impl ContractManager {
 
     #[napi(ts_return_type = "ExitDataResponse")]
     pub fn get_exit_data(&self, env: Env, contract_id: BigInt) -> Result<Object, Error> {
+        // 0️⃣ fetch contract
         let id = contract_id.get_u64().1;
-
         let contract = self
             .contracts
             .get(&id)
@@ -482,20 +482,18 @@ impl ContractManager {
         js_object.set_named_property("data", js_buf)?;
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
 
-        let length = exit_data.proofs.len() as u32;
-        let mut array = env.create_array(length)?;
-        for proof in &exit_data.proofs {
+        let mut array = env.create_array(exit_data.proofs.len() as u32)?;
+        for (idx, proof) in exit_data.proofs.iter().enumerate() {
             let proof_buffer = BufferSlice::copy_from(&env, proof.proof.clone())?;
             let vk_buffer = BufferSlice::copy_from(&env, proof.vk.clone())?;
 
-            let mut object = Object::new(&env)?;
-            object.set_named_property("proof", proof_buffer)?;
-            object.set_named_property("vk", vk_buffer)?;
-
-            array.insert(object)?;
+            let mut obj = Object::new(&env)?;
+            obj.set_named_property("proof", proof_buffer)?;
+            obj.set_named_property("vk", vk_buffer)?;
+            array.set_element(idx as u32, obj)?;
         }
-
         js_object.set_named_property("proofs", array)?;
+
         Ok(js_object)
     }
 

@@ -1,11 +1,11 @@
 use crate::domain::runner::ProvenState;
 use bitcoin::hex::DisplayHex;
 use napi::bindgen_prelude::{BufferSlice, ToNapiValue};
-use napi::Result as NapiResult;
 use napi::{
-    bindgen_prelude::{FromNapiValue, JsObjectValue, JsValue, Object},
+    bindgen_prelude::{FromNapiValue, JsObjectValue, Object},
     sys, Env,
 };
+use napi::{JsValue, Result as NapiResult};
 use std::fmt::Display;
 
 #[derive(Clone, Debug, Default)]
@@ -33,28 +33,34 @@ impl ExitData {
 }
 
 impl ToNapiValue for ExitData {
-    unsafe fn to_napi_value(env_raw: sys::napi_env, mut val: Self) -> NapiResult<sys::napi_value> {
+    unsafe fn to_napi_value(
+        env_raw: napi::sys::napi_env,
+        mut val: Self,
+    ) -> napi::Result<napi::sys::napi_value> {
         let env = Env::from_raw(env_raw);
 
         let mut obj = Object::new(&env)?;
-        let val_data = BufferSlice::copy_from(&env, std::mem::take(&mut val.data))?;
 
         obj.set_named_property("status", val.status)?;
-        obj.set_named_property("data", val_data)?;
+        obj.set_named_property(
+            "data",
+            BufferSlice::copy_from(&env, std::mem::take(&mut val.data))?,
+        )?;
         obj.set_named_property("gasUsed", val.gas_used)?;
 
         let mut arr = env.create_array(val.proofs.len() as u32)?;
-        for (idx, mut p) in val.proofs.into_iter().enumerate() {
-            let mut proof_obj = Object::new(&env)?;
-            let proof_buffer = BufferSlice::copy_from(&env, std::mem::take(&mut p.proof))?;
-            let vk_buffer = BufferSlice::copy_from(&env, std::mem::take(&mut p.vk))?;
-
-            proof_obj.set_named_property("proof", proof_buffer)?;
-            proof_obj.set_named_property("vk", vk_buffer)?;
-
-            arr.insert(idx as u32)?;
+        for proof in &mut val.proofs {
+            let mut p_obj = Object::new(&env)?;
+            p_obj.set_named_property(
+                "proof",
+                BufferSlice::copy_from(&env, std::mem::take(&mut proof.proof))?,
+            )?;
+            p_obj.set_named_property(
+                "vk",
+                BufferSlice::copy_from(&env, std::mem::take(&mut proof.vk))?,
+            )?;
+            arr.insert(p_obj)?;
         }
-
         obj.set_named_property("proofs", arr)?;
 
         Ok(obj.raw())
