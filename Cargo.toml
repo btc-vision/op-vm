@@ -13,7 +13,7 @@ wasmer-compiler-singlepass = "6.0.1"
 wasmer-types = "6.0.1"
 wasmer-compiler = "6.0.1"
 anyhow = "1.0.98"
-napi = { version = "3.0.0-beta.5", default-features = false, features = ["napi9", "tokio_rt", "async", "tokio_io_std"] }
+napi = { version = "3.0.0-beta.5", default-features = false, features = ["trace-buffer-drops", "napi9", "napi10", "napi4", "tokio_rt", "async", "tokio_io_std"] }
 napi-derive = "3.0.0-beta.2"
 tokio = { version = "1.45.1", features = ["time"] }
 chrono = "0.4.41"
@@ -63,4 +63,4 @@ lto = true
 strip = "symbols"
 
 [patch.crates-io]
-napi = { git = "https://github.com/btc-vision/napi3-rs.git", branch = "main" }
+napi = { git = "https://github.com/btc-vision/napi3-rs.git", branch = "main", default-features = false, features = ["trace-buffer-drops", "napi9", "napi10", "napi4", "tokio_rt", "async", "tokio_io_std"] }
