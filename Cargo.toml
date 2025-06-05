@@ -63,4 +63,4 @@ lto = true
 strip = "symbols"
 
 [patch.crates-io]
-napi = { git = "https://github.com/btc-vision/napi3-rs.git", branch = "main", default-features = false, features = ["trace-buffer-drops", "napi9", "napi10", "napi4", "tokio_rt", "async", "tokio_io_std"] }
+napi = { git = "https://github.com/btc-vision/napi3-rs.git", branch = "main" }
