@@ -345,7 +345,7 @@ impl ContractManager {
         &mut self,
         reserved_id: BigInt,
         address: String,
-        bytecode: Option<Buffer>,
+        bytecode: Option<BufferSlice>,
         used_gas: BigInt,
         max_gas: BigInt,
         memory_pages_used: BigInt,
@@ -374,7 +374,9 @@ impl ContractManager {
         } else {
             let bc = bytecode
                 .ok_or_else(|| Error::from_reason(anyhow!("Bytecode is required").to_string()))?
+                .as_ref()
                 .to_vec();
+
             should_cache = true;
             params.bytecode = Some(bc);
         }
@@ -625,7 +627,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        calldata: Buffer,
+        calldata: BufferSlice,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
@@ -634,24 +636,12 @@ impl ContractManager {
             .ok_or_else(|| Error::from_reason("Contract not found"))?
             .clone();
 
+        let data = calldata.as_ref().to_vec();
+
         let fut = async move {
-            let raw = tokio::task::spawn_blocking(move || contract.on_deploy(calldata.to_vec()))
+            let raw = tokio::task::spawn_blocking(move || contract.on_deploy(data))
                 .await
                 .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
-
-            /*ExitData {
-                status: raw.status,
-                data: raw.data.to_vec(),
-                gas_used: raw.gas_used,
-                proofs: raw
-                    .proofs
-                    .into_iter()
-                    .map(|p| ProvenState {
-                        proof: p.proof.to_vec(),
-                        vk: p.vk.to_vec(),
-                    })
-                    .collect(),
-            }*/
 
             Ok::<_, Error>(raw)
         };
@@ -733,7 +723,7 @@ impl ContractManager {
         &self,
         env: &'env Env,
         id: BigInt,
-        calldata: Buffer,
+        calldata: BufferSlice,
     ) -> napi::Result<PromiseRaw<'env, ExitData>> {
         let id = id.get_u64().1;
         let contract = self
@@ -742,8 +732,10 @@ impl ContractManager {
             .ok_or_else(|| Error::from_reason("Contract not found"))?
             .clone();
 
+        let data = calldata.as_ref().to_vec();
+
         let fut = async move {
-            let raw = tokio::task::spawn_blocking(move || contract.execute(calldata.to_vec()))
+            let raw = tokio::task::spawn_blocking(move || contract.execute(data))
                 .await
                 .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
 
