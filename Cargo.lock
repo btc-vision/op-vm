@@ -1807,7 +1807,7 @@ dependencies = [
 [[package]]
 name = "napi"
 version = "3.0.0-beta.7"
-source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#869fde61b14ca6112533bae3abf61c63810aba37"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#c734664d355c6ac6bc72eb71b80dd6a51cebaafb"
 dependencies = [
  "bitflags 2.6.0",
  "ctor",
@@ -1827,7 +1827,7 @@ checksum = "03acbfa4f156a32188bfa09b86dc11a431b5725253fc1fc6f6df5bed273382c4"
 [[package]]
 name = "napi-build"
 version = "2.2.1"
-source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#869fde61b14ca6112533bae3abf61c63810aba37"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#c734664d355c6ac6bc72eb71b80dd6a51cebaafb"
 
 [[package]]
 name = "napi-derive"
@@ -1859,7 +1859,7 @@ dependencies = [
 [[package]]
 name = "napi-sys"
 version = "3.0.0-alpha.3"
-source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#869fde61b14ca6112533bae3abf61c63810aba37"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#c734664d355c6ac6bc72eb71b80dd6a51cebaafb"
 dependencies = [
  "libloading",
 ]

@@ -20,7 +20,7 @@ impl OutputsExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                true,
+                false,
                 128,
             >,
         >,

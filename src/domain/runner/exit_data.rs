@@ -33,19 +33,24 @@ impl ExitData {
 }
 
 impl ToNapiValue for ExitData {
-    unsafe fn to_napi_value(env_raw: sys::napi_env, val: Self) -> NapiResult<sys::napi_value> {
+    unsafe fn to_napi_value(env_raw: sys::napi_env, mut val: Self) -> NapiResult<sys::napi_value> {
         let env = Env::from_raw(env_raw);
 
         let mut obj = Object::new(&env)?;
+        let val_data = BufferSlice::copy_from(&env, std::mem::take(&mut val.data))?;
+
         obj.set_named_property("status", val.status)?;
-        obj.set_named_property("data", BufferSlice::from_data(&env, val.data)?)?;
+        obj.set_named_property("data", val_data)?;
         obj.set_named_property("gasUsed", val.gas_used)?;
 
         let mut arr = env.create_array(val.proofs.len() as u32)?;
-        for (idx, p) in val.proofs.into_iter().enumerate() {
+        for (idx, mut p) in val.proofs.into_iter().enumerate() {
             let mut proof_obj = Object::new(&env)?;
-            proof_obj.set_named_property("proof", BufferSlice::from_data(&env, p.proof)?)?;
-            proof_obj.set_named_property("vk", BufferSlice::from_data(&env, p.vk)?)?;
+            let proof_buffer = BufferSlice::copy_from(&env, std::mem::take(&mut p.proof))?;
+            let vk_buffer = BufferSlice::copy_from(&env, std::mem::take(&mut p.vk))?;
+
+            proof_obj.set_named_property("proof", proof_buffer)?;
+            proof_obj.set_named_property("vk", vk_buffer)?;
 
             arr.insert(idx as u32)?;
         }

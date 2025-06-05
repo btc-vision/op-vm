@@ -1,7 +1,7 @@
 use napi::bindgen_prelude::{BigInt, Buffer, FromNapiValue, Promise, Unknown};
 use napi::threadsafe_function::ThreadsafeFunction;
-use std::sync::Arc;
 use napi::Status;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -18,7 +18,7 @@ pub struct GenericExternalFunction<Return: 'static + FromNapiValue = Unknown<'st
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -37,7 +37,7 @@ where
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                true,
+                false,
                 128,
             >,
         >,

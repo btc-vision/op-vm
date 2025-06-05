@@ -22,7 +22,7 @@ impl StorageLoadExternalFunction {
                 ThreadSafeJsImportResponse,
                 Status,
                 true,
-                true,
+                false,
                 128,
             >,
         >,

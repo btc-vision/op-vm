@@ -47,13 +47,13 @@ macro_rules! build_tsfn {
       $resp,
       Status,
       true,
-      true,
+      false,
       Q,
     >> = Arc::new($fn_ident
       .build_threadsafe_function()
       .max_queue_size::<Q>()
       .callee_handled::<true>()
-      .weak::<true>()
+      .weak::<false>()
       .build()?);
     tsfn
   }};
@@ -91,7 +91,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -103,7 +103,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -115,7 +115,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -127,7 +127,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -139,7 +139,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -151,7 +151,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -163,7 +163,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -175,7 +175,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -187,7 +187,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -199,7 +199,7 @@ pub struct ContractManager {
             BlockHashRequest,
             Status,
             true,
-            true,
+            false,
             128,
         >,
     >,
@@ -473,27 +473,26 @@ impl ContractManager {
             .get(&id)
             .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?;
 
-        let exit_data = contract.get_exit_data()?;
+        let mut exit_data = contract.get_exit_data()?;
 
         let mut js_object = Object::new(&env)?;
         js_object.set_named_property("status", exit_data.status)?;
-        js_object.set_named_property(
-            "data",
-            BufferSlice::from_data(&env, exit_data.data.to_vec())?,
-        )?;
+
+        let js_buf = BufferSlice::copy_from(&env, std::mem::take(&mut exit_data.data))?;
+        js_object.set_named_property("data", js_buf)?;
         js_object.set_named_property("gasUsed", exit_data.gas_used)?;
 
         let length = exit_data.proofs.len() as u32;
         let mut array = env.create_array(length)?;
-        for (_, proof) in exit_data.proofs.iter().enumerate() {
-            let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
-            let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
+        for proof in &exit_data.proofs {
+            let proof_buffer = BufferSlice::copy_from(&env, proof.proof.clone())?;
+            let vk_buffer = BufferSlice::copy_from(&env, proof.vk.clone())?;
 
             let mut object = Object::new(&env)?;
             object.set_named_property("proof", proof_buffer)?;
             object.set_named_property("vk", vk_buffer)?;
 
-            array.insert(object)?
+            array.insert(object)?;
         }
 
         js_object.set_named_property("proofs", array)?;
@@ -549,79 +548,6 @@ impl ContractManager {
         contract.set_environment_variables(environment_variables)
     }
 
-    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
-    pub fn on_deploy(
-        &self,
-        env: Env,
-        id: BigInt,
-        calldata: Buffer,
-    ) -> napi::Result<napi::JsObject> {
-        let id_u64 = id.get_u64().1;
-        let contract_arc = self
-            .contracts
-            .get(&id_u64)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?
-            .clone();
-
-        // We must clone the Arc for background usage and for final JS creation:
-        let arc_for_bg = contract_arc.clone();
-        let calldata_for_bg = calldata.to_vec();
-
-        // The future to run in the background:
-        let future = async move {
-            // Inside spawn_blocking to avoid blocking async runtime
-            let exit_data = tokio::task::spawn_blocking(move || {
-                // The heavy-lifting synchronous call
-                arc_for_bg.on_deploy(calldata_for_bg)
-            })
-            .await
-            .map_err(|join_err| {
-                Error::from_reason(format!("Tokio join error: {:?}", join_err))
-            })??;
-
-            // Return the result to the next closure
-            Ok(exit_data)
-        };
-
-        // Now convert that `future` into a JS Promise using `execute_tokio_future`.
-        let promise = env.execute_tokio_future(
-            future,
-            // This closure is run on the main thread to convert Rust data to JS objects
-            move |&mut env, exit_data| {
-                // use the second Arc to build a JS array
-                let mut js_object = env.create_object()?;
-                js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
-                js_object.set_named_property(
-                    "data",
-                    BufferSlice::from_data(&env, exit_data.data.to_vec())?,
-                )?;
-                js_object.set_named_property(
-                    "gasUsed",
-                    env.create_bigint_from_u64(exit_data.gas_used),
-                )?;
-
-                let length = exit_data.proofs.len() as u32;
-                let mut array = env.create_array(length)?;
-                for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
-                    let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
-
-                    let mut object = env.create_object()?;
-                    object.set_named_property("proof", proof_buffer)?;
-                    object.set_named_property("vk", vk_buffer)?;
-
-                    array.insert(object)?
-                }
-
-                js_object.set_named_property("proofs", array)?;
-
-                Ok(js_object)
-            },
-        )?;
-
-        Ok(promise)
-    }*/
-
     #[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn on_deploy<'env>(
         &self,
@@ -649,75 +575,6 @@ impl ContractManager {
         env.spawn_future(fut)
     }
 
-    /*#[napi(ts_return_type = "Promise<ExitDataResponse>")]
-    pub fn execute(&self, env: Env, id: BigInt, calldata: Buffer) -> napi::Result<napi::JsObject> {
-        let id_u64 = id.get_u64().1;
-        let contract_arc = self
-            .contracts
-            .get(&id_u64)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?
-            .clone();
-
-        // We must clone the Arc for background usage and for final JS creation:
-        let arc_for_bg = contract_arc.clone();
-
-        let calldata_for_bg = calldata.to_vec();
-
-        // The future to run in the background:
-        let future = async move {
-            // Inside spawn_blocking to avoid blocking async runtime
-            let exit_data = tokio::task::spawn_blocking(move || {
-                // The heavy-lifting synchronous call
-                let resp = arc_for_bg.execute(calldata_for_bg);
-                resp
-            })
-            .await
-            .map_err(|join_err| {
-                Error::from_reason(format!("Tokio join error: {:?}", join_err))
-            })??;
-
-            Ok(exit_data)
-        };
-
-        // Now convert that `future` into a JS Promise using `execute_tokio_future`.
-        let promise = env.execute_tokio_future(
-            future,
-            // This closure is run on the main thread to convert Rust data to JS objects
-            move |env, exit_data| {
-                let mut js_object = env.create_object()?;
-                js_object.set_named_property("status", env.create_uint32(exit_data.status))?;
-                js_object.set_named_property(
-                    "data",
-                    BufferSlice::from_data(&env, exit_data.data.to_vec())?,
-                )?;
-
-                js_object.set_named_property(
-                    "gasUsed",
-                    env.create_bigint_from_u64(exit_data.gas_used),
-                )?;
-
-                let length = exit_data.proofs.len() as u32;
-                let mut array = env.create_array(length)?;
-                for (_, proof) in exit_data.proofs.iter().enumerate() {
-                    let proof_buffer = BufferSlice::from_data(&env, proof.proof.to_vec())?;
-                    let vk_buffer = BufferSlice::from_data(&env, proof.vk.to_vec())?;
-
-                    let mut object = env.create_object()?;
-                    object.set_named_property("proof", proof_buffer)?;
-                    object.set_named_property("vk", vk_buffer)?;
-
-                    array.insert(object)?
-                }
-
-                js_object.set_named_property("proofs", array)?;
-
-                Ok(js_object)
-            },
-        )?;
-
-        Ok(promise)
-    }*/
-
     #[napi(ts_return_type = "Promise<ExitDataResponse>")]
     pub fn execute<'env>(
         &self,
@@ -739,118 +596,11 @@ impl ContractManager {
                 .await
                 .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
 
-            /*ExitData {
-                status: raw.status,
-                data: raw.data.to_vec(),
-                gas_used: raw.gas_used,
-                proofs: raw
-                    .proofs
-                    .into_iter()
-                    .map(|p| ProvenState {
-                        proof: p.proof.to_vec(),
-                        vk: p.vk.to_vec(),
-                    })
-                    .collect(),
-            }*/
-
             Ok::<_, Error>(raw)
         };
 
         env.spawn_future(fut)
     }
-
-    /*#[napi(ts_return_type = "Promise<number[]>")]
-    pub fn call_export_by_name(
-        &self,
-        env: Env,
-        id: BigInt,
-        function_name: String,
-        params: Vec<JsNumber>,
-    ) -> napi::Result<napi::JsObject> {
-        let id_u64 = id.get_u64().1;
-        let contract_arc = self
-            .contracts
-            .get(&id_u64)
-            .ok_or_else(|| Error::from_reason(anyhow!("Contract not found").to_string()))?
-            .clone();
-
-        // Convert JS numbers to i32
-        let int_params: Vec<i32> = params
-            .into_iter()
-            .map(|num| num.get_int32())
-            .collect::<napi::Result<Vec<i32>>>()?;
-
-        // We must clone the Arc for background usage and for final JS creation:
-        let arc_for_bg = contract_arc.clone();
-        let arc_for_js = contract_arc.clone();
-
-        let function_name_for_bg = function_name.clone();
-
-        // The future to run in the background:
-        let future = async move {
-            // Inside spawn_blocking to avoid blocking async runtime
-            let values_boxed = tokio::task::spawn_blocking(move || {
-                // The heavy-lifting synchronous call
-                arc_for_bg.call_export_by_name(&function_name_for_bg, &int_params)
-            })
-            .await
-            .map_err(|join_err| {
-                Error::from_reason(format!("Tokio join error: {:?}", join_err))
-            })??;
-
-            // Return the raw values to the next closure
-            Ok(values_boxed)
-        };
-
-        // Now convert that `future` into a JS Promise using `execute_tokio_future`.
-        let promise = env.execute_tokio_future(
-            future,
-            // This closure is run on the main thread to convert Rust data to JS objects
-            move |&mut env, values_boxed| {
-                // use the second Arc to build a JS array
-                arc_for_js.convert_values_to_js_array(&env, values_boxed)
-            },
-        )?;
-
-        Ok(promise)
-    }*/
-
-    /*#[napi(ts_return_type = "Promise<number[]>")]
-    pub fn call_export_by_name<'env>(
-        &self,
-        env: &'env Env,
-        id: BigInt,
-        function_name: String,
-        params: Vec<JsNumber>,
-    ) -> napi::Result<PromiseRaw<'env, IntArrayResponse>> {
-        let id_u64 = id.get_u64().1;
-        let contract = self
-            .contracts
-            .get(&id_u64)
-            .ok_or_else(|| Error::from_reason("Contract not found"))?
-            .clone();
-
-        let int_params = params
-            .into_iter()
-            .map(|n| n.get_int32())
-            .collect::<napi::Result<Vec<i32>>>()?;
-
-        let fut = async move {
-            let fn_name = function_name; // moved into async block
-            let values_boxed = tokio::task::spawn_blocking(move || {
-                contract.call_export_by_name(&fn_name, &int_params)
-            })
-            .await
-            .map_err(|e| Error::from_reason(format!("Tokio join error: {e:?}")))??;
-
-            Ok::<_, Error>(IntArrayResponse {
-                contract,
-                values: values_boxed,
-            })
-        };
-
-        env.spawn_future(fut)
-    }*/
 
     #[napi]
     pub fn length(&self) -> Result<BigInt, Error> {
