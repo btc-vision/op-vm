@@ -2,6 +2,7 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 use crate::interfaces::{ExternalFunction, GenericExternalFunction};
 use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;
+use napi::Status;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
@@ -17,6 +18,7 @@ impl StorageStoreExternalFunction {
                 ThreadSafeJsImportResponse,
                 Promise<Buffer>,
                 ThreadSafeJsImportResponse,
+                Status,
                 true,
                 false,
                 128,

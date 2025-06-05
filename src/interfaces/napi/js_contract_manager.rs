@@ -14,8 +14,8 @@ use napi::bindgen_prelude::{
     BigInt, Buffer, BufferSlice, Function, JsObjectValue, Object, Promise, PromiseRaw,
 };
 use napi::threadsafe_function::ThreadsafeFunction;
-use napi::Env;
 use napi::Error;
+use napi::{Env, Status};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -45,6 +45,7 @@ macro_rules! build_tsfn {
       $resp,
       $ret,
       $resp,
+      Status,
       true,
       false,
       Q,
@@ -88,6 +89,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<Buffer>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -99,6 +101,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<Buffer>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -110,6 +113,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<Buffer>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -121,6 +125,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<Buffer>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -132,6 +137,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<()>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -143,6 +149,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<()>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -154,6 +161,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<Buffer>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -165,6 +173,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<Buffer>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -176,6 +185,7 @@ pub struct ContractManager {
             ThreadSafeJsImportResponse,
             Promise<AccountTypeResponse>,
             ThreadSafeJsImportResponse,
+            Status,
             true,
             false,
             128,
@@ -187,6 +197,7 @@ pub struct ContractManager {
             BlockHashRequest,
             Promise<JsBlockHashResponse>,
             BlockHashRequest,
+            Status,
             true,
             false,
             128,

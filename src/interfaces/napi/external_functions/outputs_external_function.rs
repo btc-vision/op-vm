@@ -3,6 +3,7 @@ use crate::interfaces::{ExternalFunctionNoData, GenericExternalFunction};
 use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::ThreadsafeFunction;
 use std::sync::Arc;
+use napi::Status;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -17,6 +18,7 @@ impl OutputsExternalFunction {
                 ThreadSafeJsImportResponse,
                 Promise<Buffer>,
                 ThreadSafeJsImportResponse,
+                Status,
                 true,
                 false,
                 128,
