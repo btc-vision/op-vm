@@ -20,22 +20,20 @@
         "url": "git://github.com/btc-vision/op-vm.git"
     },
     "napi": {
-        "name": "op-vm",
-        "triples": {
-            "additional": [
-                "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "aarch64-unknown-linux-gnu",
-                "aarch64-pc-windows-msvc",
-                "universal-apple-darwin"
-            ]
-        }
+        "binaryName": "op-vm",
+        "targets": [
+            "aarch64-apple-darwin",
+            "aarch64-linux-android",
+            "aarch64-unknown-linux-gnu",
+            "aarch64-pc-windows-msvc",
+            "universal-apple-darwin"
+        ]
     },
     "engines": {
         "node": ">= 18"
     },
     "dependencies": {
-        "@napi-rs/cli": "^2.18.4"
+        "@napi-rs/cli": "3.0.0-alpha.87"
     },
     "scripts": {
         "artifacts": "napi artifacts",
@@ -48,6 +46,6 @@
         "postinstall": "npm run build"
     },
     "devDependencies": {
-        "@types/node": "^22.14.0"
+        "@types/node": "^22.15.29"
     }
 }

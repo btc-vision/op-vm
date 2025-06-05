@@ -429,7 +429,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "shlex",
  "syn 2.0.101",
 ]
@@ -660,9 +660,9 @@ checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 
 [[package]]
 name = "convert_case"
-version = "0.6.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -728,7 +728,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "log",
  "regalloc2",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "smallvec",
  "target-lexicon",
 ]
@@ -839,13 +839,19 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.2.9"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
+checksum = "a4735f265ba6a1188052ca32d461028a7d1125868be18e287e756019da7607b5"
 dependencies = [
- "quote",
- "syn 2.0.101",
+ "ctor-proc-macro",
+ "dtor",
 ]
+
+[[package]]
+name = "ctor-proc-macro"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f211af61d8efdd104f96e57adf5e426ba1bc3ed7a4ead616e15e5881fd79c4d"
 
 [[package]]
 name = "darling"
@@ -959,6 +965,21 @@ dependencies = [
  "quote",
  "syn 2.0.101",
 ]
+
+[[package]]
+name = "dtor"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97cbdf2ad6846025e8e25df05171abfb30e3ababa12ee0a0e44b9bbe570633a8"
+dependencies = [
+ "dtor-proc-macro",
+]
+
+[[package]]
+name = "dtor-proc-macro"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7454e41ff9012c00d53cf7f475c5e3afa3b91b7c90568495495e8d9bf47a1055"
 
 [[package]]
 name = "dynasm"
@@ -1785,14 +1806,15 @@ dependencies = [
 
 [[package]]
 name = "napi"
-version = "2.16.17"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
+version = "3.0.0-beta.7"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#c734664d355c6ac6bc72eb71b80dd6a51cebaafb"
 dependencies = [
  "bitflags 2.6.0",
  "ctor",
- "napi-derive 2.16.13 (git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f)",
+ "napi-build 2.2.1",
  "napi-sys",
- "once_cell",
+ "nohash-hasher",
+ "rustc-hash 2.1.1",
  "tokio",
 ]
 
@@ -1803,27 +1825,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03acbfa4f156a32188bfa09b86dc11a431b5725253fc1fc6f6df5bed273382c4"
 
 [[package]]
-name = "napi-derive"
-version = "2.16.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cbe2585d8ac223f7d34f13701434b9d5f4eb9c332cccce8dee57ea18ab8ab0c"
-dependencies = [
- "cfg-if",
- "convert_case",
- "napi-derive-backend 1.0.75 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro2",
- "quote",
- "syn 2.0.101",
-]
+name = "napi-build"
+version = "2.2.1"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#c734664d355c6ac6bc72eb71b80dd6a51cebaafb"
 
 [[package]]
 name = "napi-derive"
-version = "2.16.13"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
+version = "3.0.0-beta.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c48e8ab579e603cb66e0f9048303d25fca9f4275f421c0af150a40080bd299d"
 dependencies = [
- "cfg-if",
  "convert_case",
- "napi-derive-backend 1.0.75 (git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f)",
+ "ctor",
+ "napi-derive-backend",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -1831,38 +1845,30 @@ dependencies = [
 
 [[package]]
 name = "napi-derive-backend"
-version = "1.0.75"
+version = "2.0.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1639aaa9eeb76e91c6ae66da8ce3e89e921cd3885e99ec85f4abacae72fc91bf"
+checksum = "0a767a2d3aa9fe20f7032b9e90912e8061224dc48fcfd5a3e8716dbef8ba39a5"
 dependencies = [
  "convert_case",
- "once_cell",
  "proc-macro2",
  "quote",
- "regex",
  "semver",
  "syn 2.0.101",
 ]
 
 [[package]]
-name = "napi-derive-backend"
-version = "1.0.75"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
-dependencies = [
- "convert_case",
- "once_cell",
- "proc-macro2",
- "quote",
- "syn 2.0.101",
-]
-
-[[package]]
 name = "napi-sys"
-version = "2.4.0"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
+version = "3.0.0-alpha.3"
+source = "git+https://github.com/btc-vision/napi3-rs.git?branch=main#c734664d355c6ac6bc72eb71b80dd6a51cebaafb"
 dependencies = [
  "libloading",
 ]
+
+[[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "nom"
@@ -1954,8 +1960,8 @@ dependencies = [
  "hex",
  "log",
  "napi",
- "napi-build",
- "napi-derive 2.16.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "napi-build 2.2.0",
+ "napi-derive",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2235,7 +2241,7 @@ checksum = "ad156d539c879b7a24a363a2016d77961786e71f48f2e2fc8302a92abd2429a6"
 dependencies = [
  "hashbrown 0.13.2",
  "log",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "slice-group-by",
  "smallvec",
 ]
@@ -2354,6 +2360,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 
 [[package]]
 name = "rustix"
@@ -2694,9 +2706,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.45.0"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2513ca694ef9ede0fb23fe71a4ee4107cb102b9dc1930f6d0fd77aae068ae165"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "pin-project-lite",

@@ -1,4 +1,7 @@
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use napi::bindgen_prelude::{Buffer, Promise};
+use napi::threadsafe_function::ThreadsafeFunction;
+use std::sync::Arc;
+use napi::Status;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -7,12 +10,22 @@ use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportR
 use crate::interfaces::ExternalFunction;
 
 pub struct DeployFromAddressExternalFunction {
-    external_function: GenericExternalFunction,
+    external_function: GenericExternalFunction<Promise<Buffer>>,
 }
 
 impl DeployFromAddressExternalFunction {
     pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        tsfn: Arc<
+            ThreadsafeFunction<
+                ThreadSafeJsImportResponse,
+                Promise<Buffer>,
+                ThreadSafeJsImportResponse,
+                Status,
+                true,
+                false,
+                128,
+            >,
+        >,
         id: u64,
     ) -> Self {
         Self {

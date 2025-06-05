@@ -1,8 +1,6 @@
 use napi::bindgen_prelude::Buffer;
-use napi::{
-    bindgen_prelude::{BigInt, Promise},
-    threadsafe_function::{ErrorStrategy, ThreadsafeFunction},
-};
+use napi::{bindgen_prelude::{BigInt, Promise}, threadsafe_function::ThreadsafeFunction, Status};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
@@ -24,13 +22,33 @@ pub struct BlockHashResponse {
 }
 
 pub struct BlockHashExternalFunction {
-    tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+    tsfn: Arc<
+        ThreadsafeFunction<
+            BlockHashRequest,
+            Promise<JsBlockHashResponse>,
+            BlockHashRequest,
+            Status,
+            true,
+            false,
+            128,
+        >,
+    >,
     contract_id: u64,
 }
 
 impl BlockHashExternalFunction {
     pub fn new(
-        tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+        tsfn: Arc<
+            ThreadsafeFunction<
+                BlockHashRequest,
+                Promise<JsBlockHashResponse>,
+                BlockHashRequest,
+                Status,
+                true,
+                false,
+                128,
+            >,
+        >,
         contract_id: u64,
     ) -> Self {
         Self { tsfn, contract_id }
@@ -51,11 +69,13 @@ impl BlockHashExternalFunction {
                 .tsfn
                 .call_async(Ok(request))
                 .await
-                .map_err(|e| RuntimeError::new(e.reason));
+                .map_err(|e| RuntimeError::new(e.reason.clone()));
 
             let promise = response?;
 
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
+            let data = promise
+                .await
+                .map_err(|e| RuntimeError::new(e.reason.clone()))?;
 
             Ok(BlockHashResponse {
                 block_hash: data.block_hash.into(),
