@@ -13,6 +13,8 @@ pub struct EnvironmentVariablesRequest {
     pub contract_deployer: Uint8Array,
     pub caller: Uint8Array,
     pub origin: Uint8Array,
+    pub chain_id: Uint8Array,
+    pub protocol_id: Uint8Array,
 }
 
 impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
@@ -27,6 +29,8 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
             Address::new(&self.contract_deployer.to_vec()),
             Address::new(&self.caller.to_vec()),
             Address::new(&self.origin.to_vec()),
+            &self.chain_id,
+            &self.protocol_id,
         )
     }
 }
