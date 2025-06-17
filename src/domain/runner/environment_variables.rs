@@ -11,6 +11,8 @@ pub struct EnvironmentVariables {
     contract_deployer: Address,
     caller: Address,
     origin: Address,
+    chain_id: Vec<u8>,
+    protocol_id: Vec<u8>,
 }
 
 impl EnvironmentVariables {
@@ -24,6 +26,8 @@ impl EnvironmentVariables {
         contract_deployer: Address,
         caller: Address,
         origin: Address,
+        chain_id: &[u8],
+        protocol_id: &[u8],
     ) -> Self {
         Self {
             block_hash: block_hash.to_vec(),
@@ -35,6 +39,8 @@ impl EnvironmentVariables {
             contract_deployer,
             caller,
             origin,
+            chain_id: chain_id.to_vec(),
+            protocol_id: protocol_id.to_vec(),
         }
     }
 
@@ -49,6 +55,8 @@ impl EnvironmentVariables {
         result.extend_from_slice(&self.contract_deployer.to_bytes());
         result.extend_from_slice(&self.caller.to_bytes());
         result.extend_from_slice(&self.origin.to_bytes());
+        result.extend_from_slice(&self.chain_id);
+        result.extend_from_slice(&self.protocol_id);
         result
     }
 }

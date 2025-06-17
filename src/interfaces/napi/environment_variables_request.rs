@@ -14,6 +14,8 @@ pub struct EnvironmentVariablesRequest {
     pub contract_deployer: Vec<u8>,
     pub caller: Vec<u8>,
     pub origin: Vec<u8>,
+    pub chain_id: Vec<u8>,
+    pub protocol_id: Vec<u8>,
 }
 
 impl EnvironmentVariablesRequest {
@@ -53,6 +55,14 @@ impl EnvironmentVariablesRequest {
                 .get::<JsBuffer, _, _>(cx, "origin")?
                 .as_slice(cx)
                 .to_vec(),
+            chain_id: obj
+                .get::<JsBuffer, _, _>(cx, "chainId")?
+                .as_slice(cx)
+                .to_vec(),
+            protocol_id: obj
+                .get::<JsBuffer, _, _>(cx, "protocolId")?
+                .as_slice(cx)
+                .to_vec(),
         })
     }
 }
@@ -72,6 +82,8 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
             Address::new(&self.contract_deployer),
             Address::new(&self.caller),
             Address::new(&self.origin),
+            &self.chain_id,
+            &self.protocol_id
         )
     }
 }

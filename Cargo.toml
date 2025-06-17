@@ -1,32 +1,61 @@
 [package]
 name = "op-vm"
-version = "0.3.11"
+version = "0.4.0"
 edition = "2021"
+build = "build.rs"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-wasmer = "5.0.4"
-wasmer-compiler-singlepass = "5.0.4"
-wasmer-middlewares = "5.0.4"
-wasmer-types = "5.0.4"
-wasmer-compiler = "5.0.4"
-anyhow = "1.0.97"
-neon = {version="1.1.0-alpha.2"}
-tokio = {version="1.44.2", features=["rt","rt-multi-thread", "macros", "time", "sync"]}
-chrono = "0.4.40"
+neon = {version="1.1.1"}
+wasmer = { version = "6.0.1", default-features = true, features = ["default", "compiler", "singlepass", "wasmer-compiler-singlepass", "wasm-c-api", "core"] }
+wasmer-compiler-singlepass = "6.0.1"
+wasmer-types = "6.0.1"
+wasmer-compiler = "6.0.1"
+anyhow = "1.0.98"
+tokio = { version = "1.45.1", features=["rt","rt-multi-thread", "macros", "time", "sync"] }
+chrono = "0.4.41"
 sha2 = "0.10.8"
 ripemd = "0.1.3"
 hex = "0.4.3"
 bytes = "1.10.1"
-bitcoin = "0.32.5"
+bitcoin = "0.32.6"
 log = "0.4.27"
-secp256k1 = { version = "0.30.0", features = ["std"] }
+secp256k1 = { version = "0.31.0", features = ["std"] }
 once_cell = "1.21.3"
 thiserror = "2.0.12"
 async-trait = "0.1.88"
+dashmap = { version = "6.1.0", optional = true }
+rand_chacha = { version = "0.9.0", optional = true }
+rand_core = { version = "0.9.3", optional = true }
+ark-std = { version = "0.5.0", optional = true, default-features = false, features = ["parallel", "getrandom", "std"] }
+ark-relations = { version = "0.5.1", optional = true }
+ark-crypto-primitives = { version = "0.5.0", optional = true, default-features = false, features = ["sponge", "crh", "r1cs", "std", "snark", "ark-r1cs-std", "signature", "hashbrown", "parallel"] }
+ark-groth16 = { version = "0.5.0", optional = true, features = ["ark-r1cs-std", "parallel", "rayon", "tracing", "default", "std", "r1cs", "derivative"] }
+ark-bls12-381 = { version = "0.5.0", optional = true, features = ["curve"] }
+ark-r1cs-std = { version = "0.5.0", optional = true }
+futures = { version = "0.3.31", optional = true }
+num-bigint = { version = "0.4.6", optional = true }
+num-integer = { version = "0.1.46", optional = true }
+num-traits = { version = "0.2.19", optional = true }
+blake3 = { version = "1.8.2", optional = true }
+ark-serialize = { version = "0.5.0", optional = true, default-features = false, features = ["derive", "ark-serialize-derive"] }
+ark-ff = { version = "0.5.0", optional = true, default-features = false, features = [] }
+env_logger = { version = "0.11.8", optional = true }
 
+[build-dependencies]
+napi-build = "2.2.0"
+
+[features]
+default = ["reference-types"]
+debug-metering = ["env_logger"]
+table-metering = []
+reference-types = ["table-metering"]
+vdf-zk-snark = ["zk-snark"]
+vdf = ["num-bigint", "num-integer", "num-traits", "blake3"]
+contract-threading = ["dashmap", "futures"]
+zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-primitives", "ark-groth16", "ark-bls12-381", "ark-r1cs-std", "ark-serialize", "ark-ff"]
 
 [profile.release]
 lto = true

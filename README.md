@@ -20,13 +20,11 @@ network using Rust and Wasmer. This VM is part of the broader OP_NET initiative,
 functionality to Bitcoin. However, please note that this code is currently in an experimental stage and is subject to
 frequent breaking changes. Nothing is final, and you should expect ongoing development and instability.
 
-## Key Features
+## Warning: Experimental Code
 
-- **Wasmer Integration**: The VM leverages Wasmer, a leading WebAssembly runtime, to execute smart contracts.
-- **N-API Integration**: This project uses N-API to interface the Rust VM with Node.js, enabling seamless interaction
-  between JavaScript/TypeScript code and Rust.
-- **Multi-platform Support**: The VM is built with support for a wide range of platforms, including various Linux
-  distributions, macOS, Windows, and even Android.
+This project is in the early stages of development and is considered experimental. Expect breaking changes, incomplete
+features, and potential bugs. Use this code at your own risk, and avoid relying on it for production purposes until it
+reaches a more stable state.
 
 ## Project Structure
 
@@ -96,29 +94,11 @@ development. Please refer to the source code for detailed insights on how the VM
 - **`npm run version`**: Updates the package version.
 - **`npm run postinstall`**: Automatically runs the build script after installation.
 
-## Supported Platforms
-
-This project aims to support a wide range of platforms. The N-API bindings and Wasmer runtime are configured to work on
-various architectures, including:
-
-- **Linux**: x86_64, aarch64, armv7
-- **macOS**: x86_64, arm64
-- **Windows**: x86_64, i686
-- **Android**: aarch64, armv7
-- **FreeBSD**: x86_64
-- **Other**: RISC-V, Musl variants, etc.
-
 ## Contributing
 
 Given the experimental nature of this project, contributions are welcome, but please be aware that the codebase is
 evolving rapidly. If you encounter any issues or have suggestions for improvement, feel free to open an issue or submit
 a pull request. Signed commits are required, and please adhere to the project's code of conduct.
-
-## Warning: Experimental Code
-
-This project is in the early stages of development and is considered experimental. Expect breaking changes, incomplete
-features, and potential bugs. Use this code at your own risk, and avoid relying on it for production purposes until it
-reaches a more stable state.
 
 ## License
 

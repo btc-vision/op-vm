@@ -4,6 +4,12 @@ use domain::runner::{NEW_STORAGE_SLOT_GAS_COST, UPDATED_STORAGE_SLOT_GAS_COST};
 use interfaces::ContractManager;
 use neon::{prelude::*, types::JsBigInt};
 
+#[cfg(all(
+    feature = "contract-threading",
+    not(any(feature = "vdf", feature = "vdf-zk-snark"))
+))]
+compile_error!("feature \"contract-threading\" requires either \"vdf\" or \"vdf-zk-snark\"");
+
 mod application;
 mod domain;
 mod interfaces;
@@ -15,6 +21,12 @@ pub const INNER: &str = "inner";
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
+    #[cfg(feature = "debug-metering")]
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    #[cfg(feature = "debug-metering")]
+    log::set_max_level(log::LevelFilter::Trace);
+
     //cx.export_function("callJsFromRust", call_js_from_rust)?;
 
     panic::set_hook(Box::new(|e| {
