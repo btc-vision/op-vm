@@ -50,5 +50,8 @@
         "cargo-cp-artifact": "^0.1.9",
         "chai": "^4.3.10",
         "mocha": "^10.2.0"
+    },
+    "dependencies": {
+        "@neon-rs/cli": "^0.1.82"
     }
 }
