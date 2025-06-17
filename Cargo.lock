@@ -1786,11 +1786,12 @@ dependencies = [
 [[package]]
 name = "napi"
 version = "2.16.17"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55740c4ae1d8696773c78fdafd5d0e5fe9bc9f1b071c7ba493ba5c413a9184f3"
 dependencies = [
  "bitflags 2.6.0",
  "ctor",
- "napi-derive 2.16.13 (git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f)",
+ "napi-derive",
  "napi-sys",
  "once_cell",
  "tokio",
@@ -1810,20 +1811,7 @@ checksum = "7cbe2585d8ac223f7d34f13701434b9d5f4eb9c332cccce8dee57ea18ab8ab0c"
 dependencies = [
  "cfg-if",
  "convert_case",
- "napi-derive-backend 1.0.75 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro2",
- "quote",
- "syn 2.0.101",
-]
-
-[[package]]
-name = "napi-derive"
-version = "2.16.13"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
-dependencies = [
- "cfg-if",
- "convert_case",
- "napi-derive-backend 1.0.75 (git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f)",
+ "napi-derive-backend",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -1845,21 +1833,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "napi-derive-backend"
-version = "1.0.75"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
-dependencies = [
- "convert_case",
- "once_cell",
- "proc-macro2",
- "quote",
- "syn 2.0.101",
-]
-
-[[package]]
 name = "napi-sys"
 version = "2.4.0"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "427802e8ec3a734331fec1035594a210ce1ff4dc5bc1950530920ab717964ea3"
 dependencies = [
  "libloading",
 ]
@@ -1955,7 +1932,7 @@ dependencies = [
  "log",
  "napi",
  "napi-build",
- "napi-derive 2.16.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "napi-derive",
  "num-bigint",
  "num-integer",
  "num-traits",
