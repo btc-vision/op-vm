@@ -2,7 +2,7 @@ use crate::domain::common::Address;
 use crate::domain::runner::EnvironmentVariables;
 use napi::bindgen_prelude::{BigInt, Uint8Array};
 
-#[napi(object)]
+#[napi(object, js_name = "EnvironmentVariablesRequest")]
 pub struct EnvironmentVariablesRequest {
     pub block_hash: Uint8Array,
     pub block_number: BigInt,
@@ -17,20 +17,38 @@ pub struct EnvironmentVariablesRequest {
     pub protocol_id: Uint8Array,
 }
 
-impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
+/*impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
     fn into(self) -> EnvironmentVariables {
         EnvironmentVariables::new(
-            &self.block_hash.to_vec(),
+            &*self.block_hash.to_vec().clone(),
             self.block_number.get_u64().1,
             self.block_median_time.get_u64().1,
-            &self.tx_id.to_vec(),
-            &self.tx_hash.to_vec(),
-            Address::new(&self.contract_address.to_vec()),
-            Address::new(&self.contract_deployer.to_vec()),
-            Address::new(&self.caller.to_vec()),
-            Address::new(&self.origin.to_vec()),
-            &self.chain_id,
-            &self.protocol_id,
+            &*self.tx_id.to_vec().clone(),
+            &*self.tx_hash.to_vec().clone(),
+            Address::new(&self.contract_address.to_vec().clone()),
+            Address::new(&self.contract_deployer.to_vec().clone()),
+            Address::new(&self.caller.to_vec().clone()),
+            Address::new(&self.origin.to_vec().clone()),
+            &*self.chain_id.clone(),
+            &*self.protocol_id.clone(),
+        )
+    }
+}*/
+
+impl From<EnvironmentVariablesRequest> for EnvironmentVariables {
+    fn from(r: EnvironmentVariablesRequest) -> Self {
+        EnvironmentVariables::new(
+            &*r.block_hash.to_vec().clone(),
+            r.block_number.get_u64().1,
+            r.block_median_time.get_u64().1,
+            &*r.tx_id.to_vec().clone(),
+            &*r.tx_hash.to_vec().clone(),
+            Address::new(&r.contract_address.to_vec().clone()),
+            Address::new(&r.contract_deployer.to_vec().clone()),
+            Address::new(&r.caller.to_vec().clone()),
+            Address::new(&r.origin.to_vec().clone()),
+            &*r.chain_id.clone(),
+            &*r.protocol_id.clone(),
         )
     }
 }
