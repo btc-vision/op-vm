@@ -6,6 +6,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "typings": "index.d.ts",
+  "type": "module",
   "homepage": "https://opnet.org/",
   "keywords": [
     "opnet",
@@ -49,6 +50,7 @@
     "mocha": "^10.2.0"
   },
   "dependencies": {
-    "@neon-rs/cli": "^0.1.82"
+    "@neon-rs/cli": "^0.1.82",
+    "prettier": "^3.5.3"
   }
 }

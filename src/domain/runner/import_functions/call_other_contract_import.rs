@@ -1,6 +1,6 @@
 use crate::domain::runner::call_result::CallResult;
 use crate::domain::runner::{
-    CustomEnv, ExitData, COLD_ADDRESS_ACCESS_GAS_COST, MAX_PAGES, WARM_ADDRESS_ACCESS_GAS_COST,
+    CustomEnv, COLD_ADDRESS_ACCESS_GAS_COST, MAX_PAGES, WARM_ADDRESS_ACCESS_GAS_COST,
 };
 use wasmer::{FunctionEnvMut, RuntimeError};
 

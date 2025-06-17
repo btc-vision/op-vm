@@ -17,10 +17,8 @@ use neon::prelude::*;
 
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
-use wasmer::Value;
 
 use super::bitcoin_network_request::BitcoinNetworkRequest;
-use super::GenericExternalFunction;
 
 pub struct ContractParameter {
     pub(crate) bytecode: Option<Vec<u8>>,
@@ -69,37 +67,44 @@ impl Contract {
             cx.channel(),
             id,
         );
+
         let deploy_from_address_external = DeployFromAddressExternalFunction::new(
             "DeployFromAddress",
             manager.deploy_from_address_js_function.clone(),
             cx.channel(),
             id,
         );
+
         let console_log_external = ConsoleLogExternalFunction::new(
             "ConsoleLog",
             manager.console_log_js_function.clone(),
             cx.channel(),
             id,
         );
+
         let emit_external =
             EmitExternalFunction::new("Emit", manager.emit_js_function.clone(), cx.channel(), id);
+
         let inputs_external = InputsExternalFunction::new(
             "Inputs",
             manager.inputs_js_function.clone(),
             cx.channel(),
             id,
         );
+
         let outputs_external = OutputsExternalFunction::new(
             "Outputs",
             manager.outputs_js_function.clone(),
             cx.channel(),
             id,
         );
+
         let account_type_external = AccountTypeExternalFunction::new(
             manager.account_type_js_function.clone(),
             cx.channel(),
             id,
         );
+
         let block_hash_external = BlockHashExternalFunction::new(
             manager.block_hash_js_function.clone(),
             cx.channel(),
@@ -108,7 +113,7 @@ impl Contract {
 
         // Obtain a Runtime from the pool
         let runtime = if let Some(runtime) = manager.runtime_pool.get_runtime() {
-            NeonResult::Ok(runtime)
+            Ok(runtime)
         } else {
             cx.throw_error("No available runtimes in the pool")
         }?;
@@ -116,6 +121,7 @@ impl Contract {
         if params.memory_pages_used >= MAX_PAGES {
             return cx.throw_error("No more memory pages available");
         }
+
         let max_pages = MAX_PAGES - params.memory_pages_used;
 
         //let runtime = Arc::new(Runtime::new()?);
@@ -133,11 +139,11 @@ impl Contract {
             block_hash_external,
             runtime.clone(),
             max_pages,
+            false,
         )
         .or_else(|err| cx.throw_error(err.to_string()))?;
 
         let runner: WasmerRunner;
-
         if let Some(bytecode) = params.bytecode {
             runner = WasmerRunner::from_bytecode(
                 &bytecode,
@@ -185,6 +191,7 @@ impl Contract {
             .contract
             .lock()
             .or_else(|e| Err(anyhow!(e.to_string())))?;
+
         contract
             .set_environment_variables(environment_variables.into())
             .map_err(|e| anyhow::anyhow!(e))?;
@@ -221,7 +228,7 @@ impl Contract {
         call_result
     }
 
-    pub async fn call_export_by_name(
+    /*pub async fn call_export_by_name(
         &self,
         function_name: &str,
         int_params: &[i32],
@@ -242,7 +249,7 @@ impl Contract {
             Ok(values) => Ok(values),
             Err(e) => Err(anyhow::anyhow!(e)),
         }
-    }
+    }*/
 
     fn from_runner(
         runner: WasmerRunner,

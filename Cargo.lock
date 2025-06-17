@@ -379,7 +379,7 @@ checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.93",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -837,16 +837,6 @@ checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
 dependencies = [
  "generic-array",
  "typenum",
-]
-
-[[package]]
-name = "ctor"
-version = "0.2.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
-dependencies = [
- "quote",
- "syn 2.0.101",
 ]
 
 [[package]]
@@ -1646,6 +1636,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "libunwind"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c6639b70a7ce854b79c70d7e83f16b5dc0137cc914f3d7d03803b513ecc67ac"
+
+[[package]]
+name = "linkme"
+version = "0.3.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1b1703c00b2a6a70738920544aa51652532cacddfec2e162d2e29eae01e665c"
+dependencies = [
+ "linkme-impl",
+]
+
+[[package]]
+name = "linkme-impl"
+version = "0.3.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04d55ca5d5a14363da83bf3c33874b8feaa34653e760d5216d7ef9829c88001a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1780,68 +1796,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "napi"
-version = "2.16.17"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
-dependencies = [
- "bitflags 2.6.0",
- "ctor",
- "napi-derive 2.16.13 (git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f)",
- "napi-sys",
- "once_cell",
- "tokio",
-]
-
-[[package]]
-name = "napi-build"
-version = "2.1.6"
+name = "neon"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28acfa557c083f6e254a786e01ba253fc56f18ee000afcd4f79af735f73a6da"
-
-[[package]]
-name = "napi-derive"
-version = "2.16.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc81ad718d7f9a9bb937ad630c088ac85ebf92d04c0f97e0586e68c24c3560a2"
+checksum = "74c1d298c79e60a3f5a1e638ace1f9c1229d2a97bd3a9e40a63b67c8efa0f1e1"
 dependencies = [
- "cfg-if",
- "convert_case",
- "napi-derive-backend 1.0.75 (registry+https://github.com/rust-lang/crates.io-index)",
- "proc-macro2",
- "quote",
- "syn 2.0.93",
-]
-
-[[package]]
-name = "napi-derive"
-version = "2.16.13"
-source = "git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f#8dbdc15375e3b3e5a07a683a015864d58010509f"
-dependencies = [
- "cfg-if",
- "convert_case",
- "napi-derive-backend 1.0.75 (git+https://github.com/btc-vision/napi-rs.git?rev=8dbdc15375e3b3e5a07a683a015864d58010509f)",
- "proc-macro2",
- "quote",
- "syn 2.0.93",
-]
-
-[[package]]
-name = "napi-derive-backend"
-version = "1.0.75"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1639aaa9eeb76e91c6ae66da8ce3e89e921cd3885e99ec85f4abacae72fc91bf"
-dependencies = [
- "convert_case",
+ "either",
+ "getrandom 0.2.15",
+ "libloading",
+ "linkme",
+ "neon-macros",
  "once_cell",
  "semver",
- "syn 2.0.93",
+ "send_wrapper",
+ "smallvec",
 ]
 
 [[package]]
 name = "neon-macros"
-version = "1.1.0-alpha.2"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e769ae03a4c633352f5bf5c89465abd85145a9b1458cc078bdd4adccf0a6ddb4"
+checksum = "c39e43767817fc963f90f400600967a2b2403602c6440685d09a6bc4e02b70b1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1920,6 +1895,15 @@ name = "op-vm"
 version = "0.4.0"
 dependencies = [
  "anyhow",
+ "ark-bls12-381",
+ "ark-crypto-primitives",
+ "ark-ff",
+ "ark-groth16",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize",
+ "ark-std",
+ "async-trait",
  "bitcoin",
  "blake3",
  "bytes",
@@ -1929,9 +1913,10 @@ dependencies = [
  "futures",
  "hex",
  "log",
- "napi",
- "napi-build",
- "napi-derive 2.16.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "neon",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
  "once_cell",
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
@@ -2673,9 +2658,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.45.0"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2513ca694ef9ede0fb23fe71a4ee4107cb102b9dc1930f6d0fd77aae068ae165"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "pin-project-lite",
@@ -2690,7 +2675,7 @@ checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.93",
+ "syn 2.0.101",
 ]
 
 [[package]]

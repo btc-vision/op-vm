@@ -21,7 +21,7 @@ pub struct EnvironmentVariablesRequest {
 impl EnvironmentVariablesRequest {
     /// Construct from a JavaScript object using Neon’s APIs.
     pub fn from_js_object(cx: &mut FunctionContext, obj: Handle<JsObject>) -> NeonResult<Self> {
-        NeonResult::Ok(Self {
+        Ok(Self {
             block_hash: obj
                 .get::<JsBuffer, _, _>(cx, "blockHash")?
                 .as_slice(cx)
@@ -83,14 +83,12 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
             Address::new(&self.caller),
             Address::new(&self.origin),
             &self.chain_id,
-            &self.protocol_id
+            &self.protocol_id,
         )
     }
 }
 
-/// Example Neon function that expects one argument (an object) and returns undefined.
-/// In real usage, you might return some computed result or store `env_vars` somewhere.
-pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+/*pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     // 1. Get the first argument as an object
     let obj = cx.argument::<JsObject>(0)?;
 
@@ -103,4 +101,4 @@ pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndef
 
     // Return `undefined` (or something else) to JavaScript
     Ok(cx.undefined())
-}
+}*/

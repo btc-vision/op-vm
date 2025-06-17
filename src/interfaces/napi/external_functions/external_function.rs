@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use neon::{prelude::*, result::Throw, types::buffer::TypedArray};
 use tokio::runtime::Runtime;
@@ -24,7 +24,7 @@ impl FromJsObject for Vec<u8> {
 }
 
 impl FromJsObject for () {
-    fn from_js_object<'a, C>(cx: &mut C, obj: Handle<'a, JsValue>) -> anyhow::Result<Self>
+    fn from_js_object<'a, C>(_cx: &mut C, _obj: Handle<'a, JsValue>) -> anyhow::Result<Self>
     where
         C: Context<'a>,
     {
@@ -39,18 +39,19 @@ pub trait AsArguments {
 }
 
 pub trait ExternalFunction<R: Sized + Send + Sync> {
+    #[allow(dead_code)]
     fn name(&self) -> String {
         String::from("no name function")
     }
 
     fn handle(&self) -> Arc<Root<JsFunction>>;
     fn channel(&self) -> Channel;
-    fn call<'a, AS>(&self, runtime: &Runtime, args: AS) -> Result<R, RuntimeError>
+    fn call<'a, AS>(&self, _runtime: &Runtime, args: AS) -> Result<R, RuntimeError>
     where
         AS: AsArguments + Send + Sync + 'static,
         R: FromJsObject + 'static,
     {
-        let (sender, mut receiver) = std::sync::mpsc::channel::<Result<R, RuntimeError>>();
+        let (sender, receiver) = std::sync::mpsc::channel::<Result<R, RuntimeError>>();
         let handle = self.handle();
         let channel = self.channel();
         let success = sender.clone();
@@ -93,12 +94,13 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
                 Ok(())
             }
         });
-        let result = if let Ok(value) = receiver.recv_timeout(Duration::from_secs(100)) {
-            value
-        } else {
-            Err(RuntimeError::new("Problem to getting result from JS"))
-        };
 
-        result
+        let msg = receiver.recv();
+
+        match msg {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(err)) => Err(err),
+            Err(err) => Err(RuntimeError::new(err.to_string())),
+        }
     }
 }

@@ -1,9 +1,9 @@
-use crate::domain::runner::{self, ContractRunner, ExitData};
+use crate::domain::runner::ExitData;
 use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::napi::contract::Contract;
 use crate::interfaces::napi::contract::ContractParameter;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
-use crate::interfaces::napi::runtime_pool::{self, RuntimePool};
+use crate::interfaces::napi::runtime_pool::RuntimePool;
 use bytes::Bytes;
 use neon::prelude::*;
 use neon::types::buffer::TypedArray;
@@ -555,10 +555,12 @@ impl ContractManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn on_deploy(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         self.get_contract(contract_id)?.on_deploy(calldata)
     }
 
+    #[allow(dead_code)]
     pub fn execute(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         let result = self.get_contract(contract_id)?.execute(calldata);
         result

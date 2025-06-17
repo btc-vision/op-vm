@@ -1,6 +1,7 @@
-use neon::{prelude::Context, result::JsResult, types::JsNumber};
-
 use crate::domain::runner::BitcoinNetwork;
+use neon::context::Context;
+use neon::prelude::JsNumber;
+use neon::result::JsResult;
 
 #[derive(Copy, Clone)]
 #[repr(u8)]
@@ -21,6 +22,7 @@ impl Into<BitcoinNetwork> for BitcoinNetworkRequest {
 }
 
 impl BitcoinNetworkRequest {
+    #[allow(dead_code)]
     pub fn to_js_object<'a, C>(&self, cx: &'a mut C) -> JsResult<'a, JsNumber>
     where
         C: Context<'a>,

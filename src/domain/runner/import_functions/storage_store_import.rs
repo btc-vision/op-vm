@@ -1,5 +1,4 @@
 use crate::domain::runner::{CustomEnv, COLD_STORAGE_GAS_COST, WARM_STORAGE_GAS_COST};
-use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 #[derive(Default)]
@@ -31,7 +30,9 @@ impl StorageStoreImport {
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
 
-        let resp = env.storage_store_external.execute(&[key, value].concat(), &env.runtime)?;
+        let resp = env
+            .storage_store_external
+            .execute(&[key, value].concat(), &env.runtime)?;
 
         let is_slot_warm = resp[0] == 1;
 

@@ -31,7 +31,7 @@ impl RuntimePool {
         }
     }*/
 
-    pub fn increase(&self, size: usize) {
+    /*pub fn increase(&self, size: usize) {
         let l = self
             .expected_size
             .lock()
@@ -44,7 +44,7 @@ impl RuntimePool {
             let runtime = Runtime::new().expect("Failed to create Tokio Runtime");
             runtimes.push_back(Arc::new(runtime));
         }
-    }
+    }*/
 
     /*pub fn decrease(&self, size: usize) {
         let mut runtimes = self.runtimes.lock().unwrap();

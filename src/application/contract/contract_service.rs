@@ -2,9 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use wasmer::Value;
 
-use crate::domain::runner::{
-    ContractRunner, EnvironmentVariables, ExitData, ExtendedMemoryAccessError,
-};
+use crate::domain::runner::{ContractRunner, EnvironmentVariables, ExitData};
 
 pub struct ContractService {
     max_gas: u64,
@@ -45,7 +43,7 @@ impl ContractService {
         runner.execute(calldata, self.max_gas)
     }
 
-    pub fn call_export_by_name(
+    /*pub fn call_export_by_name(
         &mut self,
         function_name: &str,
         params: &[Value],
@@ -76,7 +74,7 @@ impl ContractService {
             });
 
         response
-    }
+    }*/
 
     pub fn get_used_gas(&mut self) -> anyhow::Result<u64> {
         let mut runner = self

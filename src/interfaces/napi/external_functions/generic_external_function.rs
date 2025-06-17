@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use neon::{prelude::*, types::JsBigInt};
-use sha2::digest::typenum::TypeArray;
 
 use super::AsArguments;
 use crate::interfaces::ExternalFunction;
@@ -50,11 +49,19 @@ impl AsArguments for BufferFunctionRequest {
         object.set(cx, "buffer", object_buffer)?;
         object.set(cx, "contractId", object_contract_id)?;
 
-        let console = cx.global_object().get::<JsObject, _, _>(cx, "console")?;
-        let log = console.get::<JsFunction, _, _>(cx, "log")?;
+        //let console = cx.global_object().get::<JsObject, _, _>(cx, "console")?;
+        //let log = console.get::<JsFunction, _, _>(cx, "log")?;
 
-        let args = vec![cx.undefined().upcast(), object.upcast()];
-        log.call(cx, console, args.clone()).unwrap();
+        let response = JsArray::new(cx, 2);
+        let undefined = cx.undefined();
+
+        response.set(cx, 0, undefined)?;
+        response.set(cx, 1, object)?;
+
+        let args = response.to_vec(cx)?;
+
+        //log.call(cx, console, args.clone())?;
+
         Ok(args)
     }
 }

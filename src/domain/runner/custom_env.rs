@@ -17,12 +17,6 @@ pub struct ProvenState {
     pub vk: Vec<u8>,
 }
 
-#[napi(object)]
-pub struct ProvenStateWrapped {
-    pub proof: Vec<u8>,
-    pub vk: Vec<u8>,
-}
-
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
     pub network: BitcoinNetwork,

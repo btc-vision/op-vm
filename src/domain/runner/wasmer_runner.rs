@@ -481,7 +481,7 @@ impl ContractRunner for WasmerRunner {
         Ok(env.exit_data.clone())
     }
 
-    fn call_export_by_name(
+    /*fn call_export_by_name(
         &mut self,
         function_name: &str,
         params: &[Value],
@@ -490,7 +490,7 @@ impl ContractRunner for WasmerRunner {
         let export = self.instance.get_function(function_name)?;
         let response = export.call(&mut self.store, params);
         self.handle_errors(response, max_gas)
-    }
+    }*/
 
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
         self.instance.read_memory(&self.store, offset, length)
