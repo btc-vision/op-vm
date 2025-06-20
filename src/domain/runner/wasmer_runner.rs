@@ -229,6 +229,12 @@ impl WasmerRunner {
             },
         };
 
+        #[cfg(feature = "transient-storage")]
+        {
+            import_object.define("env", "tload", import!(TransientLoadImport));
+            import_object.define("env", "tstore", import!(TransientStoreImport));
+        }
+
         #[cfg(feature = "contract-threading")]
         {
             import_object.define(

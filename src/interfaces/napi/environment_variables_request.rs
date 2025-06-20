@@ -87,18 +87,3 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
         )
     }
 }
-
-/*pub fn create_environment_variables(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    // 1. Get the first argument as an object
-    let obj = cx.argument::<JsObject>(0)?;
-
-    // 2. Parse it into our Rust struct
-    let req = EnvironmentVariablesRequest::from_js_object(&mut cx, obj)?;
-
-    // 3. Convert to your domain type
-    let env_vars: EnvironmentVariables = req.into();
-    // ... do something with `env_vars` here ...
-
-    // Return `undefined` (or something else) to JavaScript
-    Ok(cx.undefined())
-}*/
