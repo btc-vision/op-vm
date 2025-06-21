@@ -1,21 +1,35 @@
-use napi::bindgen_prelude::Buffer;
-use napi::{
-    bindgen_prelude::{BigInt, Promise},
-    threadsafe_function::{ErrorStrategy, ThreadsafeFunction},
+use std::sync::Arc;
+
+use neon::{
+    prelude::*,
+    types::{buffer::TypedArray, JsBigInt},
 };
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
-#[napi(object)]
+use super::{AsArguments, ExternalFunction, FromJsObject};
+
 pub struct BlockHashRequest {
-    pub block_number: BigInt,
-    pub contract_id: BigInt,
+    pub block_number: u64,
+    pub contract_id: u64,
 }
 
-#[napi(object, js_name = "BlockHashResponse")]
-pub struct JsBlockHashResponse {
-    pub block_hash: Buffer,
-    pub is_block_warm: bool,
+impl AsArguments for BlockHashRequest {
+    fn as_arguments<'a, C>(
+        &self,
+        cx: &mut C,
+    ) -> neon::prelude::NeonResult<Vec<Handle<'a, neon::prelude::JsValue>>>
+    where
+        C: Context<'a>,
+    {
+        let object = cx.empty_object();
+        let object_block_number = JsBigInt::from_u64(cx, self.block_number);
+        let object_contract_id = JsBigInt::from_u64(cx, self.contract_id);
+        object.set(cx, "blockNumber", object_block_number)?;
+        object.set(cx, "contractId", object_contract_id)?;
+
+        Ok(vec![cx.undefined().upcast(), object.upcast()])
+    }
 }
 
 pub struct BlockHashResponse {
@@ -23,17 +37,56 @@ pub struct BlockHashResponse {
     pub is_block_warm: bool,
 }
 
+impl FromJsObject for BlockHashResponse {
+    fn from_js_object<'a, C>(cx: &mut C, obj: Handle<'a, JsValue>) -> anyhow::Result<Self>
+    where
+        C: Context<'a>,
+    {
+        let obj = obj
+            .downcast_or_throw::<JsObject, _>(cx)
+            .or_else(|err| Err(anyhow::anyhow!(err.to_string())))?;
+
+        Ok(BlockHashResponse {
+            block_hash: obj
+                .get::<JsBuffer, _, _>(cx, "blockHash")
+                .or_else(|err| Err(anyhow::anyhow!(err.to_string())))?
+                .as_slice(cx)
+                .to_vec(),
+            is_block_warm: obj
+                .get::<JsBoolean, _, _>(cx, "isBlockWarm")
+                .or_else(|err| Err(anyhow::anyhow!(err.to_string())))?
+                .value(cx),
+        })
+    }
+}
+
 pub struct BlockHashExternalFunction {
-    tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
+    handle: Arc<Root<JsFunction>>,
+    channel: Channel,
     contract_id: u64,
 }
 
+impl ExternalFunction<BlockHashResponse> for BlockHashExternalFunction {
+    fn name(&self) -> String {
+        String::from("BlockHash")
+    }
+
+    fn handle(&self) -> std::sync::Arc<Root<JsFunction>> {
+        self.handle.clone()
+    }
+
+    fn channel(&self) -> Channel {
+        self.channel.clone()
+    }
+}
+
 impl BlockHashExternalFunction {
-    pub fn new(
-        tsfn: ThreadsafeFunction<BlockHashRequest, ErrorStrategy::CalleeHandled>,
-        contract_id: u64,
-    ) -> Self {
-        Self { tsfn, contract_id }
+    pub fn new(handle: Arc<Root<JsFunction>>, channel: Channel, contract_id: u64) -> Self {
+        Self {
+            handle,
+            channel,
+            contract_id,
+        }
     }
 
     pub fn execute(
@@ -41,30 +94,13 @@ impl BlockHashExternalFunction {
         block_number: u64,
         runtime: &Runtime,
     ) -> Result<BlockHashResponse, RuntimeError> {
-        let request = BlockHashRequest {
-            block_number: block_number.into(),
-            contract_id: BigInt::from(self.contract_id),
+        let args = BlockHashRequest {
+            block_number: block_number,
+            contract_id: self.contract_id,
         };
 
-        let result = async move {
-            let response: Result<Promise<JsBlockHashResponse>, RuntimeError> = self
-                .tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason));
-
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            Ok(BlockHashResponse {
-                block_hash: data.block_hash.into(),
-                is_block_warm: data.is_block_warm,
-            })
-        };
-
-        let response = runtime.block_on(result);
-
-        response
+        Ok(self
+            .call(runtime, args)
+            .or_else(|err| Err(RuntimeError::new(err.to_string())))?)
     }
 }

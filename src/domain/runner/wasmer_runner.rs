@@ -229,6 +229,12 @@ impl WasmerRunner {
             },
         };
 
+        #[cfg(feature = "transient-storage")]
+        {
+            import_object.define("env", "tload", import!(TransientLoadImport));
+            import_object.define("env", "tstore", import!(TransientStoreImport));
+        }
+
         #[cfg(feature = "contract-threading")]
         {
             import_object.define(
@@ -380,33 +386,29 @@ impl WasmerRunner {
         max_gas: u64,
     ) -> anyhow::Result<Box<[Value]>> {
         response.map_err(|e| {
-            if e.to_string().contains("unreachable") {
-                let gas_used = self.get_remaining_gas();
-                if gas_used == 0 {
-                    anyhow::anyhow!("out of gas (consumed: {})", max_gas)
-                } else {
-                    let out_of_memory = self.is_out_of_memory().unwrap_or(false);
-
-                    if out_of_memory {
-                        anyhow::anyhow!("out of memory")
-                    } else {
-                        anyhow::anyhow!(e)
-                    }
-                }
+            let gas_used = self.get_remaining_gas();
+            if gas_used == 0 {
+                anyhow::anyhow!("out of gas (consumed: {})", max_gas)
             } else {
-                anyhow::anyhow!(e)
+                let out_of_memory = self.is_out_of_memory().unwrap_or(false);
+                if out_of_memory {
+                    anyhow::anyhow!("out of memory")
+                } else {
+                    anyhow::anyhow!(e)
+                }
             }
         })
     }
 }
 
+#[async_trait::async_trait]
 impl ContractRunner for WasmerRunner {
     fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables) {
         let env = self.env.as_mut(&mut self.store);
         env.environment_variables = Some(environment_variables);
     }
 
-    fn on_deploy(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
+    fn on_deploy(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData> {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 
@@ -445,7 +447,7 @@ impl ContractRunner for WasmerRunner {
         Ok(env.exit_data.clone())
     }
 
-    fn execute(&mut self, calldata: &[u8], max_gas: u64) -> anyhow::Result<ExitData> {
+    fn execute(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData> {
         let time = Local::now();
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
@@ -485,7 +487,7 @@ impl ContractRunner for WasmerRunner {
         Ok(env.exit_data.clone())
     }
 
-    fn call_export_by_name(
+    /*fn call_export_by_name(
         &mut self,
         function_name: &str,
         params: &[Value],
@@ -494,7 +496,7 @@ impl ContractRunner for WasmerRunner {
         let export = self.instance.get_function(function_name)?;
         let response = export.call(&mut self.store, params);
         self.handle_errors(response, max_gas)
-    }
+    }*/
 
     fn read_memory(&self, offset: u64, length: u64) -> Result<Vec<u8>, ExtendedMemoryAccessError> {
         self.instance.read_memory(&self.store, offset, length)

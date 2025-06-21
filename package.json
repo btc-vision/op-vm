@@ -1,53 +1,56 @@
 {
-    "name": "@btc-vision/op-vm",
-    "description": "OP-VM executable for Bitcoin Smart Contracts",
-    "version": "0.4.0",
-    "license": "MIT",
-    "main": "index.js",
-    "types": "index.d.ts",
-    "typings": "index.d.ts",
-    "homepage": "https://opnet.org/",
-    "keywords": [
-        "opnet",
-        "bitcoin",
-        "btc",
-        "bitcoin smart contracts",
-        "smart inscriptions",
-        "ordinals"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/btc-vision/op-vm.git"
-    },
-    "napi": {
-        "name": "op-vm",
-        "triples": {
-            "additional": [
-                "aarch64-apple-darwin",
-                "aarch64-linux-android",
-                "aarch64-unknown-linux-gnu",
-                "aarch64-pc-windows-msvc",
-                "universal-apple-darwin"
-            ]
-        }
-    },
-    "engines": {
-        "node": ">= 18"
-    },
-    "dependencies": {
-        "@napi-rs/cli": "^2.18.4"
-    },
-    "scripts": {
-        "artifacts": "napi artifacts",
-        "build": "napi build --platform --release",
-        "build:debug": "napi build --platform",
-        "test": "echo ''",
-        "prepublishOnly": "napi prepublish -t npm",
-        "universal": "napi universal",
-        "version": "napi version",
-        "postinstall": "npm run build"
-    },
-    "devDependencies": {
-        "@types/node": "^22.14.0"
+  "name": "@btc-vision/op-vm",
+  "description": "OP-VM executable for Bitcoin Smart Contracts",
+  "version": "0.5.0",
+  "license": "MIT",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "typings": "index.d.ts",
+  "type": "module",
+  "homepage": "https://opnet.org/",
+  "keywords": [
+    "opnet",
+    "bitcoin",
+    "btc",
+    "bitcoin smart contracts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/btc-vision/op-vm.git"
+  },
+  "napi": {
+    "name": "op-vm",
+    "triples": {
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-linux-android",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-pc-windows-msvc",
+        "universal-apple-darwin"
+      ]
     }
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "scripts": {
+    "test": "cargo test",
+    "cargo-build": "cargo build --message-format=json-render-diagnostics > cargo.log",
+    "cross-build": "cross build --message-format=json-render-diagnostics > cross.log",
+    "postcargo-build": "neon dist < cargo.log",
+    "postcross-build": "neon dist -m /target < cross.log",
+    "debug": "npm run cargo-build --",
+    "build": "npm run cargo-build -- --release",
+    "cross": "npm run cross-build -- --release"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "cargo-cp-artifact": "^0.1.9",
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0"
+  },
+  "dependencies": {
+    "@neon-rs/cli": "^0.1.82",
+    "prettier": "^3.5.3"
+  }
 }

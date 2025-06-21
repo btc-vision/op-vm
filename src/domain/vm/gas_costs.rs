@@ -1,6 +1,44 @@
 use wasmer::wasmparser::Operator;
 use wasmer::wasmparser::Operator::*;
 
+pub const GAS_PER_CYCLE: u64 = 50;
+
+///   Cache hit / miss latencies (cycles)
+const L1_CYCLES: u64 = 4; // simple load / store 4-5
+const L2_PENALTY: u64 = 8; // 12 c – 4 c
+const L3_PENALTY: u64 = 40; // 44 c – 4 c
+const DRAM_PENALTY: u64 = 220; // Median open-page miss 180–220
+
+///   Probabilities that a random address lives in each level.
+const P_L1: u64 = 60;
+const P_L2: u64 = 30;
+const P_L3: u64 = 8;
+const P_DRAM: u64 = 2;
+
+const AVG_MEM_CYCLES: u64 = (P_L1 * L1_CYCLES
+    + P_L2 * (L1_CYCLES + L2_PENALTY)
+    + P_L3 * (L1_CYCLES + L3_PENALTY)
+    + P_DRAM * (L1_CYCLES + DRAM_PENALTY))
+    / 100;
+
+const MEM_LINE_GAS: u64 = AVG_MEM_CYCLES * GAS_PER_CYCLE; // 650 gas
+const MEM_BYTE_GAS: u64 = (MEM_LINE_GAS + 63) >> 6; // 11 gas / B
+
+const fn mem_tx_cost(bytes: u32, locked: bool) -> u64 {
+    let lines = ((bytes as u64) + 63) >> 6;
+    let base = lines * MEM_LINE_GAS;
+    if locked {
+        base + 30 * GAS_PER_CYCLE
+    } else {
+        base
+    }
+}
+
+/// Gas for an aligned load/store of `bytes` bytes.
+const fn mem_rw_cost(bytes: u32) -> u64 {
+    mem_tx_cost(bytes, false)
+}
+
 #[cfg(feature = "contract-threading")]
 const fn atomic_load_cost(bytes: u32) -> u64 {
     20_000 + (bytes as u64) * 2_000
@@ -54,10 +92,16 @@ fn call_indirect_cost(type_arity: Option<(u32, u32)>) -> u64 {
     }
 }
 
-pub const MEMORY_FILL_BASE: u64 = 50_000;
+/*pub const MEMORY_FILL_BASE: u64 = 50_000;
 pub const MEMORY_FILL_PER_BLOCK: u64 = 30; // 16-byte block
 pub const MEMORY_COPY_BASE: u64 = 60_000;
-pub const MEMORY_COPY_PER_BLOCK: u64 = 60; // 16-byte block
+pub const MEMORY_COPY_PER_BLOCK: u64 = 60; // 16-byte block*/
+
+pub const MEMORY_FILL_BASE: u64 = 3 * MEM_LINE_GAS; // 3 × 64 B pre-touch
+pub const MEMORY_FILL_PER_BLOCK: u64 = MEM_BYTE_GAS * 16; // 16-B WASM block
+
+pub const MEMORY_COPY_BASE: u64 = 4 * MEM_LINE_GAS; // dst+src pre-touch
+pub const MEMORY_COPY_PER_BLOCK: u64 = MEM_BYTE_GAS * 16; // ditto
 
 // If we ever enable the table feature.
 #[cfg(feature = "table-metering")]
@@ -92,12 +136,12 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         I32Clz => 250,
         I32Ctz => 2750,
         I32Add | I32Sub => 75,
-        I32Mul => 150,
-        I32DivS | I32DivU | I32RemS | I32RemU => 1100,
+        I32Mul => 3 * GAS_PER_CYCLE,
+        I32DivS | I32DivU | I32RemS | I32RemU => 21 * GAS_PER_CYCLE,
         I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr => 75,
-        I32Popcnt => 2750,
-        I32Load { .. } | I32Load8S { .. } | I32Load8U { .. } | I32Load16S { .. } | I32Load16U { .. } => 675,
-        I32Store { .. } | I32Store8 { .. } | I32Store16 { .. } => 850,
+        I32Popcnt => 3 * GAS_PER_CYCLE,
+        I32Load { .. } | I32Load8S { .. } | I32Load8U { .. } | I32Load16S { .. } | I32Load16U { .. } => mem_rw_cost(4),
+        I32Store { .. } | I32Store8 { .. } | I32Store16 { .. } => mem_rw_cost(4),
 
         I64Eqz | I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => 225,
         I64Clz => 250,
@@ -105,10 +149,10 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         I64Add | I64Sub => 100,
         I64Mul => 150,
         I64DivS | I64DivU | I64RemS | I64RemU => 1250,
-        I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr => 100,
-        I64Popcnt => 6000,
-        I64Load { .. } | I64Load8S { .. } | I64Load8U { .. } | I64Load16S { .. } | I64Load16U { .. } | I64Load32S { .. } | I64Load32U { .. } => 700,
-        I64Store { .. } | I64Store8 { .. } | I64Store16 { .. } | I64Store32 { .. } => 1000,
+        I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr => GAS_PER_CYCLE,
+        I64Popcnt => 6 * GAS_PER_CYCLE,
+        I64Load { .. } | I64Load8S { .. } | I64Load8U { .. } | I64Load16S { .. } | I64Load16U { .. } | I64Load32S { .. } | I64Load32U { .. } => mem_rw_cost(8),
+        I64Store { .. } | I64Store8 { .. } | I64Store16 { .. } | I64Store32 { .. } => mem_rw_cost(8),
 
         I32WrapI64 | I64ExtendI32S | I64ExtendI32U | I32Extend8S | I32Extend16S | I64Extend8S | I64Extend16S | I64Extend32S => 100,
 

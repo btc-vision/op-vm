@@ -1,5 +1,4 @@
 use crate::domain::runner::CustomEnv;
-use crate::interfaces::ExternalFunction;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 320_000_000;

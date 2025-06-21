@@ -8,14 +8,13 @@ build = "build.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
+neon = { version = "1.1.1" }
 wasmer = { version = "6.0.1", default-features = true, features = ["default", "compiler", "singlepass", "wasmer-compiler-singlepass", "wasm-c-api", "core"] }
 wasmer-compiler-singlepass = "6.0.1"
 wasmer-types = "6.0.1"
 wasmer-compiler = "6.0.1"
 anyhow = "1.0.98"
-napi = { version = "2.16.17", default-features = false, features = ["napi9", "tokio_rt", "async", "tokio_io_std"] }
-napi-derive = "2.16.13"
-tokio = { version = "1.45.0", features = ["time"] }
+tokio = { version = "1.45.1", features = ["rt", "rt-multi-thread", "macros", "time", "sync"] }
 chrono = "0.4.41"
 sha2 = "0.10.8"
 ripemd = "0.1.3"
@@ -26,6 +25,7 @@ log = "0.4.27"
 secp256k1 = { version = "0.31.0", features = ["std"] }
 once_cell = "1.21.3"
 thiserror = "2.0.12"
+async-trait = "0.1.88"
 dashmap = { version = "6.1.0", optional = true }
 rand_chacha = { version = "0.9.0", optional = true }
 rand_core = { version = "0.9.3", optional = true }
@@ -44,11 +44,9 @@ ark-serialize = { version = "0.5.0", optional = true, default-features = false, 
 ark-ff = { version = "0.5.0", optional = true, default-features = false, features = [] }
 env_logger = { version = "0.11.8", optional = true }
 
-[build-dependencies]
-napi-build = "2.2.0"
-
 [features]
 default = ["reference-types"]
+transient-storage = []
 debug-metering = ["env_logger"]
 table-metering = []
 reference-types = ["table-metering"]
@@ -60,6 +58,3 @@ zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-
 [profile.release]
 lto = true
 strip = "symbols"
-
-[patch.crates-io]
-napi = { git = "https://github.com/btc-vision/napi-rs.git", rev = "8dbdc15375e3b3e5a07a683a015864d58010509f" }

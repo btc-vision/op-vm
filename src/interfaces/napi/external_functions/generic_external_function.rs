@@ -1,106 +1,141 @@
-use napi::bindgen_prelude::{BigInt, Buffer, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
+use std::sync::Arc;
+
+use neon::{prelude::*, types::JsBigInt};
+
+use super::AsArguments;
+use crate::interfaces::ExternalFunction;
 use tokio::runtime::Runtime;
 use wasmer::RuntimeError;
 
-use crate::interfaces::napi::thread_safe_js_import_response::ThreadSafeJsImportResponse;
-use crate::interfaces::{ExternalFunction, ExternalFunctionNoData, ExternalFunctionNoResponse};
-
 pub struct GenericExternalFunction {
-    tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+    name: String,
+    channel: Channel,
+    handle: Arc<Root<JsFunction>>,
     contract_id: u64,
+}
+
+pub struct EmptyFunctionRequest {
+    contract_id: u64,
+}
+
+impl AsArguments for EmptyFunctionRequest {
+    fn as_arguments<'a, C>(
+        &self,
+        cx: &mut C,
+    ) -> neon::prelude::NeonResult<Vec<Handle<'a, neon::prelude::JsValue>>>
+    where
+        C: Context<'a>,
+    {
+        Ok(vec![JsBigInt::from_u64(cx, self.contract_id).upcast()])
+    }
+}
+
+pub struct BufferFunctionRequest {
+    pub contract_id: u64,
+    pub buffer: Vec<u8>,
+}
+
+impl AsArguments for BufferFunctionRequest {
+    fn as_arguments<'a, C>(
+        &self,
+        cx: &mut C,
+    ) -> neon::prelude::NeonResult<Vec<Handle<'a, neon::prelude::JsValue>>>
+    where
+        C: Context<'a>,
+    {
+        let object = cx.empty_object();
+        let object_buffer = JsTypedArray::from_slice(cx, &self.buffer)?;
+        let object_contract_id = JsBigInt::from_u64(cx, self.contract_id);
+        object.set(cx, "buffer", object_buffer)?;
+        object.set(cx, "contractId", object_contract_id)?;
+
+        //let console = cx.global_object().get::<JsObject, _, _>(cx, "console")?;
+        //let log = console.get::<JsFunction, _, _>(cx, "log")?;
+
+        let response = JsArray::new(cx, 2);
+        let undefined = cx.undefined();
+
+        response.set(cx, 0, undefined)?;
+        response.set(cx, 1, object)?;
+
+        let args = response.to_vec(cx)?;
+
+        //log.call(cx, console, args.clone())?;
+
+        Ok(args)
+    }
+}
+
+impl ExternalFunction<Vec<u8>> for GenericExternalFunction {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn handle(&self) -> Arc<Root<JsFunction>> {
+        self.handle.clone()
+    }
+
+    fn channel(&self) -> Channel {
+        self.channel.clone()
+    }
+}
+
+impl ExternalFunction<()> for GenericExternalFunction {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn handle(&self) -> std::sync::Arc<Root<JsFunction>> {
+        self.handle.clone()
+    }
+
+    fn channel(&self) -> Channel {
+        self.channel.clone()
+    }
 }
 
 impl GenericExternalFunction {
     pub fn new(
-        tsfn: ThreadsafeFunction<ThreadSafeJsImportResponse, ErrorStrategy::CalleeHandled>,
+        name: &str,
+        handle: Arc<Root<JsFunction>>,
+        channel: Channel,
         contract_id: u64,
     ) -> Self {
-        Self { tsfn, contract_id }
+        Self {
+            name: name.to_string(),
+            handle,
+            channel,
+            contract_id,
+        }
     }
-}
 
-impl ExternalFunction for GenericExternalFunction {
-    fn execute(&self, data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: data.to_vec(),
-            contract_id: BigInt::from(self.contract_id),
+    pub fn execute(&self, call_data: &[u8], runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
+        let args = BufferFunctionRequest {
+            buffer: call_data.to_vec(),
+            contract_id: self.contract_id,
         };
 
-        let deploy = async move {
-            let response: Result<Promise<Buffer>, RuntimeError> = self
-                .tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason));
-
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            let data = data.to_vec();
-
-            Ok(data.into())
-        };
-
-        let response = runtime.block_on(deploy);
-
-        response
+        self.call(runtime, args)
     }
-}
 
-impl ExternalFunctionNoData for GenericExternalFunction {
-    fn execute_no_data(&self, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: Vec::new(),
-            contract_id: BigInt::from(self.contract_id),
+    pub fn execute_empty_request(&self, runtime: &Runtime) -> Result<Vec<u8>, RuntimeError> {
+        let args = EmptyFunctionRequest {
+            contract_id: self.contract_id,
         };
 
-        let deploy = async move {
-            let response: Result<Promise<Buffer>, RuntimeError> = self
-                .tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason));
-
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            let data = data.to_vec();
-
-            Ok(data.into())
-        };
-
-        let response = runtime.block_on(deploy);
-
-        response
+        self.call(runtime, args)
     }
-}
 
-impl ExternalFunctionNoResponse for GenericExternalFunction {
-    fn execute_no_response(&self, data: &[u8], runtime: &Runtime) -> Result<(), RuntimeError> {
-        let request = ThreadSafeJsImportResponse {
-            buffer: Vec::from(data),
-            contract_id: BigInt::from(self.contract_id),
+    pub fn execute_no_response(
+        &self,
+        call_data: &[u8],
+        runtime: &Runtime,
+    ) -> Result<(), RuntimeError> {
+        let args = BufferFunctionRequest {
+            buffer: call_data.to_vec(),
+            contract_id: self.contract_id,
         };
 
-        let deploy = async move {
-            let response: Result<Promise<()>, RuntimeError> = self
-                .tsfn
-                .call_async(Ok(request))
-                .await
-                .map_err(|e| RuntimeError::new(e.reason));
-
-            let promise = response?;
-
-            let data = promise.await.map_err(|e| RuntimeError::new(e.reason))?;
-
-            Ok(data)
-        };
-
-        let response = runtime.block_on(deploy);
-
-        response
+        self.call(runtime, args)
     }
 }

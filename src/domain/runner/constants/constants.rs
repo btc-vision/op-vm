@@ -1,4 +1,4 @@
-pub const MAX_PAGES: u32 = 512; // 1 page = 64 KiB, 32 MiB.
+pub const MAX_PAGES: u32 = 1024; // 1 page = 64 KiB, 32 MiB.
 pub const STACK_SIZE: usize = 1024 * 1024; // 1 MiB
 pub const PAGE_MEMORY_SIZE: u64 = 64 * 1024;
 pub const MAX_MEMORY_SIZE: u64 = (MAX_PAGES as u64) * PAGE_MEMORY_SIZE;
