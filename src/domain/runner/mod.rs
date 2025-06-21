@@ -4,7 +4,7 @@ mod calldata;
 mod constants;
 mod contract_runner;
 mod custom_env;
-mod environment_variables;
+pub mod environment_variables;
 mod exit_data;
 mod exit_result;
 mod import_functions;
