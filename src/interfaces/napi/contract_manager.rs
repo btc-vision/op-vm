@@ -107,10 +107,10 @@ impl ContractManager {
                 .to_u64(&mut cx)
                 .or_else(|e| cx.throw_range_error(e.to_string()))? as u32;
 
-        //let network_number = cx.argument::<JsNumber>(6)?.value(&mut cx) as u8;
-        //let network =
-        // BitcoinNetworkRequest::try_from(network_number).or_else(|e| cx.throw_range_error(e))?;
-        let network = BitcoinNetworkRequest::Testnet;
+        let network_number = cx.argument::<JsNumber>(6)?.value(&mut cx) as u8;
+        let network =
+            BitcoinNetworkRequest::try_from(network_number).or_else(|e| cx.throw_range_error(e))?;
+
         let is_debug_mode = cx.argument::<JsBoolean>(7)?.value(&mut cx);
 
         let mut params = ContractParameter {

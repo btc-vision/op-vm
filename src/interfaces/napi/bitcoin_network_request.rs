@@ -3,7 +3,7 @@ use neon::context::Context;
 use neon::prelude::JsNumber;
 use neon::result::JsResult;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum BitcoinNetworkRequest {
     Mainnet = 0,

@@ -1,5 +1,5 @@
 use crate::application::contract::ContractService;
-use crate::domain::runner::{CustomEnv, ExitData, WasmerRunner, MAX_PAGES};
+use crate::domain::runner::{BitcoinNetwork, CustomEnv, ExitData, WasmerRunner, MAX_PAGES};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::napi::contract_manager::ContractManager;
 use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
@@ -123,10 +123,11 @@ impl Contract {
         }
 
         let max_pages = MAX_PAGES - params.memory_pages_used;
+        let network_id: BitcoinNetwork = params.network.into();
 
         //let runtime = Arc::new(Runtime::new()?);
         let custom_env = CustomEnv::new(
-            params.network.into(),
+            network_id,
             storage_load_external,
             storage_store_external,
             call_other_contract_external,
