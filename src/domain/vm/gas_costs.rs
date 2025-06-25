@@ -1,19 +1,18 @@
 use wasmer::wasmparser::Operator;
 use wasmer::wasmparser::Operator::*;
 
-pub const GAS_PER_CYCLE: u64 = 50;
+pub const GAS_PER_CYCLE: u64 = 32;
 
-///   Cache hit / miss latencies (cycles)
-const L1_CYCLES: u64 = 4; // simple load / store 4-5
-const L2_PENALTY: u64 = 8; // 12 c – 4 c
-const L3_PENALTY: u64 = 40; // 44 c – 4 c
-const DRAM_PENALTY: u64 = 220; // Median open-page miss 180–220
+const L1_CYCLES: u64 = 4;
+const L2_PENALTY: u64 = 13;
+const L3_PENALTY: u64 = 46;
+const DRAM_PENALTY: u64 = 364;
 
-///   Probabilities that a random address lives in each level.
-const P_L1: u64 = 60;
-const P_L2: u64 = 30;
-const P_L3: u64 = 8;
-const P_DRAM: u64 = 2;
+// Estimated hit-ratios for a 64 MiB Wasm sandbox
+const P_L1: u64 = 40;
+const P_L2: u64 = 25;
+const P_L3: u64 = 30;
+const P_DRAM: u64 = 5;
 
 const AVG_MEM_CYCLES: u64 = (P_L1 * L1_CYCLES
     + P_L2 * (L1_CYCLES + L2_PENALTY)
@@ -21,23 +20,36 @@ const AVG_MEM_CYCLES: u64 = (P_L1 * L1_CYCLES
     + P_DRAM * (L1_CYCLES + DRAM_PENALTY))
     / 100;
 
-const MEM_LINE_GAS: u64 = AVG_MEM_CYCLES * GAS_PER_CYCLE; // 650 gas
-const MEM_BYTE_GAS: u64 = (MEM_LINE_GAS + 63) >> 6; // 11 gas / B
+const MEM_LINE_GAS: u64 = AVG_MEM_CYCLES * GAS_PER_CYCLE;
 
-const fn mem_tx_cost(bytes: u32, locked: bool) -> u64 {
-    let lines = ((bytes as u64) + 63) >> 6;
-    let base = lines * MEM_LINE_GAS;
-    if locked {
-        base + 30 * GAS_PER_CYCLE
-    } else {
-        base
-    }
-}
+#[cfg(feature = "contract-threading")]
+const LOCKED_PENALTY_CYCLES: u64 = 140;
 
-/// Gas for an aligned load/store of `bytes` bytes.
+#[inline(always)]
 const fn mem_rw_cost(bytes: u32) -> u64 {
-    mem_tx_cost(bytes, false)
+    // ceil_div; one partial byte touches a whole line
+    let lines = ((bytes as u64) + 63) >> 6;
+    lines * MEM_LINE_GAS
 }
+
+/// Locked XADD/CMPXCHG cost
+#[cfg(feature = "contract-threading")]
+const fn atomic_rmw_cost(bytes: u32) -> u64 {
+    let lock_cycles = LOCKED_PENALTY_CYCLES + (bytes as u64 * 8);
+    lock_cycles * GAS_PER_CYCLE
+}
+
+const STREAM_LINE_CYCLES: u64 = 4;
+const STREAM_LINE_GAS: u64 = STREAM_LINE_CYCLES * GAS_PER_CYCLE;
+const STREAM_BYTE_GAS: u64 = (STREAM_LINE_GAS + 63) >> 6;
+
+pub const MEMORY_FILL_BASE: u64 = 2 * STREAM_LINE_GAS;
+pub const MEMORY_FILL_PER_BLOCK: u64 = STREAM_BYTE_GAS * 16;
+pub const MEMORY_COPY_BASE: u64 = 3 * STREAM_LINE_GAS;
+pub const MEMORY_COPY_PER_BLOCK: u64 = STREAM_BYTE_GAS * 16;
+
+const I32_BITSCAN_GAS: u64 = 4 * GAS_PER_CYCLE; // 3cy latency
+const I64_BITSCAN_GAS: u64 = 5 * GAS_PER_CYCLE; // 4cy latency
 
 #[cfg(feature = "contract-threading")]
 const fn atomic_load_cost(bytes: u32) -> u64 {
@@ -92,30 +104,18 @@ fn call_indirect_cost(type_arity: Option<(u32, u32)>) -> u64 {
     }
 }
 
-/*pub const MEMORY_FILL_BASE: u64 = 50_000;
-pub const MEMORY_FILL_PER_BLOCK: u64 = 30; // 16-byte block
-pub const MEMORY_COPY_BASE: u64 = 60_000;
-pub const MEMORY_COPY_PER_BLOCK: u64 = 60; // 16-byte block*/
-
-pub const MEMORY_FILL_BASE: u64 = 3 * MEM_LINE_GAS; // 3 × 64 B pre-touch
-pub const MEMORY_FILL_PER_BLOCK: u64 = MEM_BYTE_GAS * 16; // 16-B WASM block
-
-pub const MEMORY_COPY_BASE: u64 = 4 * MEM_LINE_GAS; // dst+src pre-touch
-pub const MEMORY_COPY_PER_BLOCK: u64 = MEM_BYTE_GAS * 16; // ditto
-
-// If we ever enable the table feature.
 #[cfg(feature = "table-metering")]
-pub const TABLE_FILL_BASE: u64 = 65_000;
+pub const TABLE_FILL_BASE: u64 = 650_000;
 #[cfg(feature = "table-metering")]
-pub const TABLE_FILL_PER_ELEM: u64 = 30;
+pub const TABLE_FILL_PER_ELEM: u64 = 800;
 #[cfg(feature = "table-metering")]
-pub const TABLE_COPY_BASE: u64 = 70_000;
+pub const TABLE_COPY_BASE: u64 = 700_000;
 #[cfg(feature = "table-metering")]
-pub const TABLE_COPY_PER_ELEM: u64 = 50;
+pub const TABLE_COPY_PER_ELEM: u64 = 1_000;
 #[cfg(feature = "table-metering")]
-pub const TABLE_GROW_BASE: u64 = 4_000;
+pub const TABLE_GROW_BASE: u64 = 40_000;
 #[cfg(feature = "table-metering")]
-pub const TABLE_GROW_PER_ELEM: u64 = 500;
+pub const TABLE_GROW_PER_ELEM: u64 = 5_000;
 
 pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
     #[rustfmt::skip]
@@ -125,7 +125,7 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         Block { .. } | Loop { .. } | Else | End => 1,
         Br { .. } | BrIf { .. } | If { .. } => 750,
         Select { .. } => 1200,
-        Call { .. } => 3750,
+        Call { .. } => 117 * GAS_PER_CYCLE,
         LocalTee { .. } => 75,
         LocalGet { .. } => 75,
         LocalSet { .. } => 200,
@@ -133,24 +133,20 @@ pub fn get_gas_cost(operator: &Operator, func_type: Option<(u32, u32)>) -> u64 {
         GlobalSet { .. } => 575,
 
         I32Eqz | I32Eq | I32Ne | I32LtS | I32LtU | I32GtS | I32GtU | I32LeS | I32LeU | I32GeS | I32GeU => 175,
-        I32Clz => 250,
-        I32Ctz => 2750,
+        I32Clz | I32Ctz |I32Popcnt => I32_BITSCAN_GAS,
         I32Add | I32Sub => 75,
         I32Mul => 3 * GAS_PER_CYCLE,
-        I32DivS | I32DivU | I32RemS | I32RemU => 21 * GAS_PER_CYCLE,
-        I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr => 75,
-        I32Popcnt => 3 * GAS_PER_CYCLE,
+        I32DivS | I32DivU | I32RemS | I32RemU => 14 * GAS_PER_CYCLE,
+        I32And | I32Or | I32Xor | I32Shl | I32ShrS | I32ShrU | I32Rotl | I32Rotr => GAS_PER_CYCLE,
         I32Load { .. } | I32Load8S { .. } | I32Load8U { .. } | I32Load16S { .. } | I32Load16U { .. } => mem_rw_cost(4),
         I32Store { .. } | I32Store8 { .. } | I32Store16 { .. } => mem_rw_cost(4),
 
         I64Eqz | I64Eq | I64Ne | I64LtS | I64LtU | I64GtS | I64GtU | I64LeS | I64LeU | I64GeS | I64GeU => 225,
-        I64Clz => 250,
-        I64Ctz => 6000,
+        I64Clz | I64Ctz | I64Popcnt => I64_BITSCAN_GAS,
         I64Add | I64Sub => 100,
-        I64Mul => 150,
-        I64DivS | I64DivU | I64RemS | I64RemU => 1250,
+        I64Mul => 5 * GAS_PER_CYCLE,
+        I64DivS | I64DivU | I64RemS | I64RemU => 20 * GAS_PER_CYCLE,
         I64And | I64Or | I64Xor | I64Shl | I64ShrS | I64ShrU | I64Rotl | I64Rotr => GAS_PER_CYCLE,
-        I64Popcnt => 6 * GAS_PER_CYCLE,
         I64Load { .. } | I64Load8S { .. } | I64Load8U { .. } | I64Load16S { .. } | I64Load16U { .. } | I64Load32S { .. } | I64Load32U { .. } => mem_rw_cost(8),
         I64Store { .. } | I64Store8 { .. } | I64Store16 { .. } | I64Store32 { .. } => mem_rw_cost(8),
 

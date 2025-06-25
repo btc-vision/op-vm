@@ -10,9 +10,9 @@ use neon::{prelude::*, types::JsBigInt};
 ))]
 compile_error!("feature \"contract-threading\" requires either \"vdf\" or \"vdf-zk-snark\"");
 
-mod application;
-mod domain;
-mod interfaces;
+pub mod application;
+pub mod domain;
+pub mod interfaces;
 
 pub const PROTOTYPE: &str = "prototype";
 pub const INNER: &str = "inner";

@@ -54,6 +54,7 @@ impl Contract {
             cx.channel(),
             id,
         );
+
         let storage_store_external = StorageStoreExternalFunction::new(
             "StorageStore",
             manager.storage_store_js_function.clone(),

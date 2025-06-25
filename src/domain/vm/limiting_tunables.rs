@@ -23,6 +23,7 @@ impl<T: Tunables> LimitingTunables<T> {
         let vm_config = VMConfig {
             wasm_stack_size: Some(stack_size),
         };
+
         Self {
             max_pages: Pages(max_pages),
             vm_config,

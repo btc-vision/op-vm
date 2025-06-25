@@ -1,5 +1,6 @@
 #[cfg(feature = "contract-threading")]
 pub use self::atomic::*;
+pub use self::dummy::*;
 pub use self::gas_costs::*;
 pub use self::limiting_tunables::*;
 pub use self::logger::*;
@@ -13,6 +14,7 @@ pub use self::vdf::*;
 
 #[cfg(feature = "contract-threading")]
 mod atomic;
+mod dummy;
 mod gas_costs;
 mod limiting_tunables;
 mod logger;
