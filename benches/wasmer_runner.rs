@@ -16,15 +16,8 @@ const BASIC_WAT: &str = r#"
 fn runner_from_wat(wat: &str) -> WasmerRunner {
     let wasm = parse_str(wat).expect("invalid WAT");
     let env = dummy_custom_env();
-    WasmerRunner::from_bytecode(
-        &wasm,
-        0,                          // used_gas so far
-        MAX_GAS_WASM_INIT + 20_000, // max_gas
-        32,                         // 32 × 64 KiB pages = 2 MiB
-        env,
-        false,
-    )
-    .expect("runner instantiation failed")
+    WasmerRunner::from_bytecode(&wasm, 0, MAX_GAS_WASM_INIT + 20_000, 32, env, false)
+        .expect("runner instantiation failed")
 }
 
 #[test]
