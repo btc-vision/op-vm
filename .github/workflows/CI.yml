@@ -28,41 +28,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Windows x64
-          - os: windows-latest
-            rust-target: x86_64-pc-windows-msvc
+        settings:
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
             platform: win32
             arch: x64
 
-          # Windows ARM64
-          - os: windows-latest
-            rust-target: aarch64-pc-windows-msvc
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
             platform: win32
             arch: arm64
 
-          # macOS x64 (Intel)
-          - os: macos-latest
-            rust-target: x86_64-apple-darwin
+          - host: macos-latest
+            target: x86_64-apple-darwin
             platform: darwin
             arch: x64
 
-          # macOS ARM64 (Apple Silicon)
-          - os: macos-latest
-            rust-target: aarch64-apple-darwin
+          - host: macos-latest
+            target: aarch64-apple-darwin
             platform: darwin
             arch: arm64
 
-          # Linux x64
-          - os: ubuntu-latest
-            rust-target: x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             platform: linux
             arch: x64
 
-        node-version: [ 22, 23 ]
+        node: [ 22, 23 ]
 
-    name: Build - ${{ matrix.platform }}-${{ matrix.arch }} - Node ${{ matrix.node-version }}
-    runs-on: ${{ matrix.os }}
+    name: Build - ${{ matrix.settings.platform }}-${{ matrix.settings.arch }} - Node ${{ matrix.node }}
+    runs-on: ${{ matrix.settings.host }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,14 +65,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: ${{ matrix.rust-target }}
+          targets: ${{ matrix.settings.target }}
 
       - name: Install @neon-rs/cli
         run: npm install -g @neon-rs/cli
@@ -88,40 +83,40 @@ jobs:
       - name: Build native module
         run: npm run build
         env:
-          RUST_TARGET: ${{ matrix.rust-target }}
+          RUST_TARGET: ${{ matrix.settings.target }}
 
       - name: Rename binary
         shell: bash
         run: |
           if [ -f "index.node" ]; then
-            mkdir -p prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-            cp index.node prebuilds/${{ matrix.platform }}-${{ matrix.arch }}/op-vm.node
+            mkdir -p prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}
+            cp index.node prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}/op-vm.node
           fi
 
       - name: Test binary
-        # Skip test for cross-compiled ARM targets
-        if: matrix.arch != 'arm64' || matrix.os == 'macos-latest'
+        # Skip test for cross-compiled ARM targets on x64 hosts
+        if: matrix.settings.arch != 'arm64' || matrix.settings.host == 'macos-latest'
         run: npm test
 
       - name: Package prebuilt binary
         shell: bash
         run: |
-          tar -czf ${{ env.APP_NAME }}-v${{ matrix.node-version }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C prebuilds/${{ matrix.platform }}-${{ matrix.arch }} .
+          tar -czf ${{ env.APP_NAME }}-v${{ matrix.node }}-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}.tar.gz -C prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }} .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bindings-${{ matrix.platform }}-${{ matrix.arch }}-node${{ matrix.node-version }}
-          path: ${{ env.APP_NAME }}-v${{ matrix.node-version }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+          name: bindings-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}-node${{ matrix.node }}
+          path: ${{ env.APP_NAME }}-v${{ matrix.node }}-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}.tar.gz
           if-no-files-found: error
 
   # Linux ARM64 builds using Docker
   build-linux-arm:
     strategy:
       matrix:
-        node-version: [ 22, 23 ]
+        node: [ 22, 23 ]
 
-    name: Build - linux-arm64 (Docker) - Node ${{ matrix.node-version }}
+    name: Build - linux-arm64 (Docker) - Node ${{ matrix.node }}
     runs-on: ubuntu-latest
 
     steps:
@@ -137,7 +132,7 @@ jobs:
           docker run --rm -v ${{ github.workspace }}:/build \
             --platform linux/arm64 \
             -w /build \
-            node:${{ matrix.node-version }} \
+            node:${{ matrix.node }} \
             bash -c "
               apt-get update && apt-get install -y build-essential python3 curl && \
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
@@ -151,13 +146,13 @@ jobs:
 
       - name: Package prebuilt binary
         run: |
-          tar -czf ${{ env.APP_NAME }}-v${{ matrix.node-version }}-linux-arm64.tar.gz -C prebuilds/linux-arm64 .
+          tar -czf ${{ env.APP_NAME }}-v${{ matrix.node }}-linux-arm64.tar.gz -C prebuilds/linux-arm64 .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bindings-linux-arm64-node${{ matrix.node-version }}
-          path: ${{ env.APP_NAME }}-v${{ matrix.node-version }}-linux-arm64.tar.gz
+          name: bindings-linux-arm64-node${{ matrix.node }}
+          path: ${{ env.APP_NAME }}-v${{ matrix.node }}-linux-arm64.tar.gz
           if-no-files-found: error
 
   publish:
@@ -228,13 +223,13 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-        node-version: [ 22, 23 ]
+        node: [ 22, 23 ]
 
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ matrix.node }}
 
       - name: Get package version
         shell: bash
