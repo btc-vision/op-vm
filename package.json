@@ -33,7 +33,6 @@
     "install.mjs"
   ],
   "scripts": {
-    "test": "cargo test",
     "postinstall": "node install.mjs",
     "cargo-build": "cargo build --message-format=json-render-diagnostics > cargo.log",
     "cross-build": "cross build --message-format=json-render-diagnostics > cross.log",
