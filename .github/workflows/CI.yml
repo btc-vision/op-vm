@@ -37,6 +37,13 @@ jobs:
             setup: |
               npm install -g @neon-rs/cli
 
+          - os: windows-latest
+            rust-target: aarch64-pc-windows-msvc
+            platform: win32
+            arch: arm64
+            setup: |
+              npm install -g @neon-rs/cli
+
           # macOS builds
           - os: macos-latest
             rust-target: x86_64-apple-darwin
