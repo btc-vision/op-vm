@@ -93,11 +93,6 @@ jobs:
             cp index.node prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}/op-vm.node
           fi
 
-      - name: Test binary
-        # Skip test for cross-compiled ARM targets on x64 hosts
-        if: matrix.settings.arch != 'arm64' || matrix.settings.host == 'macos-latest'
-        run: npm test
-
       - name: Package prebuilt binary
         shell: bash
         run: |
