@@ -8,6 +8,7 @@ env:
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
 on:
   push:
@@ -93,6 +94,11 @@ jobs:
             cp index.node prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}/op-vm.node
           fi
 
+      - name: Generate build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}/op-vm.node
+
       - name: Package prebuilt binary
         shell: bash
         run: |
@@ -113,6 +119,11 @@ jobs:
 
     name: Build - linux-arm64 (Docker) - Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -138,6 +149,11 @@ jobs:
               mkdir -p prebuilds/linux-arm64 && \
               cp index.node prebuilds/linux-arm64/op-vm.node
             "
+
+      - name: Generate build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: prebuilds/linux-arm64/op-vm.node
 
       - name: Package prebuilt binary
         run: |
