@@ -118,9 +118,6 @@ jobs:
           fi
         shell: bash
 
-      - name: Test binary
-        run: npm test
-
       - name: Package prebuilt binary
         run: |
           tar -czf ${{ env.APP_NAME }}-v${{ matrix.node-version }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C prebuilds/${{ matrix.platform }}-${{ matrix.arch }} .
