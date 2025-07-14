@@ -11,3 +11,61 @@ yarn.lock
 .yarn
 __test__
 renovate.json
+
+# Build artifacts
+target/
+*.log
+cross.log
+cargo.log
+
+# Development files
+.github/
+.gitignore
+.editorconfig
+docs/
+tests/
+benches/
+examples/
+
+# CI artifacts
+artifacts/
+*.tar.gz
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keep only necessary Rust source files
+# The src/ directory is needed for building from source
+# but we can exclude test files
+src/**/*_test.rs
+src/**/*_tests.rs
+src/**/test_*.rs
+src/**/tests/
+
+# Documentation
+*.md
+!README.md
+LICENSE
+
+# Configuration files that aren't needed for builds
+.rustfmt.toml
+.clippy.toml
+rust-toolchain.toml
+deny.toml
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+*.tmp
+temp/
+tmp/

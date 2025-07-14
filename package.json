@@ -18,31 +18,31 @@
     "type": "git",
     "url": "git://github.com/btc-vision/op-vm.git"
   },
-  "napi": {
-    "name": "op-vm",
-    "triples": {
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-linux-android",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-pc-windows-msvc",
-        "universal-apple-darwin"
-      ]
-    }
-  },
   "engines": {
     "node": ">= 22"
   },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "index.node",
+    "Cargo.toml",
+    "Cargo.lock",
+    "src/",
+    "build.rs",
+    "prebuilds/",
+    "install.mjs"
+  ],
   "scripts": {
     "test": "cargo test",
-    "postinstall": "npm run build",
+    "postinstall": "node install.mjs",
     "cargo-build": "cargo build --message-format=json-render-diagnostics > cargo.log",
     "cross-build": "cross build --message-format=json-render-diagnostics > cross.log",
     "postcargo-build": "neon dist < cargo.log",
     "postcross-build": "neon dist -m /target < cross.log",
     "debug": "npm run cargo-build --",
     "build": "npm run cargo-build -- --release",
-    "cross": "npm run cross-build -- --release"
+    "cross": "npm run cross-build -- --release",
+    "prepublishOnly": "echo 'Skipping build on publish'"
   },
   "devDependencies": {
     "@types/node": "^24.0.3",
