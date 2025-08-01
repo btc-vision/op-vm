@@ -41,7 +41,8 @@
     "debug": "npm run cargo-build --",
     "build": "npm run cargo-build -- --release",
     "cross": "npm run cross-build -- --release",
-    "prepublishOnly": "echo 'Skipping build on publish'"
+    "prepublishOnly": "echo 'Skipping build on publish'",
+    "coverage": "cargo llvm-cov clean --workspace && cargo llvm-cov --workspace --open"
   },
   "devDependencies": {
     "@types/node": "^24.0.3",

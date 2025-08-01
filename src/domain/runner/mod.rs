@@ -7,7 +7,7 @@ mod custom_env;
 pub mod environment_variables;
 mod exit_data;
 mod exit_result;
-mod import_functions;
+pub mod import_functions;
 mod instance_wrapper;
 mod store;
 mod wasmer_runner;

@@ -16,6 +16,7 @@ use crate::domain::vm::{get_points_atomic, get_total_threads, AtomicMeteringErro
 #[cfg(feature = "contract-threading")]
 use dashmap::DashMap;
 
+use crate::domain::runner::common::MemoryWriter;
 #[cfg(feature = "contract-threading")]
 use std::sync::Arc;
 
@@ -167,5 +168,18 @@ impl Drop for InstanceWrapper {
         if Arc::strong_count(&self.futexes) == 1 {
             self.futexes.retain(|_, q| Arc::strong_count(q) > 1);
         }
+    }
+}
+
+impl MemoryWriter for InstanceWrapper {
+    type Error = ExtendedMemoryAccessError;
+
+    fn write_memory(
+        &self,
+        store: &impl AsStoreRef,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<(), Self::Error> {
+        self.write_memory(store, offset, data)
     }
 }
