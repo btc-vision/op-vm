@@ -43,6 +43,7 @@ blake3 = { version = "1.8.2", optional = true }
 ark-serialize = { version = "0.5.0", optional = true, default-features = false, features = ["derive", "ark-serialize-derive"] }
 ark-ff = { version = "0.5.0", optional = true, default-features = false, features = [] }
 env_logger = { version = "0.11.8", optional = true }
+lru = { version = "0.16.0", optional = true }
 
 [dev-dependencies]
 wat = "1.235.0"
@@ -53,7 +54,7 @@ transient-storage = []
 debug-metering = ["env_logger"]
 table-metering = []
 reference-types = ["table-metering"]
-vdf-zk-snark = ["zk-snark"]
+vdf-zk-snark = ["zk-snark", "lru"]
 vdf = ["num-bigint", "num-integer", "num-traits", "blake3"]
 contract-threading = ["dashmap", "futures"]
 zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-primitives", "ark-groth16", "ark-bls12-381", "ark-r1cs-std", "ark-serialize", "ark-ff"]
