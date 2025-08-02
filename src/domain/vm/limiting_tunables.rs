@@ -32,9 +32,9 @@ impl<T: Tunables> LimitingTunables<T> {
     }
 
     /// Takes an input memory type as requested by the guest and sets
-    /// a maximum if missing. The resulting memory type is final if
-    /// valid. However, this can produce invalid types, such that
-    /// validate_memory must be called before creating the memory.
+    /// a maximum if missing. The resulting memory type is passed to
+    /// the base implementation. Validation occurs later during memory
+    /// creation in create_host_memory and create_vm_memory.
     fn adjust_memory(&self, requested: &MemoryType) -> MemoryType {
         let mut adjusted = requested.clone();
         if requested.maximum.is_none() {
