@@ -225,7 +225,15 @@ where
 
     let waiter = {
         let ticket = queue.ticket();
-        queue.clone().wait_for_change(ticket).map(|_| ())
+        queue.clone().wait_for_change(ticket).map(|_| {
+            // Check if we woke up due to shut down
+            if queue.closed.load(Ordering::Acquire) {
+                // Return OK to gracefully exit
+                ()
+            } else {
+                ()
+            }
+        })
     };
 
     let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
