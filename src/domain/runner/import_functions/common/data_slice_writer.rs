@@ -1,55 +1,62 @@
-use crate::domain::runner::InstanceWrapper;
 use std::cmp::min;
-use wasmer::{RuntimeError, StoreMut};
+use wasmer::{AsStoreRef, RuntimeError, StoreMut};
+
+pub trait MemoryWriter {
+    type Error: std::error::Error;
+
+    fn write_memory(
+        &self,
+        store: &impl AsStoreRef,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<(), Self::Error>;
+}
 
 #[derive(Default)]
 pub struct DataSliceWriter;
 
 impl DataSliceWriter {
-    pub fn write_data_and_padding_to_memory(
+    pub fn write_data_and_padding_to_memory<W: MemoryWriter>(
         store: &mut StoreMut,
-        instance: &InstanceWrapper,
+        instance: &W,
         result_data: &[u8],
         offset: u32,
         length: u32,
         result_ptr: u32,
     ) -> Result<(), RuntimeError> {
-        Self::write_data_slice_to_memory(
+        let data_written = Self::write_data_slice_to_memory(
             store,
-            &instance,
+            instance,
             result_data,
             offset,
             length,
             result_ptr,
         )?;
-        Self::write_data_padding_to_memory(
-            store,
-            &instance,
-            result_data,
-            offset,
-            length,
-            result_ptr,
-        )
+
+        Self::write_data_padding_to_memory(store, instance, data_written, length, result_ptr)
     }
 
-    fn write_data_slice_to_memory(
+    fn write_data_slice_to_memory<W: MemoryWriter>(
         store: &mut StoreMut,
-        instance: &InstanceWrapper,
+        instance: &W,
         result_data: &[u8],
         offset: u32,
         length: u32,
         result_ptr: u32,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<usize, RuntimeError> {
         let result_data_sliced =
             Self::slice_in_bounds(result_data, offset as usize, length as usize)
                 .ok_or(RuntimeError::new("Error slicing data"))?;
 
+        let data_written = result_data_sliced.len();
+
         if !result_data_sliced.is_empty() {
             instance
-                .write_memory(&store, result_ptr as u64, result_data_sliced)
+                .write_memory(store, result_ptr as u64, result_data_sliced)
                 .map_err(|_e| RuntimeError::new("Error writing data to memory"))?;
         }
-        Ok(())
+
+        Ok(data_written)
     }
 
     fn slice_in_bounds(data: &[u8], offset: usize, length: usize) -> Option<&[u8]> {
@@ -58,20 +65,21 @@ impl DataSliceWriter {
         data.get(start..end)
     }
 
-    fn write_data_padding_to_memory(
+    fn write_data_padding_to_memory<W: MemoryWriter>(
         store: &mut StoreMut,
-        instance: &InstanceWrapper,
-        result_data: &[u8],
-        offset: u32,
+        instance: &W,
+        data_written: usize,
         length: u32,
         result_ptr: u32,
     ) -> Result<(), RuntimeError> {
-        if result_data.len() < (offset + length) as usize {
-            let zero_bytes_length = (offset + length) as usize - result_data.len();
+        if data_written < length as usize {
+            let zero_bytes_length = length as usize - data_written;
             let zero_bytes_vec = vec![0; zero_bytes_length];
-            let ptr = result_ptr as u64 + result_data.len() as u64;
+
+            let ptr = result_ptr as u64 + data_written as u64;
+
             instance
-                .write_memory(&store, ptr, &zero_bytes_vec)
+                .write_memory(store, ptr, &zero_bytes_vec)
                 .map_err(|_e| RuntimeError::new("Error writing data to memory"))?;
         }
         Ok(())
