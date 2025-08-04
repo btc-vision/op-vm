@@ -181,10 +181,11 @@ where
         return Ok(TIMED_OUT);
     }
 
-    if !proof_bytes.is_empty() {
-        let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
-        let seed = addr ^ expected.into() ^ diff;
+    let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
+    let seed = addr ^ expected.into() ^ diff;
 
+    #[cfg(any(feature = "vdf", feature = "vdf-zk-snark"))]
+    if !proof_bytes.is_empty() {
         #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
         match parse_proof(&proof_bytes) {
             None => return Ok(NOT_AUTHORIZED), // bad format
@@ -228,15 +229,20 @@ where
         queue.clone().wait_for_change(ticket).map(|_| ())
     };
 
-    let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
-    let seed = addr ^ expected.into() ^ diff;
-    let timer = deterministic_delay(seed, diff);
+    // SAFETY: THIS WAS JUST AN EXPERIMENT. IT IS NOT USED ANYWHERE AND THREADS ARE NOT SUPPORTED.
+    // ALWAYS RETURN TIMED_OUT.
+
+    Ok(TIMED_OUT)
+
+    // THE CODE BELOW HAVE A RACE CONDITION.
+
+    /*let timer = deterministic_delay(seed, diff);
 
     pin_mut!(waiter, timer);
     match select(waiter, timer).await {
         futures::future::Either::Left((_, _)) => Ok(OK),
         futures::future::Either::Right((_, _)) => Ok(TIMED_OUT),
-    }
+    }*/
 }
 
 fn notify_impl(
