@@ -64,7 +64,7 @@ impl WasmerRunner {
         Ok(instance)
     }
 
-    fn create_engine(max_pages: u32) -> anyhow::Result<Store> {
+    pub fn create_engine(max_pages: u32) -> anyhow::Result<Store> {
         let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost, MAX_MEMORY_COPY_SIZE);
         let metering = Arc::new(meter);
 

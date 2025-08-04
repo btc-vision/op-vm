@@ -1,22 +1,15 @@
 pub mod mock_instance_wrapper;
 
 pub use mock_instance_wrapper::{MemoryRead, MemoryWrite, MockInstanceWrapper};
+use op_vm::domain::runner::{WasmerRunner, MAX_PAGES};
+use wasmer_compiler::CompilerConfig;
 
 /// Create a mock Store for testing
 ///
 /// Creates a minimal Wasmer store suitable for testing memory operations.
 pub fn create_mock_store() -> wasmer::Store {
-    use wasmer::{sys::EngineBuilder, Store};
-    use wasmer_compiler_singlepass::Singlepass;
-
-    // Create a compiler with default settings
-    let compiler = Singlepass::default();
-
-    // Use EngineBuilder to create the engine
-    let engine = EngineBuilder::new(compiler).engine();
-
-    // Create and return the store
-    Store::new(engine)
+    let store = WasmerRunner::create_engine(MAX_PAGES).unwrap();
+    store
 }
 
 /// Common test constants
