@@ -231,6 +231,8 @@ where
 
     // SAFETY: THIS WAS JUST AN EXPERIMENT. IT IS NOT USED ANYWHERE AND THREADS ARE NOT SUPPORTED.
     // ALWAYS RETURN TIMED_OUT.
+    //
+    // PLEASE CHECK: https://github.com/btc-vision/OIP/blob/main/OIP/OIP-0002.md
 
     Ok(TIMED_OUT)
 
