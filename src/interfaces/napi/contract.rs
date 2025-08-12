@@ -126,7 +126,6 @@ impl Contract {
         let max_pages = MAX_PAGES - params.memory_pages_used;
         let network_id: BitcoinNetwork = params.network.into();
 
-        //let runtime = Arc::new(Runtime::new()?);
         let custom_env = CustomEnv::new(
             network_id,
             storage_load_external,
