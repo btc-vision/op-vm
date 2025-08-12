@@ -34,6 +34,9 @@ use ark_serialize::{Compress, Validate};
 #[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
 use {crate::domain::vm::prove, ark_serialize::CanonicalDeserialize};
 
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+use lru::LruCache;
+
 const OK: i32 = 0;
 const TIMED_OUT: i32 = 1;
 const NOT_EQUAL: i32 = 2;
@@ -151,6 +154,26 @@ fn deserialize_vk(bytes: &[u8]) -> Option<VerifyingKey<Bls12_381>> {
     .ok()
 }
 
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+static VK_CACHE: OnceLock<Mutex<LruCache<Vec<u8>, Arc<VerifyingKey<Bls12_381>>>>> = OnceLock::new();
+
+#[cfg(all(feature = "vdf-zk-snark", not(feature = "vdf")))]
+fn get_cached_vk(vk_bytes: &[u8]) -> Option<Arc<VerifyingKey<Bls12_381>>> {
+    let cache = VK_CACHE.get_or_init(|| Mutex::new(LruCache::new(100))); // Max 100 keys, experimental.
+
+    let mut cache_guard = cache.lock().unwrap();
+
+    if let Some(vk) = cache_guard.get(vk_bytes) {
+        return Some(vk.clone());
+    }
+
+    let vk = deserialize_vk(vk_bytes)?;
+    let vk_arc = Arc::new(vk);
+    cache_guard.put(vk_bytes.to_vec(), vk_arc.clone());
+
+    Some(vk_arc)
+}
+
 async fn wait_async<A: AtomicInt>(
     mem: Memory,
     store: StoreRef<'_>,
@@ -181,10 +204,11 @@ where
         return Ok(TIMED_OUT);
     }
 
-    if !proof_bytes.is_empty() {
-        let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
-        let seed = addr ^ expected.into() ^ diff;
+    let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
+    let seed = addr ^ expected.into() ^ diff;
 
+    #[cfg(any(feature = "vdf", feature = "vdf-zk-snark"))]
+    if !proof_bytes.is_empty() {
         #[cfg(all(feature = "vdf", not(feature = "vdf-zk-snark")))]
         match parse_proof(&proof_bytes) {
             None => return Ok(NOT_AUTHORIZED), // bad format
@@ -198,16 +222,16 @@ where
         match parse_snark(&proof_bytes) {
             None => return Ok(NOT_AUTHORIZED),
             Some((y, proof)) => {
-                let vk = if vk_bytes.is_empty() {
+                if vk_bytes.is_empty() {
                     return Ok(NOT_AUTHORIZED);
-                } else {
-                    match deserialize_vk(&vk_bytes) {
-                        Some(v) => Box::leak(Box::new(v)), // 'static lifetime hack
-                        None => return Ok(NOT_AUTHORIZED),
-                    }
+                }
+
+                let vk = match get_cached_vk(&vk_bytes) {
+                    Some(vk) => vk,
+                    None => return Ok(NOT_AUTHORIZED),
                 };
 
-                let verified = verify(&little_endian_u64(seed), &y, &proof, vk).map_err(|e| {
+                let verified = verify(&little_endian_u64(seed), &y, &proof, &vk).map_err(|e| {
                     println!("Error verifying proof: {}", e);
                     RuntimeError::new("verification failed")
                 });
@@ -225,18 +249,33 @@ where
 
     let waiter = {
         let ticket = queue.ticket();
-        queue.clone().wait_for_change(ticket).map(|_| ())
+        queue.clone().wait_for_change(ticket).map(|_| {
+            // Check if we woke up due to shut down
+            if queue.closed.load(Ordering::Acquire) {
+                // Return OK to gracefully exit
+                ()
+            } else {
+                ()
+            }
+        })
     };
 
-    let diff = ((timeout_ns as u64) / NS_PER_HASH).clamp(1, MAX_DIFF);
-    let seed = addr ^ expected.into() ^ diff;
-    let timer = deterministic_delay(seed, diff);
+    // SAFETY: THIS WAS JUST AN EXPERIMENT. IT IS NOT USED ANYWHERE AND THREADS ARE NOT SUPPORTED.
+    // ALWAYS RETURN TIMED_OUT.
+    //
+    // PLEASE CHECK: https://github.com/btc-vision/OIP/blob/main/OIP/OIP-0002.md
+
+    Ok(TIMED_OUT)
+
+    // THE CODE BELOW HAVE A RACE CONDITION.
+
+    /*let timer = deterministic_delay(seed, diff);
 
     pin_mut!(waiter, timer);
     match select(waiter, timer).await {
         futures::future::Either::Left((_, _)) => Ok(OK),
         futures::future::Either::Right((_, _)) => Ok(TIMED_OUT),
-    }
+    }*/
 }
 
 fn notify_impl(

@@ -16,6 +16,7 @@ use crate::domain::vm::{get_points_atomic, get_total_threads, AtomicMeteringErro
 #[cfg(feature = "contract-threading")]
 use dashmap::DashMap;
 
+use crate::domain::runner::common::MemoryWriter;
 #[cfg(feature = "contract-threading")]
 use std::sync::Arc;
 
@@ -164,8 +165,35 @@ impl InstanceWrapper {
 #[cfg(feature = "contract-threading")]
 impl Drop for InstanceWrapper {
     fn drop(&mut self) {
+        // Only perform cleanup if we're the last owner of the futexes map
         if Arc::strong_count(&self.futexes) == 1 {
-            self.futexes.retain(|_, q| Arc::strong_count(q) > 1);
+            // Collect all wait queues before clearing the map
+            let queues: Vec<Arc<WaitQueue>> = self
+                .futexes
+                .iter()
+                .map(|entry| entry.value().clone())
+                .collect();
+
+            // Clear the map first to prevent new waiters
+            self.futexes.clear();
+
+            // Now shutdown all queues, waking any waiters
+            for queue in queues {
+                queue.shutdown();
+            }
         }
+    }
+}
+
+impl MemoryWriter for InstanceWrapper {
+    type Error = ExtendedMemoryAccessError;
+
+    fn write_memory(
+        &self,
+        store: &impl AsStoreRef,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<(), Self::Error> {
+        self.write_memory(store, offset, data)
     }
 }

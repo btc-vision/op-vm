@@ -1,7 +1,7 @@
 mod account_type_import;
 mod block_hash_import;
 mod call_other_contract_import;
-mod common;
+pub mod common;
 mod console_log_import;
 mod deploy_from_address_import;
 mod emit_import;
