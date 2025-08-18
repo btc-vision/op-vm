@@ -49,9 +49,7 @@ impl AccountTypeExternalFunction {
     }
 }
 
-impl super::external_function::ExternalFunction<AccountTypeResponse>
-    for AccountTypeExternalFunction
-{
+impl ExternalFunction<AccountTypeResponse> for AccountTypeExternalFunction {
     fn name(&self) -> String {
         String::from("AccountType")
     }
