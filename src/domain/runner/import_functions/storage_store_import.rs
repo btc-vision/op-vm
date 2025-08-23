@@ -26,6 +26,7 @@ impl StorageStoreImport {
         let key = instance
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
+
         let value = instance
             .read_memory(&store, value_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage value from memory"))?;
