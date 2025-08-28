@@ -2,8 +2,7 @@
 rustflags = [
     "-C", "panic=abort",
     "-C", "lto=fat",
-    "-C", "opt-level=3",
-    "-Z", "stack-protector=none"
+    "-C", "opt-level=3"
 ]
 
 [target.aarch64-unknown-linux-musl]
