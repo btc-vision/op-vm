@@ -401,7 +401,7 @@ impl WasmerRunner {
     }
 }
 
-#[async_trait::async_trait]
+//#[async_trait::async_trait]
 impl ContractRunner for WasmerRunner {
     fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables) {
         let env = self.env.as_mut(&mut self.store);
