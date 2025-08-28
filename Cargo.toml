@@ -63,4 +63,8 @@ zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-
 lto = true
 strip = "symbols"
 panic = "abort"
-opt-level = "z"
+codegen-units = 1
+opt-level = 3
+
+[profile.dev]
+panic = "abort"

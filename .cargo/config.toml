@@ -1,8 +1,9 @@
 [target.x86_64-unknown-linux-gnu]
 rustflags = [
     "-C", "panic=abort",
-    "-C", "link-arg=-Wl,--export-dynamic-symbol=__rust_probestack",
-    "-C", "link-arg=-Wl,--allow-multiple-definition"
+    "-C", "lto=fat",
+    "-C", "opt-level=3",
+    "-Z", "stack-protector=none"
 ]
 
 [target.aarch64-unknown-linux-musl]
