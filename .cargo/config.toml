@@ -1,9 +1,5 @@
 [target.x86_64-unknown-linux-gnu]
-rustflags = [
-    "-C", "panic=abort",
-    "-C", "lto=fat",
-    "-C", "opt-level=3"
-]
+rustflags = ["-C", "panic=abort"]
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-musl-gcc"

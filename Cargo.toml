@@ -60,11 +60,5 @@ contract-threading = ["dashmap", "futures"]
 zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-primitives", "ark-groth16", "ark-bls12-381", "ark-r1cs-std", "ark-serialize", "ark-ff"]
 
 [profile.release]
-lto = true
 strip = "symbols"
-panic = "abort"
-codegen-units = 1
-opt-level = 3
-
-[profile.dev]
 panic = "abort"
