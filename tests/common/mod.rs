@@ -2,7 +2,6 @@ pub mod mock_instance_wrapper;
 
 pub use mock_instance_wrapper::{MemoryRead, MemoryWrite, MockInstanceWrapper};
 use op_vm::domain::runner::{WasmerRunner, MAX_PAGES};
-use wasmer_compiler::CompilerConfig;
 
 /// Create a mock Store for testing
 ///
