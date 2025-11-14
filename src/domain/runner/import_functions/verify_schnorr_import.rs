@@ -1,6 +1,6 @@
 use crate::domain::runner::CustomEnv;
-use once_cell::sync::Lazy;
-use secp256k1::{schnorr, Secp256k1, XOnlyPublicKey};
+use secp256k1::schnorr::verify;
+use secp256k1::{schnorr, XOnlyPublicKey};
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 1_000_000;
@@ -15,8 +15,6 @@ impl VerifySchnorrImport {
         signature_ptr: u32,
         message_ptr: u32,
     ) -> Result<u32, RuntimeError> {
-        static SECP: Lazy<Secp256k1<secp256k1::All>> = Lazy::new(|| Secp256k1::new());
-
         let (env, mut store) = context.data_and_store_mut();
 
         let instance = env
@@ -44,7 +42,7 @@ impl VerifySchnorrImport {
             .map_err(|e| RuntimeError::new(format!("Error converting public key: {}", e)))?;
 
         let signature = schnorr::Signature::from_byte_array(signature_bytes);
-        let result = SECP.verify_schnorr(&signature, &message_bytes, &xonly_public_key);
+        let result = verify(&signature, &message_bytes, &xonly_public_key);
         let result = result.is_ok() as u32;
 
         Ok(result)
