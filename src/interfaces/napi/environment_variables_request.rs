@@ -3,7 +3,9 @@ use neon::{
     types::{buffer::TypedArray, JsBigInt},
 };
 
+use crate::domain::runner::ConsensusFlags;
 use crate::domain::{common::Address, runner::EnvironmentVariables};
+
 pub struct EnvironmentVariablesRequest {
     pub block_hash: Vec<u8>,
     pub block_number: u64,
@@ -16,6 +18,8 @@ pub struct EnvironmentVariablesRequest {
     pub origin: Vec<u8>,
     pub chain_id: Vec<u8>,
     pub protocol_id: Vec<u8>,
+    pub origin_tweaked_public_key: Vec<u8>,
+    pub consensus_flags: u64,
 }
 
 impl EnvironmentVariablesRequest {
@@ -63,6 +67,14 @@ impl EnvironmentVariablesRequest {
                 .get::<JsBuffer, _, _>(cx, "protocolId")?
                 .as_slice(cx)
                 .to_vec(),
+            origin_tweaked_public_key: obj
+                .get::<JsBuffer, _, _>(cx, "originTweakedPublicKey")?
+                .as_slice(cx)
+                .to_vec(),
+            consensus_flags: obj
+                .get::<JsBigInt, _, _>(cx, "consensusFlags")?
+                .to_u64(cx)
+                .or_else(|err| cx.throw_range_error(err.to_string()))?,
         })
     }
 }
@@ -84,6 +96,8 @@ impl Into<EnvironmentVariables> for EnvironmentVariablesRequest {
             Address::new(&self.origin),
             &self.chain_id,
             &self.protocol_id,
+            &self.origin_tweaked_public_key,
+            ConsensusFlags::from_u64(self.consensus_flags),
         )
     }
 }

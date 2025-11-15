@@ -3,8 +3,8 @@ use crate::domain::runner::{BitcoinNetwork, CallResult, Calldata, ExitData, Inst
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
-    InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
-    StorageStoreExternalFunction,
+    InputsExternalFunction, MLDSALoadExternalFunction, OutputsExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -31,6 +31,7 @@ pub struct CustomEnv {
     pub outputs_external: OutputsExternalFunction,
     pub account_type_external: AccountTypeExternalFunction,
     pub block_hash_external: BlockHashExternalFunction,
+    pub mldsa_load_external: MLDSALoadExternalFunction,
     pub runtime: Arc<Runtime>,
     pub calldata: Calldata,
     pub environment_variables: Option<EnvironmentVariables>,
@@ -57,6 +58,7 @@ impl CustomEnv {
         outputs_external: OutputsExternalFunction,
         account_type_external: AccountTypeExternalFunction,
         block_hash_external: BlockHashExternalFunction,
+        mldsa_load_external: MLDSALoadExternalFunction,
         runtime: Arc<Runtime>,
         max_pages: u32,
         return_proofs: bool,
@@ -75,6 +77,7 @@ impl CustomEnv {
             outputs_external,
             account_type_external,
             block_hash_external,
+            mldsa_load_external,
             runtime,
             calldata: Calldata::default(),
             environment_variables: None,

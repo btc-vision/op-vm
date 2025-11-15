@@ -7,8 +7,8 @@ use crate::interfaces::napi::runtime_pool::RuntimePool;
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
-    InputsExternalFunction, OutputsExternalFunction, StorageLoadExternalFunction,
-    StorageStoreExternalFunction,
+    InputsExternalFunction, MLDSALoadExternalFunction, OutputsExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction,
 };
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -112,6 +112,13 @@ impl Contract {
             id,
         );
 
+        let mldsa_load_external = MLDSALoadExternalFunction::new(
+            "MLDSALoad",
+            manager.mldsa_load_js_function.clone(),
+            cx.channel(),
+            id,
+        );
+
         // Obtain a Runtime from the pool
         let runtime = if let Some(runtime) = manager.runtime_pool.get_runtime() {
             Ok(runtime)
@@ -138,6 +145,7 @@ impl Contract {
             outputs_external,
             account_type_external,
             block_hash_external,
+            mldsa_load_external,
             runtime.clone(),
             max_pages,
             false,
