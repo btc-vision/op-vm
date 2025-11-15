@@ -55,7 +55,7 @@ jobs:
             platform: linux
             arch: x64
 
-        node: [ 22, 23 ]
+        node: [ 22, 23, 24 ]
 
     name: Build - ${{ matrix.settings.platform }}-${{ matrix.settings.arch }} - Node ${{ matrix.node }}
     runs-on: ${{ matrix.settings.host }}
@@ -115,7 +115,7 @@ jobs:
   build-linux-arm:
     strategy:
       matrix:
-        node: [ 22, 23 ]
+        node: [ 22, 23, 24 ]
 
     name: Build - linux-arm64 (Docker) - Node ${{ matrix.node }}
     runs-on: ubuntu-latest
@@ -178,7 +178,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
       - name: Download all artifacts
@@ -234,7 +234,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-        node: [ 22, 23 ]
+        node: [ 22, 23, 24 ]
 
     steps:
       - name: Setup Node.js
