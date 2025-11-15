@@ -3,12 +3,6 @@ export const enum BitcoinNetworkRequest {
     Testnet = 1,
     Regtest = 2,
 }
-
-export enum ConsensusFlags {
-    None = 0,
-    MLDSASignaturesOnly = 0b1,
-}
-
 export interface EnvironmentVariablesRequest {
     readonly blockHash: Uint8Array;
     readonly blockNumber: bigint;
@@ -22,7 +16,7 @@ export interface EnvironmentVariablesRequest {
     readonly chainId: Uint8Array;
     readonly protocolId: Uint8Array;
     readonly originTweakedPublicKey: Uint8Array;
-    readonly consensusFlags: ConsensusFlags;
+    readonly consensusFlags: bigint;
 }
 
 export interface VMProof {
