@@ -26,6 +26,7 @@ log = "0.4.28"
 secp256k1 = { version = "0.32.0-beta.2", features = ["std"] }
 once_cell = "1.21.3"
 thiserror = "2.0.17"
+fips204 = { version = "0.4.6", features = ["default"] }
 dashmap = { version = "7.0.0-rc2", optional = true }
 rand_chacha = { version = "0.10.0-rc.1", optional = true }
 rand_core = { version = "0.10.0-rc-2", optional = true }

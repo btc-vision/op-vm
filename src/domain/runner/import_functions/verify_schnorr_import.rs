@@ -29,11 +29,13 @@ impl VerifySchnorrImport {
             .map_err(|_e| RuntimeError::new("Error reading Schnorr public key from memory"))?
             .try_into()
             .map_err(|_e| RuntimeError::new("Error reading Schnorr public key from memory"))?;
+
         let signature_bytes: [u8; 64] = instance
             .read_memory(&store, signature_ptr as u64, 64)
             .map_err(|_e| RuntimeError::new("Error reading Schnorr signature from memory"))?
             .try_into()
             .map_err(|_e| RuntimeError::new("Error reading Schnorr signature from memory"))?;
+
         let message_bytes = instance
             .read_memory(&store, message_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading Schnorr message from memory"))?;
