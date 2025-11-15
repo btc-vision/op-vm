@@ -112,6 +112,13 @@ impl Contract {
             id,
         );
 
+        let mldsa_load_external = StorageLoadExternalFunction::new(
+            "MLDSALoad",
+            manager.storage_load_js_function.clone(),
+            cx.channel(),
+            id,
+        );
+
         // Obtain a Runtime from the pool
         let runtime = if let Some(runtime) = manager.runtime_pool.get_runtime() {
             Ok(runtime)
@@ -138,6 +145,7 @@ impl Contract {
             outputs_external,
             account_type_external,
             block_hash_external,
+            mldsa_load_external,
             runtime.clone(),
             max_pages,
             false,

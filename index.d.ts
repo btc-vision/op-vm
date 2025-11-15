@@ -4,6 +4,11 @@ export const enum BitcoinNetworkRequest {
     Regtest = 2,
 }
 
+export enum ConsensusFlags {
+    None = 0,
+    MLDSASignaturesOnly = 0b1,
+}
+
 export interface EnvironmentVariablesRequest {
     readonly blockHash: Uint8Array;
     readonly blockNumber: bigint;
@@ -16,6 +21,8 @@ export interface EnvironmentVariablesRequest {
     readonly origin: Uint8Array;
     readonly chainId: Uint8Array;
     readonly protocolId: Uint8Array;
+    readonly originTweakedPublicKey: Uint8Array;
+    readonly consensusFlags: ConsensusFlags;
 }
 
 export interface VMProof {
@@ -82,6 +89,10 @@ export declare class ContractManager {
             result: ThreadSafeJsImportResponse,
         ) => Promise<AccountTypeResponse>,
         blockHashJsFunction: (_: never, result: BlockHashRequest) => Promise<BlockHashResponse>,
+        mldsaLoadJsFunction: (
+            _: never,
+            result: ThreadSafeJsImportResponse,
+        ) => Promise<Buffer | Uint8Array>,
     );
 
     reserveId(): bigint;

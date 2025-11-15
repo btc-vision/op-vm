@@ -10,6 +10,7 @@ pub const COLD_STORAGE_GAS_COST: u64 = 21_000_000;
 pub const WARM_STORAGE_GAS_COST: u64 = 1_000_000;
 pub const NEW_STORAGE_SLOT_GAS_COST: u64 = 200_000_000;
 pub const UPDATED_STORAGE_SLOT_GAS_COST: u64 = 29_000_000;
+pub const LOAD_MLDSA_PUBLIC_KEY_GAS_COST: u64 = 100_000_000;
 
 #[cfg(feature = "contract-threading")]
 pub const MAX_GAS_WASM_INIT_ATOMIC: u64 = 1_000_000;

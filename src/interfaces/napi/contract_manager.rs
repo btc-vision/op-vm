@@ -28,6 +28,7 @@ pub struct ContractManager {
     pub outputs_js_function: Arc<Root<JsFunction>>,
     pub account_type_js_function: Arc<Root<JsFunction>>,
     pub block_hash_js_function: Arc<Root<JsFunction>>,
+    pub mldsa_load_js_function: Arc<Root<JsFunction>>,
 }
 
 impl Finalize for ContractManager {}
@@ -51,6 +52,7 @@ impl ContractManager {
         let outputs_js_function = cx.argument::<JsFunction>(8)?.root(&mut cx);
         let account_type_js_function = cx.argument::<JsFunction>(9)?.root(&mut cx);
         let block_hash_js_function = cx.argument::<JsFunction>(10)?.root(&mut cx);
+        let mldsa_load_js_function = cx.argument::<JsFunction>(11)?.root(&mut cx);
 
         let inner = cx.boxed(Arc::new(Mutex::new(ContractManager::new(
             max_idling_runtimes,
@@ -64,6 +66,7 @@ impl ContractManager {
             outputs_js_function,
             account_type_js_function,
             block_hash_js_function,
+            mldsa_load_js_function,
         )?)));
 
         this.set(&mut cx, INNER, inner)?;
@@ -92,16 +95,19 @@ impl ContractManager {
             .argument::<JsBigInt>(0)?
             .to_u64(&mut cx)
             .or_else(|e| cx.throw_range_error(e.to_string()))?;
+
         let address = cx.argument::<JsString>(1)?.value(&mut cx);
         let bytecode = cx.argument::<JsValue>(2)?;
         let used_gas = cx
             .argument::<JsBigInt>(3)?
             .to_u64(&mut cx)
             .or_else(|e| cx.throw_range_error(e.to_string()))?;
+
         let max_gas = cx
             .argument::<JsBigInt>(4)?
             .to_u64(&mut cx)
             .or_else(|e| cx.throw_range_error(e.to_string()))?;
+
         let memory_pages_used =
             cx.argument::<JsBigInt>(5)?
                 .to_u64(&mut cx)
@@ -310,6 +316,7 @@ impl ContractManager {
         let mut manager = inner
             .lock()
             .or_else(|err| cx.throw_error(err.to_string()))?;
+
         let contract_id = cx
             .argument::<JsBigInt>(0)?
             .to_u64(&mut cx)
@@ -452,6 +459,7 @@ impl ContractManager {
         outputs_js_function: Root<JsFunction>,
         account_type_js_function: Root<JsFunction>,
         block_hash_js_function: Root<JsFunction>,
+        mldsa_load_js_function: Root<JsFunction>,
     ) -> NeonResult<Self> {
         let max_idling_runtimes = max_idling_runtimes as usize;
         let runtime_pool = Arc::new(RuntimePool::new(max_idling_runtimes));
@@ -471,6 +479,7 @@ impl ContractManager {
             outputs_js_function: Arc::new(outputs_js_function),
             account_type_js_function: Arc::new(account_type_js_function),
             block_hash_js_function: Arc::new(block_hash_js_function),
+            mldsa_load_js_function: Arc::new(mldsa_load_js_function),
         })
     }
 

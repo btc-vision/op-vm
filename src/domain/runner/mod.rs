@@ -9,11 +9,12 @@ mod exit_data;
 mod exit_result;
 pub mod import_functions;
 mod instance_wrapper;
+mod signatures;
 mod store;
 mod wasmer_runner;
 
 pub use self::{
     bitcoin_network::*, call_result::*, calldata::*, constants::*, contract_runner::*,
     custom_env::*, environment_variables::*, exit_data::*, exit_result::*, import_functions::*,
-    instance_wrapper::*, store::*, wasmer_runner::*,
+    instance_wrapper::*, signatures::*, store::*, wasmer_runner::*,
 };
