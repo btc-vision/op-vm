@@ -153,6 +153,8 @@ impl VerifySignatureImport {
             )
             .map_err(|e| RuntimeError::new(format!("Error reading ML-DSA public key: {:?}", e)))?;
 
+        let public_key_bytes = &public_key_bytes[2..]; // Skip first 2 bytes
+
         // Read signature
         let signature_bytes = instance
             .read_memory(
