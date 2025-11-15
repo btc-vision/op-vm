@@ -22,7 +22,7 @@ impl MLDSALoadImport {
             .ok_or(RuntimeError::new("Instance not found"))?;
 
         let key = instance
-            .read_memory(&store, key_ptr as u64, 32)
+            .read_memory(&store, key_ptr as u64, 33)
             .map_err(|_e| RuntimeError::new("Error reading mldsa from memory"))?;
 
         let response = env.mldsa_load_external.execute(&key, &env.runtime)?;
