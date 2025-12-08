@@ -1,7 +1,7 @@
 {
     "name": "@btc-vision/op-vm",
     "description": "OP-VM executable for Bitcoin Smart Contracts",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "license": "MIT",
     "main": "index.js",
     "types": "index.d.ts",

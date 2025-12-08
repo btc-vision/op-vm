@@ -3,7 +3,6 @@ env:
   DEBUG: neon:*
   APP_NAME: op-vm
   PACKAGE_NAME: "@btc-vision/op-vm"
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
 permissions:
   contents: write
@@ -55,7 +54,12 @@ jobs:
             platform: linux
             arch: x64
 
-        node: [ 22, 23, 24 ]
+          - host: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            platform: linux
+            arch: arm64
+
+        node: [ 22, 23, 24, 25 ]
 
     name: Build - ${{ matrix.settings.platform }}-${{ matrix.settings.arch }} - Node ${{ matrix.node }}
     runs-on: ${{ matrix.settings.host }}
@@ -111,66 +115,15 @@ jobs:
           path: ${{ env.APP_NAME }}-v${{ matrix.node }}-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}.tar.gz
           if-no-files-found: error
 
-  # Linux ARM64 builds using Docker
-  build-linux-arm:
-    strategy:
-      matrix:
-        node: [ 22, 23, 24 ]
-
-    name: Build - linux-arm64 (Docker) - Node ${{ matrix.node }}
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Build in Docker
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/build \
-            --platform linux/arm64 \
-            -w /build \
-            node:${{ matrix.node }} \
-            bash -c "
-              apt-get update && apt-get install -y build-essential python3 curl && \
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
-              source ~/.cargo/env && \
-              npm install -g @neon-rs/cli && \
-              npm ci && \
-              npm run build && \
-              mkdir -p prebuilds/linux-arm64 && \
-              cp index.node prebuilds/linux-arm64/op-vm.node
-            "
-
-      - name: Generate build provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: prebuilds/linux-arm64/op-vm.node
-
-      - name: Package prebuilt binary
-        run: |
-          tar -czf ${{ env.APP_NAME }}-v${{ matrix.node }}-linux-arm64.tar.gz -C prebuilds/linux-arm64 .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bindings-linux-arm64-node${{ matrix.node }}
-          path: ${{ env.APP_NAME }}-v${{ matrix.node }}-linux-arm64.tar.gz
-          if-no-files-found: error
-
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    needs: [ build, build-linux-arm ]
+    needs: build
     if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -180,6 +133,9 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm
+        run: npm install -g npm@latest
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -192,7 +148,6 @@ jobs:
           cd artifacts
           for dir in */; do
             for file in $dir*.tar.gz; do
-              # Extract platform and arch from filename
               if [[ $file =~ v[0-9]+-([^-]+)-([^.]+)\.tar\.gz ]]; then
                 platform="${BASH_REMATCH[1]}"
                 arch="${BASH_REMATCH[2]}"
@@ -206,7 +161,6 @@ jobs:
 
       - name: Create temporary package.json for publishing
         run: |
-          # Remove postinstall script for published package
           node -e "
           const pkg = require('./package.json');
           delete pkg.scripts.postinstall;
@@ -219,13 +173,8 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Publish to npm
-        run: |
-          npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
-          npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
-  # Test published package
   test-published:
     name: Test published package
     runs-on: ${{ matrix.os }}
@@ -234,7 +183,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
-        node: [ 22, 23, 24 ]
+        node: [ 22, 23, 24, 25 ]
 
     steps:
       - name: Setup Node.js
