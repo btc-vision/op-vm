@@ -221,6 +221,10 @@ impl HugePageLinearMemory {
     }
 
     /// Allocate memory with huge pages, falling back to regular pages if needed.
+    ///
+    /// IMPORTANT: This follows Wasmer's approach - reserve total_size with PROT_NONE,
+    /// then only make accessible_size accessible. Guard pages remain PROT_NONE and
+    /// use no physical memory. Huge pages are only applied to the accessible portion.
     #[cfg(target_os = "linux")]
     fn allocate_memory(
         total_size: usize,
@@ -237,62 +241,13 @@ impl HugePageLinearMemory {
             return Ok((ptr::null_mut(), false));
         }
 
-        // Round up to huge page size for huge page allocation
-        let aligned_total = round_up_to_huge_page(total_size);
-
-        // Try explicit huge pages first if configured and size is large enough
-        if config.use_explicit_huge_pages && total_size >= HUGE_PAGE_SIZE {
-            let ptr = unsafe {
-                mmap(
-                    ptr::null_mut(),
-                    aligned_total,
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
-                    -1,
-                    0,
-                )
-            };
-
-            if ptr != MAP_FAILED {
-                // Lock pages in RAM to prevent swapping
-                if config.use_mlock {
-                    let mlock_result = unsafe { libc::mlock(ptr, aligned_total) };
-                    if mlock_result == 0 {
-                        log::debug!(
-                            "Allocated and mlocked {} bytes with MAP_HUGETLB (huge pages)",
-                            aligned_total
-                        );
-                    } else if config.log_fallback_warnings {
-                        log::warn!(
-                            "mlock failed for {} bytes: {} (memory will be swappable)",
-                            aligned_total,
-                            std::io::Error::last_os_error()
-                        );
-                    }
-                } else {
-                    log::debug!(
-                        "Allocated {} bytes with MAP_HUGETLB (huge pages)",
-                        aligned_total
-                    );
-                }
-                return Ok((ptr as *mut u8, true));
-            }
-
-            if config.log_fallback_warnings {
-                let err = std::io::Error::last_os_error();
-                log::warn!(
-                    "MAP_HUGETLB failed for {} bytes: {}. Falling back to regular pages.",
-                    aligned_total,
-                    err
-                );
-            }
-        }
-
-        // Fall back to regular allocation
+        // Round total to regular page boundary (for guard pages)
         let aligned_total = round_up_to_page(total_size);
 
-        // First reserve the full region with PROT_NONE
-        let ptr = unsafe {
+        // First, reserve the FULL region with PROT_NONE (like Wasmer does).
+        // This is just virtual address space - no physical memory is used.
+        // The guard region will remain PROT_NONE.
+        let base_ptr = unsafe {
             mmap(
                 ptr::null_mut(),
                 aligned_total,
@@ -303,42 +258,90 @@ impl HugePageLinearMemory {
             )
         };
 
-        if ptr == MAP_FAILED {
+        if base_ptr == MAP_FAILED {
             let err = std::io::Error::last_os_error();
-            return Err(MemoryError::Region(format!("mmap failed: {}", err)));
+            return Err(MemoryError::Region(format!("mmap reserve failed: {}", err)));
         }
 
-        // Make the accessible portion readable/writable
-        if accessible_size > 0 {
-            let result =
-                unsafe { mprotect(ptr, accessible_size, PROT_READ | PROT_WRITE) };
+        // If no accessible memory needed, we're done
+        if accessible_size == 0 {
+            return Ok((base_ptr as *mut u8, false));
+        }
+
+        // Round accessible size to huge page boundary for huge page allocation
+        let aligned_accessible = round_up_to_huge_page(accessible_size);
+        let mut uses_huge_pages = false;
+
+        // Try explicit huge pages for the ACCESSIBLE portion only (not guards!)
+        // Only worthwhile if accessible_size is >= 2MB
+        if config.use_explicit_huge_pages && accessible_size >= HUGE_PAGE_SIZE {
+            // Remap the accessible portion with MAP_HUGETLB using MAP_FIXED
+            let huge_ptr = unsafe {
+                mmap(
+                    base_ptr,
+                    aligned_accessible,
+                    PROT_READ | PROT_WRITE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | libc::MAP_FIXED,
+                    -1,
+                    0,
+                )
+            };
+
+            if huge_ptr != MAP_FAILED {
+                uses_huge_pages = true;
+                println!(
+                    "[HugePages] Mapped {} bytes with MAP_HUGETLB (accessible={}, guard={} bytes)",
+                    aligned_accessible,
+                    accessible_size,
+                    aligned_total - aligned_accessible
+                );
+
+                // Optionally mlock only the accessible portion
+                if config.use_mlock {
+                    let mlock_result = unsafe { libc::mlock(base_ptr, accessible_size) };
+                    if mlock_result != 0 && config.log_fallback_warnings {
+                        println!(
+                            "[HugePages WARN] mlock failed for {} bytes: {} (memory may be swapped)",
+                            accessible_size,
+                            std::io::Error::last_os_error()
+                        );
+                    }
+                }
+            } else if config.log_fallback_warnings {
+                println!(
+                    "[HugePages WARN] MAP_HUGETLB failed: {}. Using regular pages.",
+                    std::io::Error::last_os_error()
+                );
+            }
+        }
+
+        // If we didn't get huge pages, make accessible portion readable/writable with regular pages
+        if !uses_huge_pages {
+            let result = unsafe { mprotect(base_ptr, accessible_size, PROT_READ | PROT_WRITE) };
 
             if result != 0 {
                 let err = std::io::Error::last_os_error();
                 unsafe {
-                    libc::munmap(ptr, aligned_total);
+                    libc::munmap(base_ptr, aligned_total);
                 }
                 return Err(MemoryError::Region(format!("mprotect failed: {}", err)));
             }
-        }
 
-        // Try to apply madvise for transparent huge pages
-        if config.use_transparent_huge_pages && accessible_size >= HUGE_PAGE_SIZE {
-            const MADV_HUGEPAGE: i32 = 14;
-            let result =
-                unsafe { libc::madvise(ptr, accessible_size, MADV_HUGEPAGE) };
+            // Try transparent huge pages via madvise
+            if config.use_transparent_huge_pages && accessible_size >= HUGE_PAGE_SIZE {
+                const MADV_HUGEPAGE: i32 = 14;
+                let result = unsafe { libc::madvise(base_ptr, accessible_size, MADV_HUGEPAGE) };
 
-            if result == 0 {
-                log::debug!(
-                    "Applied MADV_HUGEPAGE to {} bytes (transparent huge pages)",
-                    accessible_size
-                );
-            } else if config.log_fallback_warnings {
-                log::debug!("madvise(MADV_HUGEPAGE) failed, using regular pages");
+                if result == 0 {
+                    println!(
+                        "[HugePages] Applied MADV_HUGEPAGE to {} bytes (transparent huge pages)",
+                        accessible_size
+                    );
+                }
             }
         }
 
-        Ok((ptr as *mut u8, false))
+        Ok((base_ptr as *mut u8, uses_huge_pages))
     }
 
     #[cfg(not(target_os = "linux"))]
