@@ -74,8 +74,11 @@ pub struct HugePageLinearMemory {
     uses_huge_pages: bool,
     /// Memory configuration
     config: MemoryConfig,
-    /// The VM memory definition for compiled code
+    /// The VM memory definition for compiled code (internal, owned by this struct)
     vm_memory_definition: Box<UnsafeCell<VMMemoryDefinition>>,
+    /// External VM memory definition location (when created via create_vm_memory)
+    /// This is the location that compiled WebAssembly code actually accesses.
+    external_vm_definition: Option<NonNull<VMMemoryDefinition>>,
     /// Huge page configuration
     huge_page_config: HugePageConfig,
 }
@@ -174,23 +177,23 @@ impl HugePageLinearMemory {
         let (ptr, uses_huge_pages) =
             Self::allocate_memory(total_size, initial_bytes, &huge_page_config)?;
 
-        // Create or use external VM definition
-        let vm_memory_definition = if let Some(mut ext_def) = vm_memory_location {
+        // Create internal VM definition (always needed)
+        let vm_memory_definition = Box::new(UnsafeCell::new(VMMemoryDefinition {
+            base: ptr,
+            current_length: initial_bytes,
+        }));
+
+        // If external location is provided (from create_vm_memory), update it too
+        // This is the location that compiled WebAssembly code actually accesses
+        let external_vm_definition = if let Some(mut ext_def) = vm_memory_location {
             unsafe {
                 let def = ext_def.as_mut();
                 def.base = ptr;
                 def.current_length = initial_bytes;
             }
-            // Create a dummy box - we won't use it since we have external definition
-            Box::new(UnsafeCell::new(VMMemoryDefinition {
-                base: ptr,
-                current_length: initial_bytes,
-            }))
+            Some(ext_def)
         } else {
-            Box::new(UnsafeCell::new(VMMemoryDefinition {
-                base: ptr,
-                current_length: initial_bytes,
-            }))
+            None
         };
 
         if uses_huge_pages {
@@ -212,6 +215,7 @@ impl HugePageLinearMemory {
                 offset_guard_size,
             },
             vm_memory_definition,
+            external_vm_definition,
             huge_page_config,
         })
     }
@@ -359,12 +363,20 @@ impl HugePageLinearMemory {
         self.uses_huge_pages
     }
 
-    /// Update the VM memory definition with new base and length
-    fn update_vm_memory_definition(&self, base: *mut u8, length: usize) {
+    fn update_vm_memory_definition(&mut self, base: *mut u8, length: usize) {
+        // Update internal definition
         unsafe {
             let def = &mut *self.vm_memory_definition.get();
             def.base = base;
             def.current_length = length;
+        }
+
+        if let Some(mut ext_def) = self.external_vm_definition {
+            unsafe {
+                let def = ext_def.as_mut();
+                def.base = base;
+                def.current_length = length;
+            }
         }
     }
 }
