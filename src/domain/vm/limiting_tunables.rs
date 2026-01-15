@@ -29,7 +29,7 @@ pub struct LimitingTunables<T: Tunables> {
 impl<T: Tunables> LimitingTunables<T> {
     /// Create new LimitingTunables with default settings (huge pages disabled)
     pub fn new(base: T, max_pages: u32, stack_size: usize) -> Self {
-        Self::with_huge_pages(base, max_pages, stack_size, HugePageConfig::disabled())
+        Self::with_huge_pages(base, max_pages, stack_size, HugePageConfig::default())
     }
 
     /// Create new LimitingTunables with huge page support.
@@ -48,8 +48,8 @@ impl<T: Tunables> LimitingTunables<T> {
         };
 
         // Only use custom huge page memory if explicit huge pages are enabled
-        let use_huge_page_memory = huge_page_config.use_explicit_huge_pages
-            || huge_page_config.use_transparent_huge_pages;
+        let use_huge_page_memory =
+            huge_page_config.use_explicit_huge_pages || huge_page_config.use_transparent_huge_pages;
 
         Self {
             max_pages: Pages(max_pages),
@@ -130,6 +130,12 @@ impl<T: Tunables> Tunables for LimitingTunables<T> {
         ty: &MemoryType,
         style: &MemoryStyle,
     ) -> Result<vm::VMMemory, MemoryError> {
+        #[cfg(feature = "debug-metering")]
+        log::info!(
+            "[LimitingTunables] create_host_memory: min={} pages, max={:?} pages, use_huge_page_memory={}",
+            ty.minimum.0, ty.maximum.map(|p| p.0), self.use_huge_page_memory
+        );
+
         let adjusted = self.adjust_memory(ty);
         self.validate_memory(&adjusted)?;
 
@@ -151,8 +157,9 @@ impl<T: Tunables> Tunables for LimitingTunables<T> {
             }
 
             // Convert to VMMemory
-            Ok(vm::VMMemory::from_custom(Box::new(memory)
-                as Box<dyn vm::LinearMemory + 'static>))
+            Ok(vm::VMMemory::from_custom(
+                Box::new(memory) as Box<dyn vm::LinearMemory + 'static>
+            ))
         } else {
             self.base.create_host_memory(&adjusted, style)
         }
@@ -168,6 +175,12 @@ impl<T: Tunables> Tunables for LimitingTunables<T> {
         style: &MemoryStyle,
         vm_definition_location: NonNull<VMMemoryDefinition>,
     ) -> Result<vm::VMMemory, MemoryError> {
+        #[cfg(feature = "debug-metering")]
+        log::info!(
+            "[LimitingTunables] create_vm_memory: min={} pages, max={:?} pages, use_huge_page_memory={}",
+            ty.minimum.0, ty.maximum.map(|p| p.0), self.use_huge_page_memory
+        );
+
         let adjusted = self.adjust_memory(ty);
         self.validate_memory(&adjusted)?;
 
@@ -178,10 +191,8 @@ impl<T: Tunables> Tunables for LimitingTunables<T> {
                 style,
                 self.huge_page_config,
                 // SAFETY: We're converting between compatible VMMemoryDefinition types
-                NonNull::new_unchecked(
-                    vm_definition_location.as_ptr()
-                        as *mut super::huge_page_linear_memory::VMMemoryDefinition,
-                ),
+                NonNull::new_unchecked(vm_definition_location.as_ptr()
+                    as *mut super::huge_page_linear_memory::VMMemoryDefinition),
             )?;
 
             if memory.uses_huge_pages() {
@@ -197,8 +208,9 @@ impl<T: Tunables> Tunables for LimitingTunables<T> {
                 );
             }
 
-            Ok(vm::VMMemory::from_custom(Box::new(memory)
-                as Box<dyn vm::LinearMemory + 'static>))
+            Ok(vm::VMMemory::from_custom(
+                Box::new(memory) as Box<dyn vm::LinearMemory + 'static>
+            ))
         } else {
             self.base
                 .create_vm_memory(&adjusted, style, vm_definition_location)
