@@ -2,6 +2,8 @@
 pub use self::atomic::*;
 pub use self::dummy::*;
 pub use self::gas_costs::*;
+pub use self::huge_page_linear_memory::*;
+pub use self::huge_page_memory::*;
 pub use self::limiting_tunables::*;
 pub use self::logger::*;
 pub use self::middlewares::*;
@@ -16,6 +18,10 @@ pub use self::vdf::*;
 mod atomic;
 mod dummy;
 mod gas_costs;
+#[cfg(test)]
+mod huge_page_benchmark;
+mod huge_page_linear_memory;
+mod huge_page_memory;
 mod limiting_tunables;
 mod logger;
 mod middlewares;

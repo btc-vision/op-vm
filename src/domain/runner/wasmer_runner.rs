@@ -21,7 +21,7 @@ use crate::domain::runner::{
 };
 
 use crate::domain::vm::{
-    get_gas_cost, log_time_diff, LimitingTunables, Metering, RejectFPMiddleware,
+    get_gas_cost, log_time_diff, HugePageConfig, LimitingTunables, Metering, RejectFPMiddleware,
 };
 
 #[cfg(feature = "contract-threading")]
@@ -65,6 +65,19 @@ impl WasmerRunner {
     }
 
     pub fn create_engine(max_pages: u32) -> anyhow::Result<Store> {
+        Self::create_engine_with_config(max_pages, HugePageConfig::default())
+    }
+
+    /// Create an engine with huge page support enabled (uses transparent huge pages with fallback)
+    pub fn create_engine_with_huge_pages(max_pages: u32) -> anyhow::Result<Store> {
+        Self::create_engine_with_config(max_pages, HugePageConfig::default())
+    }
+
+    /// Create an engine with custom huge page configuration
+    pub fn create_engine_with_config(
+        max_pages: u32,
+        huge_page_config: HugePageConfig,
+    ) -> anyhow::Result<Store> {
         let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost, MAX_MEMORY_COPY_SIZE);
         let metering = Arc::new(meter);
 
@@ -94,7 +107,7 @@ impl WasmerRunner {
             .set_features(Option::from(Self::get_features()))
             .engine();
 
-        let store = Store::new(Self::create_tunable(engine, max_pages));
+        let store = Store::new(Self::create_tunable_with_config(engine, max_pages, huge_page_config));
         Ok(store)
     }
 
@@ -178,9 +191,23 @@ impl WasmerRunner {
         Ok(instance)
     }
 
-    fn create_tunable(mut engine: Engine, max_pages: u32) -> Engine {
+    fn create_tunable(engine: Engine, max_pages: u32) -> Engine {
+        Self::create_tunable_with_config(engine, max_pages, HugePageConfig::default())
+    }
+
+    /// Create tunables with huge page support enabled
+    pub fn create_tunable_with_huge_pages(engine: Engine, max_pages: u32) -> Engine {
+        Self::create_tunable_with_config(engine, max_pages, HugePageConfig::default())
+    }
+
+    /// Create tunables with custom huge page configuration
+    pub fn create_tunable_with_config(
+        mut engine: Engine,
+        max_pages: u32,
+        huge_page_config: HugePageConfig,
+    ) -> Engine {
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, max_pages, STACK_SIZE);
+        let tunables = LimitingTunables::with_huge_pages(base, max_pages, STACK_SIZE, huge_page_config);
 
         engine.set_tunables(tunables);
 
