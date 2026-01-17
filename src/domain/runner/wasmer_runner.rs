@@ -26,7 +26,7 @@ use crate::domain::vm::{
 
 #[cfg(feature = "contract-threading")]
 use crate::domain::runner::MAX_GAS_WASM_INIT_ATOMIC;
-use crate::domain::runner::{MLDSALoadImport, MAX_MEMORY_COPY_SIZE};
+use crate::domain::runner::{MLDSALoadImport, UpdateFromAddressImport, MAX_MEMORY_COPY_SIZE};
 #[cfg(feature = "contract-threading")]
 use crate::domain::vm::{
     atomic_notify, atomic_wait32, atomic_wait64, default_cost_atomic, set_helper_index_atomic,
@@ -35,6 +35,7 @@ use crate::domain::vm::{
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
 const CONTRACT_ON_DEPLOY_FUNCTION_NAME: &'static str = "onDeploy";
+const CONTRACT_ON_UPDATE_FUNCTION_NAME: &'static str = "onUpdate";
 
 pub struct WasmerRunner {
     module: Module,
@@ -227,6 +228,7 @@ impl WasmerRunner {
                 "validateBitcoinAddress" => import!(ValidateBitcoinAddressImport),
                 "verifySignature" => import!(VerifySignatureImport),
                 "loadMLDSA" => import!(MLDSALoadImport),
+                "updateFromAddress" => import!(UpdateFromAddressImport),
             },
         };
 
@@ -410,6 +412,45 @@ impl ContractRunner for WasmerRunner {
     }
 
     fn on_deploy(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData> {
+        let env = self.env.as_mut(&mut self.store);
+        env.calldata = Calldata::new(&calldata);
+
+        let export = self
+            .instance
+            .get_function(CONTRACT_ON_UPDATE_FUNCTION_NAME)?;
+
+        let params = &[Value::I32(calldata.len() as i32)];
+        let response = export.call(&mut self.store, params);
+
+        let response: Result<Box<[Value]>, RuntimeError> = match response {
+            Ok(result) => Ok(result),
+            Err(error) => match error.downcast::<ExitResult>() {
+                Ok(result) => match result {
+                    ExitResult::Ok(data) => return Ok(data),
+                    ExitResult::Err(e) => Err(e)?,
+                },
+                Err(e) => Err(e),
+            },
+        };
+
+        let result = self.handle_errors(response, max_gas)?;
+
+        let status = result
+            .get(0)
+            .ok_or(RuntimeError::new("Invalid value returned from contract"))?
+            .i32()
+            .ok_or(RuntimeError::new("Invalid value returned from contract"))?
+            as u32;
+
+        let gas_used = self.get_used_gas();
+        let env = self.env.as_mut(&mut self.store);
+
+        env.exit_data = ExitData::new(status, gas_used, &[], env.proofs.clone());
+
+        Ok(env.exit_data.clone())
+    }
+
+    fn on_update(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData> {
         let env = self.env.as_mut(&mut self.store);
         env.calldata = Calldata::new(&calldata);
 

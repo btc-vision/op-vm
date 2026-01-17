@@ -55,6 +55,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     let contract_manager_set_environment_variable =
         JsFunction::new(&mut cx, ContractManager::js_set_environment_variables)?;
     let contract_manager_on_deploy = JsFunction::new(&mut cx, ContractManager::js_on_deploy)?;
+    let contract_manager_on_update = JsFunction::new(&mut cx, ContractManager::js_on_update)?;
     let contract_manager_execute = JsFunction::new(&mut cx, ContractManager::js_execute)?;
     let contract_manager_length = JsFunction::new(&mut cx, ContractManager::js_length)?;
     let contract_manager_clear = JsFunction::new(&mut cx, ContractManager::js_clear)?;
@@ -101,6 +102,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     contract_manager_prototype
         .prop(&mut cx, "onDeploy")
         .set(contract_manager_on_deploy)?;
+    contract_manager_prototype
+        .prop(&mut cx, "onUpdate")
+        .set(contract_manager_on_update)?;
     contract_manager_prototype
         .prop(&mut cx, "execute")
         .set(contract_manager_execute)?;
