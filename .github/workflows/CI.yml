@@ -65,10 +65,10 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -99,7 +99,7 @@ jobs:
           fi
 
       - name: Generate build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}/op-vm.node
 
@@ -109,7 +109,7 @@ jobs:
           tar -czf ${{ env.APP_NAME }}-v${{ matrix.node }}-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}.tar.gz -C prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }} .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bindings-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}-node${{ matrix.node }}
           path: ${{ env.APP_NAME }}-v${{ matrix.node }}-${{ matrix.settings.platform }}-${{ matrix.settings.arch }}.tar.gz
@@ -126,10 +126,10 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
@@ -138,7 +138,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -196,12 +196,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -278,7 +278,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
 

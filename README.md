@@ -20,13 +20,15 @@ functionality to Bitcoin.
 
 ## Security Audit
 
-<a href="https://verichains.io/">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./AUDIT/verichains-logo.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./AUDIT/verichains-logo-dark.svg">
-    <img alt="Verichains" src="./AUDIT/verichains-logo.svg" height="32">
-  </picture>
-</a>
+<p align="center">
+  <a href="https://verichains.io/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./AUDIT/verichains-logo.svg">
+      <source media="(prefers-color-scheme: light)" srcset="./AUDIT/verichains-logo-dark.svg">
+      <img alt="Verichains" src="./AUDIT/verichains-logo.svg" height="32">
+    </picture>
+  </a>
+</p>
 
 OP-VM has been professionally audited by **[Verichains](https://verichains.io/)**, a leading blockchain security firm.
 The audit confirms that the codebase is secure and ready for mainnet deployment.
