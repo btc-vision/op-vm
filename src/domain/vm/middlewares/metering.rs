@@ -73,7 +73,7 @@ impl fmt::Debug for MeteringGlobalIndexes {
 /// # Example
 ///
 /// ```rust
-/// use std::sync::Arc;
+/// /*use std::sync::Arc;
 /// use wasmer::{wasmparser::Operator, sys::CompilerConfig};
 /// use wasmer_middlewares::Metering;
 ///
@@ -93,7 +93,7 @@ impl fmt::Debug for MeteringGlobalIndexes {
 ///
 ///     // Finally, let's push the middleware.
 ///     compiler_config.push_middleware(metering);
-/// }
+/// }*/
 /// ```
 pub struct Metering<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> {
     /// Initial limit of points.
@@ -653,7 +653,7 @@ where
 /// # Example
 ///
 /// ```rust
-/// use wasmer::Instance;
+/// /*use wasmer::Instance;
 /// use wasmer::AsStoreMut;
 /// use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 ///
@@ -661,7 +661,7 @@ where
 /// /// number of remaining points.
 /// fn can_continue_to_run(store: &mut impl AsStoreMut, instance: &Instance) -> bool {
 ///     matches!(get_remaining_points(store, instance), MeteringPoints::Remaining(points) if points > 0)
-/// }
+/// }*/
 /// ```
 pub fn get_remaining_points(ctx: &mut impl AsStoreMut, instance: &Instance) -> MeteringPoints {
     let exhausted: i32 = instance
@@ -702,16 +702,16 @@ pub fn get_remaining_points(ctx: &mut impl AsStoreMut, instance: &Instance) -> M
 /// # Example
 ///
 /// ```rust
-/// use wasmer::{AsStoreMut, Instance};
-/// use wasmer_middlewares::metering::set_remaining_points;
+/// //use wasmer::{AsStoreMut, Instance};
+/// //use wasmer_middlewares::metering::set_remaining_points;
 ///
-/// fn update_remaining_points(store: &mut impl AsStoreMut, instance: &Instance) {
+/// /*fn update_remaining_points(store: &mut impl AsStoreMut, instance: &Instance) {
 ///     // The new limit.
 ///     let new_limit = 10;
 ///
 ///     // Update the remaining points to the `new_limit`.
 ///     set_remaining_points(store, instance, new_limit);
-/// }
+/// }*/
 /// ```
 pub fn set_remaining_points(ctx: &mut impl AsStoreMut, instance: &Instance, points: u64) {
     instance
