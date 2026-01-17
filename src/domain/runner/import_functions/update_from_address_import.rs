@@ -1,4 +1,4 @@
-use crate::domain::runner::CustomEnv;
+use crate::domain::runner::{ConsensusFlags, CustomEnv};
 use wasmer::{FunctionEnvMut, RuntimeError};
 
 const STATIC_GAS_COST: u64 = 320_000_000;
@@ -28,6 +28,20 @@ impl UpdateFromAddressImport {
             .ok_or(RuntimeError::new("Instance not found"))?;
 
         instance.use_gas(&mut store, STATIC_GAS_COST);
+
+        let env_variables = env
+            .environment_variables
+            .as_ref()
+            .ok_or_else(|| RuntimeError::new("Environment variables not found"))?;
+
+        let allow_update_by_address =
+            env_variables.is_consensus_flag_set(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS);
+
+        if !allow_update_by_address {
+            return Err(RuntimeError::new(
+                "Update from address is not allowed by consensus rules",
+            ));
+        }
 
         let update_address = instance
             .read_memory(&store, update_address_ptr as u64, 32)
