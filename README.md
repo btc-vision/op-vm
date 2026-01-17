@@ -6,7 +6,6 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 ![NodeJS](https://img.shields.io/badge/Node%20js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![NPM](https://img.shields.io/badge/npm-CB3837?style=for-the-badge&logo=npm&logoColor=white)
-![Gulp](https://img.shields.io/badge/GULP-%23CF4647.svg?style=for-the-badge&logo=gulp&logoColor=white)
 ![ESLint](https://img.shields.io/badge/ESLint-4B3263?style=for-the-badge&logo=eslint&logoColor=white)
 
 [![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square)](https://github.com/prettier/prettier)
@@ -15,40 +14,31 @@
 
 ## Overview
 
-OP_NET Rust VM, an experimental virtual machine designed for evaluating smart contracts on the Bitcoin
-network using Rust and Wasmer. This VM is part of the broader OP_NET initiative, which aims to bring smart contract
-functionality to Bitcoin. However, please note that this code is currently in an experimental stage and is subject to
-frequent breaking changes. Nothing is final, and you should expect ongoing development and instability.
+OP_NET Rust VM, a production-ready virtual machine designed for evaluating smart contracts on the Bitcoin
+network using Rust and Wasmer. This VM is part of the broader OP_NET initiative, which brings smart contract
+functionality to Bitcoin.
 
-## Warning: Experimental Code
+## Security Audit
 
-This project is in the early stages of development and is considered experimental. Expect breaking changes, incomplete
-features, and potential bugs. Use this code at your own risk, and avoid relying on it for production purposes until it
-reaches a more stable state.
+<a href="https://verichains.io/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./AUDIT/verichains-logo.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./AUDIT/verichains-logo-dark.svg">
+    <img alt="Verichains" src="./AUDIT/verichains-logo.svg" height="32">
+  </picture>
+</a>
 
-## Project Structure
+OP-VM has been professionally audited by **[Verichains](https://verichains.io/)**, a leading blockchain security firm.
+The audit confirms that the codebase is secure and ready for mainnet deployment.
 
-The project is organized into the following directories:
-
-- **`src/`**: Contains the Rust source code for the VM.
-    - **`application/`**: (Currently empty, might be reserved for application-level logic in the future)
-    - **`domain/`**: Core domain logic of the VM.
-        - **`runner/`**: Contains the code that runs and manages contracts, including setting up environments, managing
-          instances, and handling custom imports.
-        - **`vm/`**: Core virtual machine components, including gas cost management, logging, and other critical VM
-          operations.
-    - **`interfaces/`**: Manages external function calls and N-API bindings.
-        - **`napi/`**: Implements external functions that interface with Node.js.
-- **`target/`**: Build artifacts, including the compiled VM binaries, are stored here.
+For audit reports and details, see the [AUDIT](./AUDIT) directory.
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js**: Version 22 or higher is required.
+- **Node.js**: Version 24/25+ or higher is required.
 - **Rust**: You must have Rust installed to compile and develop this project.
-- **wasm-pack**: To work with Wasmer, ensure that `wasm-pack` is installed.
-- **@napi-rs/cli**: This is a required dependency for managing N-API bindings.
 
 ### Installation
 
@@ -76,28 +66,27 @@ The project is organized into the following directories:
    To build in debug mode:
 
    ```bash
-   npm run build:debug
+   npm run debug
    ```
 
 ### Usage
 
-After building the project, you can use the VM to evaluate Bitcoin smart contracts by integrating it into your Node.js
-applications. Since this is an experimental module, documentation on specific APIs and usage examples is still under
-development. Please refer to the source code for detailed insights on how the VM operates.
+Please refer to the source code for detailed insights on how the VM operates.
+See [the unit test framework](https://github.com/btc-vision/unit-test-framework).
 
 ### Scripts
 
-- **`npm run build`**: Compiles the Rust code into a platform-specific binary.
-- **`npm run build:debug`**: Compiles the Rust code with debug information.
-- **`npm run artifacts`**: Generates artifacts for all supported platforms.
-- **`npm run universal`**: Builds a universal binary.
-- **`npm run version`**: Updates the package version.
-- **`npm run postinstall`**: Automatically runs the build script after installation.
+- **`npm run build`**: Compiles the Rust code into a release binary.
+- **`npm run debug`**: Compiles the Rust code with debug information.
+- **`npm run cross`**: Cross-compiles for different platforms.
+- **`npm test`**: Runs the Rust test suite.
+- **`npm run coverage`**: Generates code coverage report.
+- **`npm run postinstall`**: Automatically runs after installation to set up the binary.
 
 ## Contributing
 
-Given the experimental nature of this project, contributions are welcome, but please be aware that the codebase is
-evolving rapidly. If you encounter any issues or have suggestions for improvement, feel free to open an issue or submit
+Contributions are welcome! If you encounter any issues or have suggestions for improvement, feel free to open an issue
+or submit
 a pull request. Signed commits are required, and please adhere to the project's code of conduct.
 
 ## License
