@@ -213,7 +213,7 @@ jobs:
 
       - name: Generate changelog
         id: changelog
-        uses: mikepenz/release-changelog-builder-action@v5
+        uses: mikepenz/release-changelog-builder-action@v6
         with:
           configuration: .github/changelog-config.json
           outputFile: CHANGELOG_RELEASE.md
