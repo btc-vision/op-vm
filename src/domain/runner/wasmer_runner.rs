@@ -417,7 +417,7 @@ impl ContractRunner for WasmerRunner {
 
         let export = self
             .instance
-            .get_function(CONTRACT_ON_UPDATE_FUNCTION_NAME)?;
+            .get_function(CONTRACT_ON_DEPLOY_FUNCTION_NAME)?;
 
         let params = &[Value::I32(calldata.len() as i32)];
         let response = export.call(&mut self.store, params);
@@ -456,7 +456,7 @@ impl ContractRunner for WasmerRunner {
 
         let export = self
             .instance
-            .get_function(CONTRACT_ON_DEPLOY_FUNCTION_NAME)?;
+            .get_function(CONTRACT_ON_UPDATE_FUNCTION_NAME)?;
 
         let params = &[Value::I32(calldata.len() as i32)];
         let response = export.call(&mut self.store, params);
