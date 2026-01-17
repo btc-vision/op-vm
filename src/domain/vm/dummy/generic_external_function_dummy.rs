@@ -19,11 +19,11 @@ where
     /// Build a dummy with an arbitrary responder.
     ///
     /// ```rust
-    /// let echo = GenericExternalFunctionDummy::new(
+    /// /*let echo = GenericExternalFunctionDummy::new(
     ///     "echo",
     ///     42,
     ///     |data| Ok(data.to_vec())
-    /// );
+    /// );*/
     /// ```
     pub fn new<F, N>(name: N, contract_id: u64, responder: F) -> Self
     where

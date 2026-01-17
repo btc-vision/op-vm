@@ -137,9 +137,7 @@ impl WasmerRunner {
 
         // Could be cool if implemented, maybe useful for loading other contracts in the same module?
         features.module_linking = false; // https://github.com/WebAssembly/module-linking/blob/main/proposals/module-linking/Explainer.md
-
-        // Verify before mainnet
-        features.bulk_memory = true; // TODO: Verify the new metring clamp added. Verify memory dynamic gas.
+        features.bulk_memory = true;
 
         // Ok
         features.simd = true;

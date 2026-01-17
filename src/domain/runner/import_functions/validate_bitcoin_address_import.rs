@@ -1,5 +1,5 @@
 use crate::domain::runner::{BitcoinNetwork, CustomEnv};
-use bitcoin::{Address, Network};
+use bitcoin::{Address, Network, TestnetVersion};
 use std::str::FromStr;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -58,7 +58,7 @@ impl ValidateBitcoinAddressImport {
     ) -> Result<bool, String> {
         let network: Network = match opnet_network {
             BitcoinNetwork::Mainnet => Network::Bitcoin,
-            BitcoinNetwork::Testnet => Network::Testnet,
+            BitcoinNetwork::Testnet => Network::Testnet(TestnetVersion::V4),
             BitcoinNetwork::Regtest => Network::Regtest,
         };
 
