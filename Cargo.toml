@@ -50,7 +50,7 @@ lru = { version = "0.16.2", optional = true }
 wat = "1.241.2"
 
 [features]
-default = ["reference-types", "ml-dsa-44", "ml-dsa-65", "ml-dsa-87"]
+default = ["reference-types", "ml-dsa-44"]
 ml-dsa-44 = []
 ml-dsa-65 = []
 ml-dsa-87 = []

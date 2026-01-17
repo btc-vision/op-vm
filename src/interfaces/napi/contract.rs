@@ -8,7 +8,7 @@ use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
     InputsExternalFunction, MLDSALoadExternalFunction, OutputsExternalFunction,
-    StorageLoadExternalFunction, StorageStoreExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction, UpdateFromAddressExternalFunction,
 };
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -76,6 +76,13 @@ impl Contract {
             id,
         );
 
+        let update_from_address_external = UpdateFromAddressExternalFunction::new(
+            "UpdateFromAddress",
+            manager.update_from_address_js_function.clone(),
+            cx.channel(),
+            id,
+        );
+
         let console_log_external = ConsoleLogExternalFunction::new(
             "ConsoleLog",
             manager.console_log_js_function.clone(),
@@ -139,6 +146,7 @@ impl Contract {
             storage_store_external,
             call_other_contract_external,
             deploy_from_address_external,
+            update_from_address_external,
             console_log_external,
             emit_external,
             inputs_external,
@@ -216,6 +224,21 @@ impl Contract {
             .or_else(|e| Err(anyhow!(e.to_string())))?;
 
         let call_result = contract.on_deploy(calldata);
+
+        match call_result {
+            Ok(values) => Ok(values),
+            Err(e) => Err(anyhow::anyhow!(e)),
+        }
+    }
+
+    pub fn on_update(&self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
+        // Lock the contract and call
+        let mut contract = self
+            .contract
+            .lock()
+            .or_else(|e| Err(anyhow!(e.to_string())))?;
+
+        let call_result = contract.on_update(calldata);
 
         match call_result {
             Ok(values) => Ok(values),

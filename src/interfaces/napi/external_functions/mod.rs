@@ -4,7 +4,7 @@ pub use self::{
     deploy_from_address_external_function::*, emit_external_function::*, external_function::*,
     generic_external_function::*, inputs_external_function::*, mldsa_load_external_function::*,
     outputs_external_function::*, storage_load_external_function::*,
-    storage_store_external_function::*,
+    storage_store_external_function::*, update_from_address_external_function::*,
 };
 
 mod account_type_external_function;
@@ -20,3 +20,4 @@ mod mldsa_load_external_function;
 mod outputs_external_function;
 mod storage_load_external_function;
 mod storage_store_external_function;
+mod update_from_address_external_function;

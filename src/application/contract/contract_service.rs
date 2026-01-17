@@ -35,6 +35,14 @@ impl ContractService {
         runner.on_deploy(calldata, self.max_gas)
     }
 
+    pub fn on_update(&mut self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
+        let mut runner = self
+            .runner
+            .lock()
+            .or_else(|err| Err(anyhow::anyhow!(err.to_string())))?;
+        runner.on_update(calldata, self.max_gas)
+    }
+
     pub fn execute(&mut self, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         let mut runner = self
             .runner

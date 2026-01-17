@@ -22,6 +22,7 @@ pub struct ContractManager {
     pub storage_store_js_function: Arc<Root<JsFunction>>,
     pub call_other_contract_js_function: Arc<Root<JsFunction>>,
     pub deploy_from_address_js_function: Arc<Root<JsFunction>>,
+    pub update_from_address_js_function: Arc<Root<JsFunction>>,
     pub console_log_js_function: Arc<Root<JsFunction>>,
     pub emit_js_function: Arc<Root<JsFunction>>,
     pub inputs_js_function: Arc<Root<JsFunction>>,
@@ -46,13 +47,14 @@ impl ContractManager {
         let storage_store_js_function = cx.argument::<JsFunction>(2)?.root(&mut cx);
         let call_other_contract_js_function = cx.argument::<JsFunction>(3)?.root(&mut cx);
         let deploy_from_address_js_function = cx.argument::<JsFunction>(4)?.root(&mut cx);
-        let console_log_js_function = cx.argument::<JsFunction>(5)?.root(&mut cx);
-        let emit_js_function = cx.argument::<JsFunction>(6)?.root(&mut cx);
-        let inputs_js_function = cx.argument::<JsFunction>(7)?.root(&mut cx);
-        let outputs_js_function = cx.argument::<JsFunction>(8)?.root(&mut cx);
-        let account_type_js_function = cx.argument::<JsFunction>(9)?.root(&mut cx);
-        let block_hash_js_function = cx.argument::<JsFunction>(10)?.root(&mut cx);
-        let mldsa_load_js_function = cx.argument::<JsFunction>(11)?.root(&mut cx);
+        let update_from_address_js_function = cx.argument::<JsFunction>(5)?.root(&mut cx);
+        let console_log_js_function = cx.argument::<JsFunction>(6)?.root(&mut cx);
+        let emit_js_function = cx.argument::<JsFunction>(7)?.root(&mut cx);
+        let inputs_js_function = cx.argument::<JsFunction>(8)?.root(&mut cx);
+        let outputs_js_function = cx.argument::<JsFunction>(9)?.root(&mut cx);
+        let account_type_js_function = cx.argument::<JsFunction>(10)?.root(&mut cx);
+        let block_hash_js_function = cx.argument::<JsFunction>(11)?.root(&mut cx);
+        let mldsa_load_js_function = cx.argument::<JsFunction>(12)?.root(&mut cx);
 
         let inner = cx.boxed(Arc::new(Mutex::new(ContractManager::new(
             max_idling_runtimes,
@@ -60,6 +62,7 @@ impl ContractManager {
             storage_store_js_function,
             call_other_contract_js_function,
             deploy_from_address_js_function,
+            update_from_address_js_function,
             console_log_js_function,
             emit_js_function,
             inputs_js_function,
@@ -375,6 +378,48 @@ impl ContractManager {
         Ok(promise)
     }
 
+    pub fn js_on_update(mut cx: FunctionContext) -> JsResult<JsPromise> {
+        let this = cx.this::<JsObject>()?;
+        let inner: Handle<'_, BoxedContractManager> =
+            this.get::<BoxedContractManager, _, _>(&mut cx, INNER)?;
+        let inner = Arc::clone(&inner);
+
+        let contract_id = cx
+            .argument::<JsBigInt>(0)?
+            .to_u64(&mut cx)
+            .or_throw(&mut cx)?;
+        let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
+        let (deferred, promise) = cx.promise();
+        let channel = cx.channel();
+
+        // Call task on background
+        let contract = inner
+            .lock()
+            .unwrap()
+            .get_contract(contract_id)
+            .unwrap()
+            .clone();
+
+        std::thread::spawn(move || {
+            let result = contract.on_update(calldata);
+
+            // Sync with main JS thread
+            channel.send(move |mut cx| match result {
+                Ok(exit_data) => {
+                    let result = exit_data.to_js_object(&mut cx).unwrap();
+                    Ok(deferred.resolve(&mut cx, result))
+                }
+                Err(err) => {
+                    let error = cx.string(err.to_string());
+                    deferred.reject(&mut cx, error);
+                    Ok(())
+                }
+            })
+        });
+
+        Ok(promise)
+    }
+
     pub fn js_execute(mut cx: FunctionContext) -> JsResult<JsPromise> {
         let this = cx.this::<JsObject>()?;
         let inner: Handle<'_, BoxedContractManager> =
@@ -453,6 +498,7 @@ impl ContractManager {
         storage_store_js_function: Root<JsFunction>,
         call_other_contract_js_function: Root<JsFunction>,
         deploy_from_address_js_function: Root<JsFunction>,
+        update_from_address_js_function: Root<JsFunction>,
         console_log_js_function: Root<JsFunction>,
         emit_js_function: Root<JsFunction>,
         inputs_js_function: Root<JsFunction>,
@@ -472,6 +518,7 @@ impl ContractManager {
             storage_store_js_function: Arc::new(storage_store_js_function),
             call_other_contract_js_function: Arc::new(call_other_contract_js_function),
             deploy_from_address_js_function: Arc::new(deploy_from_address_js_function),
+            update_from_address_js_function: Arc::new(update_from_address_js_function),
             console_log_js_function: Arc::new(console_log_js_function),
             runtime_pool,
             emit_js_function: Arc::new(emit_js_function),
@@ -567,6 +614,11 @@ impl ContractManager {
     #[allow(dead_code)]
     pub fn on_deploy(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
         self.get_contract(contract_id)?.on_deploy(calldata)
+    }
+
+    #[allow(dead_code)]
+    pub fn on_update(&self, contract_id: u64, calldata: Vec<u8>) -> anyhow::Result<ExitData> {
+        self.get_contract(contract_id)?.on_update(calldata)
     }
 
     #[allow(dead_code)]

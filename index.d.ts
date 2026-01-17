@@ -74,6 +74,10 @@ export declare class ContractManager {
             _: never,
             result: ThreadSafeJsImportResponse,
         ) => Promise<Buffer | Uint8Array>,
+        updateFromAddressJsFunction: (
+            _: never,
+            result: ThreadSafeJsImportResponse,
+        ) => Promise<Buffer | Uint8Array>,
         consoleLogJsFunction: (_: never, result: ThreadSafeJsImportResponse) => Promise<void>,
         emitJsFunction: (_: never, result: ThreadSafeJsImportResponse) => Promise<void>,
         inputsJsFunction: (id: bigint) => Promise<Buffer | Uint8Array>,
@@ -123,6 +127,8 @@ export declare class ContractManager {
     setEnvironmentVariables(id: bigint, environmentVariables: EnvironmentVariablesRequest): void;
 
     onDeploy(id: bigint, calldata: Buffer): Promise<ExitDataResponse>;
+
+    onUpdate(id: bigint, calldata: Buffer): Promise<ExitDataResponse>;
 
     execute(id: bigint, calldata: Buffer): Promise<ExitDataResponse>;
 

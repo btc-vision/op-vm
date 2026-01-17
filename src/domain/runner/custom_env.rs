@@ -4,7 +4,7 @@ use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
     InputsExternalFunction, MLDSALoadExternalFunction, OutputsExternalFunction,
-    StorageLoadExternalFunction, StorageStoreExternalFunction,
+    StorageLoadExternalFunction, StorageStoreExternalFunction, UpdateFromAddressExternalFunction,
 };
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -25,6 +25,7 @@ pub struct CustomEnv {
     pub storage_store_external: StorageStoreExternalFunction,
     pub call_other_contract_external: CallOtherContractExternalFunction,
     pub deploy_from_address_external: DeployFromAddressExternalFunction,
+    pub update_from_address_external: UpdateFromAddressExternalFunction,
     pub console_log_external: ConsoleLogExternalFunction,
     pub emit_external: EmitExternalFunction,
     pub inputs_external: InputsExternalFunction,
@@ -52,6 +53,7 @@ impl CustomEnv {
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,
         deploy_from_address_external: DeployFromAddressExternalFunction,
+        update_from_address_external: UpdateFromAddressExternalFunction,
         console_log_external: ConsoleLogExternalFunction,
         emit_external: EmitExternalFunction,
         inputs_external: InputsExternalFunction,
@@ -71,6 +73,7 @@ impl CustomEnv {
             storage_store_external,
             call_other_contract_external,
             deploy_from_address_external,
+            update_from_address_external,
             console_log_external,
             emit_external,
             inputs_external,

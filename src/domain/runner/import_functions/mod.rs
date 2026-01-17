@@ -20,6 +20,7 @@ mod storage_load_import;
 mod storage_store_import;
 mod transient_load_import;
 mod transient_store_import;
+mod update_from_address_import;
 mod validate_bitcoin_address_import;
 mod verify_signatures_import;
 
@@ -30,5 +31,6 @@ pub use self::{
     get_inputs_import::*, get_inputs_size_import::*, get_outputs_import::*,
     get_outputs_size_import::*, mldsa_load_import::*, ripemd160_import::*, sha256_import::*,
     storage_load_import::*, storage_store_import::*, transient_load_import::*,
-    transient_store_import::*, validate_bitcoin_address_import::*, verify_signatures_import::*,
+    transient_store_import::*, update_from_address_import::*, validate_bitcoin_address_import::*,
+    verify_signatures_import::*,
 };
