@@ -172,8 +172,22 @@ jobs:
       - name: Install dependencies (without postinstall)
         run: npm ci --ignore-scripts
 
+      - name: Determine npm tag
+        id: npm-tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "$VERSION" == *"-alpha"* ]]; then
+            echo "tag=alpha" >> $GITHUB_OUTPUT
+          elif [[ "$VERSION" == *"-beta"* ]]; then
+            echo "tag=beta" >> $GITHUB_OUTPUT
+          elif [[ "$VERSION" == *"-rc"* ]]; then
+            echo "tag=rc" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --access public --tag ${{ steps.npm-tag.outputs.tag }}
 
   release:
     name: Create GitHub Release
@@ -234,13 +248,23 @@ jobs:
           git commit -m "docs: update CHANGELOG.md for ${GITHUB_REF#refs/tags/}" || echo "No changes to commit"
           git push origin HEAD:main || echo "Could not push to main"
 
+      - name: Check if prerelease
+        id: prerelease
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
           body_path: CHANGELOG_RELEASE.md
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}
 
   test-published:
     name: Test published package
