@@ -28,6 +28,7 @@ dummy_ext_fn!(StorageLoadDummy, Vec<u8>);
 dummy_ext_fn!(StorageStoreDummy, ());
 dummy_ext_fn!(CallOtherContractDummy, Vec<u8>);
 dummy_ext_fn!(DeployFromAddressDummy, u64);
+dummy_ext_fn!(UpdateFromAddressDummy, u64);
 dummy_ext_fn!(ConsoleLogDummy, ());
 dummy_ext_fn!(EmitDummy, ());
 dummy_ext_fn!(InputsDummy, Vec<u8>);
