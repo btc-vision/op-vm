@@ -886,9 +886,9 @@ dependencies = [
 
 [[package]]
 name = "crypto-common"
-version = "0.2.0-rc.5"
+version = "0.2.0-rc.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "919bd05924682a5480aec713596b9e2aabed3a0a6022fab6847f85a99e5f190a"
+checksum = "c7722afd27468475c9b6063dc03a57ef2ca833816981619f8ebe64d38d207eef"
 dependencies = [
  "hybrid-array",
 ]
@@ -1000,13 +1000,13 @@ dependencies = [
 
 [[package]]
 name = "digest"
-version = "0.11.0-rc.4"
+version = "0.11.0-rc.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea390c940e465846d64775e55e3115d5dc934acb953de6f6e6360bc232fe2bf7"
+checksum = "2fc1408b7a9f59a7b933faff3e9e7fc15a05a524effd3b3d1601156944c8077f"
 dependencies = [
  "block-buffer 0.11.0",
  "const-oid",
- "crypto-common 0.2.0-rc.5",
+ "crypto-common 0.2.0-rc.13",
 ]
 
 [[package]]
@@ -2221,11 +2221,11 @@ dependencies = [
 
 [[package]]
 name = "ripemd"
-version = "0.2.0-rc.3"
+version = "0.2.0-rc.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc804eb044d044dcfa77f973ace1f4faa1084f130d9a7ec49c274ce47afda67"
+checksum = "62289234b5b4b79919baf4546acd935d28124e783e60f288383360d8a40d8996"
 dependencies = [
- "digest 0.11.0-rc.4",
+ "digest 0.11.0-rc.8",
 ]
 
 [[package]]
@@ -2401,7 +2401,7 @@ checksum = "19d43dc0354d88b791216bb5c1bfbb60c0814460cc653ae0ebd71f286d0bd927"
 dependencies = [
  "cfg-if",
  "cpufeatures",
- "digest 0.11.0-rc.4",
+ "digest 0.11.0-rc.8",
 ]
 
 [[package]]
