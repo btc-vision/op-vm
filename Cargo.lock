@@ -1888,7 +1888,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "rand_chacha 0.10.0-rc.6",
- "rand_core 0.10.0-rc-3",
+ "rand_core 0.10.0-rc-6",
  "ripemd",
  "secp256k1",
  "sha2 0.11.0-rc.3",
@@ -2099,7 +2099,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2b2777712d1ff9999cf3a05d4d41a832cccc2f7893073a9ede7ce325d00dcac"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.10.0-rc-3",
+ "rand_core 0.10.0-rc-6",
 ]
 
 [[package]]
@@ -2122,9 +2122,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.10.0-rc-3"
+version = "0.10.0-rc-6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f66ee92bc15280519ef199a274fe0cafff4245d31bc39aaa31c011ad56cb1f05"
+checksum = "70765ff7112b0fb2d272d24d9a2f907fc206211304328fe58b2db15a5649ef28"
 
 [[package]]
 name = "rayon"
