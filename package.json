@@ -1,7 +1,7 @@
 {
     "name": "@btc-vision/op-vm",
     "description": "OP-VM executable for Bitcoin Smart Contracts",
-    "version": "1.0.0-alpha",
+    "version": "1.0.0-beta.2",
     "license": "MIT",
     "main": "index.js",
     "types": "index.d.ts",
@@ -46,12 +46,12 @@
         "coverage": "cargo llvm-cov clean --workspace && cargo llvm-cov --workspace --open"
     },
     "devDependencies": {
-        "@types/node": "^25.0.9",
+        "@types/node": "^25.1.0",
         "cargo-cp-artifact": "^0.1.9",
         "mocha": "^11.7.5"
     },
     "dependencies": {
         "@neon-rs/cli": "^0.1.82",
-        "prettier": "^3.8.0"
+        "prettier": "^3.8.1"
     }
 }
