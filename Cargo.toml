@@ -1,6 +1,6 @@
 [package]
 name = "op-vm"
-version = "1.0.0-beta.2"
+version = "1.0.0-beta.0"
 edition = "2021"
 build = "build.rs"
 rust-version = "1.92.0"
