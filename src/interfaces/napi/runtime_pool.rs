@@ -19,7 +19,7 @@ impl RuntimePool {
         }
         Self {
             runtimes: Mutex::new(runtimes),
-            idling: Mutex::new(Arc::new(AtomicUsize::new(0))),
+            idling: Mutex::new(Arc::new(AtomicUsize::new(size))),
             expected_size: Mutex::new(Arc::new(AtomicUsize::new(size))),
         }
     }
