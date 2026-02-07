@@ -1897,8 +1897,8 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
- "rand_chacha 0.10.0-rc.6",
- "rand_core 0.10.0-rc-6",
+ "rand_chacha 0.10.0",
+ "rand_core 0.10.0",
  "ripemd",
  "secp256k1",
  "sha2 0.11.0-rc.4",
@@ -2104,12 +2104,12 @@ dependencies = [
 
 [[package]]
 name = "rand_chacha"
-version = "0.10.0-rc.6"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2b2777712d1ff9999cf3a05d4d41a832cccc2f7893073a9ede7ce325d00dcac"
+checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.10.0-rc-6",
+ "rand_core 0.10.0",
 ]
 
 [[package]]
@@ -2132,9 +2132,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.10.0-rc-6"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70765ff7112b0fb2d272d24d9a2f907fc206211304328fe58b2db15a5649ef28"
+checksum = "0c8d0fd677905edcbeedbf2edb6494d676f0e98d54d5cf9bda0b061cb8fb8aba"
 
 [[package]]
 name = "rangemap"
