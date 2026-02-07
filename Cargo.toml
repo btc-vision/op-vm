@@ -29,7 +29,7 @@ thiserror = "2.0.17"
 fips204 = { version = "0.4.6", features = ["default"] }
 dashmap = { version = "7.0.0-rc2", optional = true }
 rand_chacha = { version = "0.10.0-rc.6", optional = true }
-rand_core = { version = "0.10.0-rc-3", optional = true }
+rand_core = { version = "0.10.0", optional = true }
 ark-std = { version = "0.5.0", optional = true, default-features = false, features = ["parallel", "getrandom", "std"] }
 ark-relations = { version = "0.5.1", optional = true }
 ark-crypto-primitives = { version = "0.5.0", optional = true, default-features = false, features = ["sponge", "crh", "r1cs", "std", "snark", "ark-r1cs-std", "signature", "hashbrown", "parallel"] }
