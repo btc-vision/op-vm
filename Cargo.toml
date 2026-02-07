@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 neon = { version = "1.2.0-alpha.0" }
-wasmer = { version = "7.0.0", default-features = true, features = ["default", "compiler", "singlepass", "wasmer-compiler-singlepass", "wasm-c-api", "core"] }
+wasmer = { version = "7.0.1", default-features = true, features = ["default", "compiler", "singlepass", "wasmer-compiler-singlepass", "wasm-c-api", "core"] }
 wasmer-compiler-singlepass = "7.0.0"
 wasmer-types = { version = "7.0.0", features = ["default"] }
 wasmer-compiler = { version = "7.0.0" }
