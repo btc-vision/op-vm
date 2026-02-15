@@ -92,10 +92,10 @@ impl WasmerRunner {
         // Bad
         features.memory64 = false; // TODO: Enabling this break metering for gas and memory. We need two meters. Larger binaries and ~2–10 % slower memory-heavy loops.
 
-        // DoS possible if enabled like it is.
+        // Length-aware gas was implemented.
         #[cfg(feature = "reference-types")]
         {
-            features.reference_types = true; // TODO: Add length-aware gas on TableGrow. Enables table.grow/externref which can allocate millions of funcref slots in one opcode. https://github.com/WebAssembly/spec/blob/main/proposals/reference-types/Overview.md
+            features.reference_types = true;
         }
 
         #[cfg(not(feature = "reference-types"))]
