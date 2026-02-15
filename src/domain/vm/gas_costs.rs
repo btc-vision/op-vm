@@ -22,21 +22,11 @@ const AVG_MEM_CYCLES: u64 = (P_L1 * L1_CYCLES
 
 const MEM_LINE_GAS: u64 = AVG_MEM_CYCLES * GAS_PER_CYCLE;
 
-#[cfg(feature = "contract-threading")]
-const LOCKED_PENALTY_CYCLES: u64 = 140;
-
 #[inline(always)]
 const fn mem_rw_cost(bytes: u32) -> u64 {
     // ceil_div; one partial byte touches a whole line
     let lines = ((bytes as u64) + 63) >> 6;
     lines * MEM_LINE_GAS
-}
-
-/// Locked XADD/CMPXCHG cost
-#[cfg(feature = "contract-threading")]
-const fn atomic_rmw_cost(bytes: u32) -> u64 {
-    let lock_cycles = LOCKED_PENALTY_CYCLES + (bytes as u64 * 8);
-    lock_cycles * GAS_PER_CYCLE
 }
 
 const STREAM_LINE_CYCLES: u64 = 4;
@@ -51,44 +41,18 @@ pub const MEMORY_COPY_PER_BLOCK: u64 = STREAM_BYTE_GAS * 16;
 const I32_BITSCAN_GAS: u64 = 4 * GAS_PER_CYCLE; // 3cy latency
 const I64_BITSCAN_GAS: u64 = 5 * GAS_PER_CYCLE; // 4cy latency
 
-#[cfg(feature = "contract-threading")]
-const fn atomic_load_cost(bytes: u32) -> u64 {
-    20_000 + (bytes as u64) * 2_000
-}
-#[cfg(feature = "contract-threading")]
-const fn atomic_store_cost(bytes: u32) -> u64 {
-    45_000 + (bytes as u64) * 3_000
-}
-#[cfg(feature = "contract-threading")]
-const fn atomic_rmw_cost(bytes: u32) -> u64 {
-    60_000 + (bytes as u64) * 4_000
-}
-#[cfg(feature = "contract-threading")]
-const fn memory_atomic_notify() -> u64 {
-    600_000
-}
-#[cfg(feature = "contract-threading")]
-const fn memory_atomic_wait(bytes: u64) -> u64 {
-    800_000 + (bytes * 6_250)
-}
-
-#[cfg(not(feature = "contract-threading"))]
 const fn atomic_load_cost(_: u32) -> u64 {
     u64::MAX
 }
-#[cfg(not(feature = "contract-threading"))]
 const fn atomic_store_cost(_: u32) -> u64 {
     u64::MAX
 }
-#[cfg(not(feature = "contract-threading"))]
 const fn atomic_rmw_cost(_: u32) -> u64 {
     u64::MAX
 }
-#[cfg(not(feature = "contract-threading"))]
 const fn memory_atomic_notify() -> u64 {
     u64::MAX
 }
-#[cfg(not(feature = "contract-threading"))]
 const fn memory_atomic_wait(_: u64) -> u64 {
     u64::MAX
 }

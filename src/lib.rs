@@ -4,12 +4,6 @@ use domain::runner::{NEW_STORAGE_SLOT_GAS_COST, UPDATED_STORAGE_SLOT_GAS_COST};
 use interfaces::ContractManager;
 use neon::{prelude::*, types::JsBigInt};
 
-#[cfg(all(
-    feature = "contract-threading",
-    not(any(feature = "vdf", feature = "vdf-zk-snark"))
-))]
-compile_error!("feature \"contract-threading\" requires either \"vdf\" or \"vdf-zk-snark\"");
-
 pub mod application;
 pub mod domain;
 pub mod interfaces;
