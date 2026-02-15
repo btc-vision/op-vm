@@ -24,14 +24,7 @@ use crate::domain::vm::{
     get_gas_cost, log_time_diff, LimitingTunables, Metering, RejectFPMiddleware,
 };
 
-#[cfg(feature = "contract-threading")]
-use crate::domain::runner::MAX_GAS_WASM_INIT_ATOMIC;
 use crate::domain::runner::{MLDSALoadImport, UpdateFromAddressImport, MAX_MEMORY_COPY_SIZE};
-#[cfg(feature = "contract-threading")]
-use crate::domain::vm::{
-    atomic_notify, atomic_wait32, atomic_wait64, default_cost_atomic, set_helper_index_atomic,
-    thread_spawn, AtomicHelper, AtomicWaitMetering, GasConfig,
-};
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
 const CONTRACT_ON_DEPLOY_FUNCTION_NAME: &'static str = "onDeploy";
@@ -73,20 +66,6 @@ impl WasmerRunner {
         compiler.canonicalize_nans(true);
 
         compiler.enable_verifier();
-        #[cfg(feature = "contract-threading")]
-        {
-            let atomic_meter = AtomicWaitMetering::new(
-                GasConfig {
-                    setup_gas: 2_000,
-                    wait_fallback: 15_000,
-                    notify_gas: 3_000,
-                    spawn_cost: 100_000,
-                },
-                MAX_GAS_WASM_INIT_ATOMIC,
-                default_cost_atomic,
-            );
-            compiler.push_middleware(Arc::new(atomic_meter));
-        }
 
         compiler.push_middleware(RejectFPMiddleware::new());
         compiler.push_middleware(metering);
@@ -108,15 +87,7 @@ impl WasmerRunner {
         // DoS: MUST BE DISABLED FEATURES
         features.tail_call = false; // Turns infinite self-tail recursion into a single metered opcode; impossible to bound with stack-depth limits.
 
-        #[cfg(feature = "contract-threading")]
-        {
-            features.threads = true; // TODO: atomic.wait + infinite timeout and scheduler starvation. Must set timeout to 0.
-        }
-
-        #[cfg(not(feature = "contract-threading"))]
-        {
-            features.threads = false;
-        }
+        features.threads = false;
 
         // Bad
         features.memory64 = false; // TODO: Enabling this break metering for gas and memory. We need two meters. Larger binaries and ~2–10 % slower memory-heavy loops.
@@ -236,31 +207,6 @@ impl WasmerRunner {
             import_object.define("env", "tstore", import!(TransientStoreImport));
         }
 
-        #[cfg(feature = "contract-threading")]
-        {
-            import_object.define(
-                "env",
-                "__atomic_wait32",
-                Function::new_typed_with_env(&mut store, &env, atomic_wait32),
-            );
-            import_object.define(
-                "env",
-                "__atomic_wait64",
-                Function::new_typed_with_env(&mut store, &env, atomic_wait64),
-            );
-
-            import_object.define(
-                "env",
-                "__atomic_notify",
-                Function::new_typed_with_env(&mut store, &env, atomic_notify),
-            );
-            import_object.define(
-                "env",
-                "__thread_spawn",
-                Function::new_typed_with_env(&mut store, &env, thread_spawn),
-            );
-        }
-
         if is_debug_mode {
             import_object.define("debug", "log", import!(ConsoleLogImport));
         }
@@ -275,23 +221,6 @@ impl WasmerRunner {
                 anyhow::anyhow!("Failed to instantiate contract: {}", e)
             }
         })?;
-
-        #[cfg(feature = "contract-threading")]
-        {
-            for (idx, import) in instance.module().imports().enumerate() {
-                let helper = match (import.module(), import.name()) {
-                    ("env", "__atomic_wait32") => Some(AtomicHelper::Wait32),
-                    ("env", "__atomic_wait64") => Some(AtomicHelper::Wait64),
-                    ("env", "__atomic_notify") => Some(AtomicHelper::Notify),
-                    ("env", "__thread_spawn") => Some(AtomicHelper::Spawn),
-                    _ => None,
-                };
-
-                if let Some(h) = helper {
-                    let _ = set_helper_index_atomic(&mut store, &instance, h, idx as u32);
-                }
-            }
-        }
 
         let instance_wrapper = InstanceWrapper::new(instance.clone(), max_gas);
         env.as_mut(&mut store).instance = Some(instance_wrapper.clone());

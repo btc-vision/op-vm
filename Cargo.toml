@@ -27,24 +27,7 @@ secp256k1 = { version = "0.32.0-beta.2", features = ["std"] }
 once_cell = "1.21.3"
 thiserror = "2.0.17"
 fips204 = { version = "0.4.6", features = ["default"] }
-dashmap = { version = "7.0.0-rc2", optional = true }
-rand_chacha = { version = "0.10.0-rc.6", optional = true }
-rand_core = { version = "0.10.0-rc-3", optional = true }
-ark-std = { version = "0.5.0", optional = true, default-features = false, features = ["parallel", "getrandom", "std"] }
-ark-relations = { version = "0.5.1", optional = true }
-ark-crypto-primitives = { version = "0.5.0", optional = true, default-features = false, features = ["sponge", "crh", "r1cs", "std", "snark", "ark-r1cs-std", "signature", "hashbrown", "parallel"] }
-ark-groth16 = { version = "0.5.0", optional = true, features = ["ark-r1cs-std", "parallel", "rayon", "tracing", "default", "std", "r1cs", "derivative"] }
-ark-bls12-381 = { version = "0.5.0", optional = true, features = ["curve"] }
-ark-r1cs-std = { version = "0.5.0", optional = true }
-futures = { version = "0.3.31", optional = true }
-num-bigint = { version = "0.4.6", optional = true }
-num-integer = { version = "0.1.46", optional = true }
-num-traits = { version = "0.2.19", optional = true }
-blake3 = { version = "1.8.3", optional = true }
-ark-serialize = { version = "0.5.0", optional = true, default-features = false, features = ["derive", "ark-serialize-derive"] }
-ark-ff = { version = "0.5.0", optional = true, default-features = false, features = [] }
 env_logger = { version = "0.11.8", optional = true }
-lru = { version = "0.16.3", optional = true }
 
 [dev-dependencies]
 wat = "1.244.0"
@@ -58,10 +41,6 @@ transient-storage = []
 debug-metering = ["env_logger"]
 table-metering = []
 reference-types = ["table-metering"]
-vdf-zk-snark = ["zk-snark", "lru"]
-vdf = ["num-bigint", "num-integer", "num-traits", "blake3"]
-contract-threading = ["dashmap", "futures"]
-zk-snark = ["rand_chacha", "rand_core", "ark-std", "ark-relations", "ark-crypto-primitives", "ark-groth16", "ark-bls12-381", "ark-r1cs-std", "ark-serialize", "ark-ff"]
 
 [profile.release]
 strip = "symbols"

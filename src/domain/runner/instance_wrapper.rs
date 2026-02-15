@@ -4,29 +4,12 @@ use thiserror::Error;
 use wasmer::{AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError};
 use wasmer_types::Pages;
 
-#[cfg(feature = "contract-threading")]
-use crate::domain::runner::MAX_THREADS;
-
-#[cfg(feature = "contract-threading")]
-use crate::domain::vm::WaitQueue;
-
-#[cfg(feature = "contract-threading")]
-use crate::domain::vm::{get_points_atomic, get_total_threads, AtomicMeteringError, AtomicPoints};
-
-#[cfg(feature = "contract-threading")]
-use dashmap::DashMap;
-
 use crate::domain::runner::common::MemoryWriter;
-#[cfg(feature = "contract-threading")]
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct InstanceWrapper {
     pub(crate) instance: Instance,
     max_gas: u64,
-
-    #[cfg(feature = "contract-threading")]
-    futexes: Arc<DashMap<u64, Arc<WaitQueue>>>,
 }
 
 #[derive(Clone, Copy, Debug, Error)]
@@ -44,8 +27,6 @@ impl InstanceWrapper {
         Self {
             instance,
             max_gas,
-            #[cfg(feature = "contract-threading")]
-            futexes: Arc::new(DashMap::default()),
         }
     }
 
@@ -121,67 +102,6 @@ impl InstanceWrapper {
 
     pub fn get_function(&self, name: &str) -> Result<&Function, ExportError> {
         self.instance.exports.get_function(name)
-    }
-
-    #[cfg(feature = "contract-threading")]
-    #[inline]
-    pub fn futex_for(&self, offset: u64) -> Arc<WaitQueue> {
-        self.futexes
-            .entry(offset)
-            .or_insert_with(|| Arc::new(WaitQueue::default()))
-            .clone()
-    }
-
-    #[cfg(feature = "contract-threading")]
-    #[allow(dead_code)]
-    pub fn get_total_threads(
-        &self,
-        store: &mut impl AsStoreMut,
-    ) -> Result<u32, AtomicMeteringError> {
-        let thread_count = get_total_threads(store, &self.instance)?;
-        let max: u32 = MAX_THREADS as u32;
-
-        if max < thread_count {
-            Ok(0)
-        } else {
-            Ok(max - thread_count)
-        }
-    }
-
-    #[cfg(feature = "contract-threading")]
-    #[allow(dead_code)]
-    pub fn get_remaining_atomic_gas(
-        &self,
-        store: &mut impl AsStoreMut,
-    ) -> Result<u64, AtomicMeteringError> {
-        match get_points_atomic(store, &self.instance) {
-            Ok(AtomicPoints::Remaining(r)) => Ok(r),
-            Ok(AtomicPoints::Exhausted) => Ok(0),
-            _ => Err(AtomicMeteringError::Exhausted),
-        }
-    }
-}
-
-#[cfg(feature = "contract-threading")]
-impl Drop for InstanceWrapper {
-    fn drop(&mut self) {
-        // Only perform cleanup if we're the last owner of the futexes map
-        if Arc::strong_count(&self.futexes) == 1 {
-            // Collect all wait queues before clearing the map
-            let queues: Vec<Arc<WaitQueue>> = self
-                .futexes
-                .iter()
-                .map(|entry| entry.value().clone())
-                .collect();
-
-            // Clear the map first to prevent new waiters
-            self.futexes.clear();
-
-            // Now shutdown all queues, waking any waiters
-            for queue in queues {
-                queue.shutdown();
-            }
-        }
     }
 }
 
