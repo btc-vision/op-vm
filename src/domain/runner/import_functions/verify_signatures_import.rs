@@ -361,7 +361,10 @@ impl VerifySignatureImport {
         // always valid. If S was already low it returns an identical copy.
         let signature = signature.normalize_s();
 
-        let verifying_key = Self::read_ecdsa_public_key(&store, &instance, public_key_ptr)?;
+        let verifying_key = match Self::read_ecdsa_public_key(&store, &instance, public_key_ptr) {
+            Ok(key) => key,
+            Err(_) => return Ok(0),
+        };
 
         let result = verifying_key.verify_prehash(&message_hash, &signature);
         Ok(result.is_ok() as u32)
@@ -464,17 +467,15 @@ impl VerifySignatureImport {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        ECDSA_KEY_FORMAT_COMPRESSED, ECDSA_KEY_FORMAT_HYBRID, ECDSA_KEY_FORMAT_RAW,
+        ECDSA_KEY_FORMAT_UNCOMPRESSED,
+    };
     use k256::ecdsa::{
         signature::hazmat::PrehashVerifier, RecoveryId, Signature as EcdsaSignature, SigningKey,
         VerifyingKey,
     };
     use secp256k1::{schnorr, XOnlyPublicKey};
-
-    /// Must match ECDSAKeyFormat enum in AS guest and constants in production code.
-    const ECDSA_KEY_FORMAT_COMPRESSED: u8 = 0x00;
-    const ECDSA_KEY_FORMAT_UNCOMPRESSED: u8 = 0x01;
-    const ECDSA_KEY_FORMAT_HYBRID: u8 = 0x02;
-    const ECDSA_KEY_FORMAT_RAW: u8 = 0x03;
 
     // =========================================================================
     // Deterministic key generation from fixed seeds. No OsRng, no rand crate.
