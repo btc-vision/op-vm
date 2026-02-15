@@ -1,9 +1,9 @@
 [package]
 name = "op-vm"
-version = "1.0.0-beta.0"
+version = "1.0.0-beta.1"
 edition = "2021"
 build = "build.rs"
-rust-version = "1.92.0"
+rust-version = "1.93.1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
