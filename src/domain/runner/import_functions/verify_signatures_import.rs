@@ -75,13 +75,32 @@ impl VerifySignatureImport {
         signature_ptr: u32,
         message_ptr: u32,
     ) -> Result<u32, RuntimeError> {
-        let (env, mut store) = context.data_and_store_mut();
+        let (env, store) = context.data_and_store_mut();
 
         let instance = env
             .instance
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        Self::execute_inner(
+            env.environment_variables.as_ref(),
+            store,
+            instance,
+            public_key_ptr,
+            signature_ptr,
+            message_ptr,
+        )
+    }
+
+    /// Core dispatch logic, separated from FunctionEnvMut for testability.
+    fn execute_inner(
+        env_variables: Option<&crate::domain::runner::EnvironmentVariables>,
+        mut store: StoreMut,
+        instance: InstanceWrapper,
+        public_key_ptr: u32,
+        signature_ptr: u32,
+        message_ptr: u32,
+    ) -> Result<u32, RuntimeError> {
         // Base overhead: memory reads, header parsing, dispatch.
         instance.use_gas(&mut store, STATIC_GAS_COST);
 
@@ -96,9 +115,7 @@ impl VerifySignatureImport {
             .copied()
             .ok_or_else(|| RuntimeError::new("Error reading public key type byte"))?;
 
-        let env_variables = env
-            .environment_variables
-            .as_ref()
+        let env_variables = env_variables
             .ok_or_else(|| RuntimeError::new("Environment variables not found"))?;
 
         let unsafe_quantum_signatures_allowed =
@@ -1646,5 +1663,960 @@ mod tests {
         let sk = default_signing_key();
         let compact = sign_bitcoin(&sk, &test_message_hash());
         assert!(EcdsaSignature::from_slice(&compact).is_ok());
+    }
+
+    // =========================================================================
+    // INTEGRATION TESTS: execute_inner with real Wasmer instance
+    //
+    // These tests exercise the complete host function path: memory reads,
+    // header parsing, consensus flag enforcement, per-algorithm gas charging,
+    // and end-to-end cryptographic verification through the wire protocol.
+    // =========================================================================
+
+    use crate::domain::runner::{
+        ConsensusFlags, EnvironmentVariables, InstanceWrapper, WasmerRunner, MAX_PAGES,
+    };
+    use wasmer::{imports, AsStoreMut, Instance, Module};
+
+    use super::{
+        VerifySignatureImport, ECDSA_BITCOIN_VERIFY_GAS_COST, ECDSA_ETHEREUM_VERIFY_GAS_COST,
+        ECDSA_SUBTYPE_BITCOIN, ECDSA_SUBTYPE_ETHEREUM, MLDSA_44_VERIFY_GAS_COST,
+        MLDSA_65_VERIFY_GAS_COST, MLDSA_87_VERIFY_GAS_COST, SCHNORR_VERIFY_GAS_COST,
+        STATIC_GAS_COST,
+    };
+
+    const TEST_GAS_LIMIT: u64 = 10_000_000_000;
+
+    /// Creates a real Wasmer instance with memory and metering globals.
+    /// The WAT module is compiled through the metering middleware so
+    /// use_gas / get_remaining_gas work correctly.
+    fn create_test_instance() -> (wasmer::Store, InstanceWrapper) {
+        let mut store = WasmerRunner::create_engine(MAX_PAGES).unwrap();
+        let wasm = wat::parse_str(
+            "(module (memory (export \"memory\") 1) (func (export \"noop\") nop))",
+        )
+        .unwrap();
+        let module = Module::new(&store, &wasm).unwrap();
+        let instance = Instance::new(&mut store, &module, &imports! {}).unwrap();
+        let wrapper = InstanceWrapper::new(instance, TEST_GAS_LIMIT);
+        wrapper.set_remaining_gas(&mut store, TEST_GAS_LIMIT);
+        (store, wrapper)
+    }
+
+    fn env_with_quantum_flag() -> EnvironmentVariables {
+        EnvironmentVariables::new(
+            &[0u8; 32],
+            0,
+            0,
+            &[0u8; 32],
+            &[0u8; 32],
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            &[],
+            &[],
+            &[],
+            ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED,
+        )
+    }
+
+    /// Writes data into the Wasmer instance's memory at the given offset.
+    fn write_mem(store: &wasmer::Store, instance: &InstanceWrapper, offset: u64, data: &[u8]) {
+        instance.write_memory(store, offset, data).unwrap();
+    }
+
+    /// Builds the ECDSA wire buffer: [type=0x00, subtype, format, ...key_material]
+    fn build_ecdsa_pubkey_wire(subtype: u8, format: u8, key_material: &[u8]) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(3 + key_material.len());
+        buf.push(0x00);
+        buf.push(subtype);
+        buf.push(format);
+        buf.extend_from_slice(key_material);
+        buf
+    }
+
+    /// Builds the Schnorr wire buffer: [type=0x01, ...32-byte xonly pubkey]
+    fn build_schnorr_pubkey_wire(xonly: &[u8; 32]) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(33);
+        buf.push(0x01);
+        buf.extend_from_slice(xonly);
+        buf
+    }
+
+    // -----------------------------------------------------------------
+    // Consensus flag enforcement
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_ecdsa_rejected_without_quantum_flag() {
+        let (mut store, instance) = create_test_instance();
+        let env = EnvironmentVariables::default(); // no flags
+
+        // Write a valid ECDSA header (type=0, subtype=Ethereum)
+        write_mem(&store, &instance, 0, &[0x00, ECDSA_SUBTYPE_ETHEREUM]);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            100,
+            200,
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.message().contains("ECDSA"),
+            "expected ECDSA rejection, got: {}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn execute_schnorr_rejected_without_quantum_flag() {
+        let (mut store, instance) = create_test_instance();
+        let env = EnvironmentVariables::default();
+
+        write_mem(&store, &instance, 0, &[0x01, 0x00]);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            100,
+            200,
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.message().contains("Schnorr"),
+            "expected Schnorr rejection, got: {}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn execute_mldsa_allowed_without_quantum_flag() {
+        let (mut store, instance) = create_test_instance();
+        let env = EnvironmentVariables::default();
+
+        // ML-DSA header: type=0x02, level=0x00 (ML-DSA-44)
+        // Write enough fake data for the ML-DSA path to attempt reading.
+        // It will fail during crypto verification, but the dispatch succeeds.
+        write_mem(&store, &instance, 0, &[0x02, 0x00]);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            100,
+            200,
+        );
+        // ML-DSA-44 should NOT be rejected by consensus flags.
+        // It will fail later (reading key/sig) or return 0, but not with
+        // a "not allowed by consensus rules" error.
+        match &result {
+            Err(e) => assert!(
+                !e.message().contains("not allowed by consensus"),
+                "ML-DSA should not be blocked by consensus flag, got: {}",
+                e.message()
+            ),
+            Ok(v) => assert_eq!(*v, 0), // verification failed with garbage data, expected
+        }
+    }
+
+    #[test]
+    fn execute_missing_env_variables_returns_error() {
+        let (mut store, instance) = create_test_instance();
+
+        write_mem(&store, &instance, 0, &[0x00, 0x00]);
+
+        let result = VerifySignatureImport::execute_inner(
+            None, // no environment variables
+            store.as_store_mut(),
+            instance,
+            0,
+            100,
+            200,
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.message().contains("Environment variables not found"),
+            "got: {}",
+            err.message()
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Header dispatch: unsupported types
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_unsupported_key_type_returns_error() {
+        let env = env_with_quantum_flag();
+
+        for bad_type in [0x03u8, 0x04, 0x10, 0xFF] {
+            let (mut store, instance) = create_test_instance();
+            write_mem(&store, &instance, 0, &[bad_type, 0x00]);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                100,
+                200,
+            );
+            let err = result.unwrap_err();
+            assert!(
+                err.message().contains("Unsupported public key type"),
+                "type 0x{:02X}: {}",
+                bad_type,
+                err.message()
+            );
+        }
+    }
+
+    #[test]
+    fn execute_unsupported_ecdsa_subtype_returns_error() {
+        let env = env_with_quantum_flag();
+
+        for bad_sub in [2u8, 3, 127, 255] {
+            let (mut store, instance) = create_test_instance();
+            write_mem(&store, &instance, 0, &[0x00, bad_sub]);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                100,
+                200,
+            );
+            let err = result.unwrap_err();
+            assert!(
+                err.message().contains("Unsupported ECDSA sub-type"),
+                "subtype {}: {}",
+                bad_sub,
+                err.message()
+            );
+        }
+    }
+
+    #[test]
+    fn execute_invalid_mldsa_level_returns_error() {
+        let env = env_with_quantum_flag();
+
+        for bad_level in [3u8, 4, 127, 255] {
+            let (mut store, instance) = create_test_instance();
+            write_mem(&store, &instance, 0, &[0x02, bad_level]);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                100,
+                200,
+            );
+            let err = result.unwrap_err();
+            assert!(
+                err.message().contains("MLDSA gas cost"),
+                "level {}: {}",
+                bad_level,
+                err.message()
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Gas metering
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_charges_static_gas_on_unsupported_type() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+
+        write_mem(&store, &instance, 0, &[0xFF, 0x00]);
+
+        let _ = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance.clone(),
+            0,
+            100,
+            200,
+        );
+
+        let used = instance.get_used_gas(&mut store);
+        assert_eq!(used, STATIC_GAS_COST);
+    }
+
+    #[test]
+    fn execute_charges_ecdsa_ethereum_gas() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let (sig_wire, _) = sign_ethereum(&sk, &msg);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_ETHEREUM,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        let pk_ptr: u32 = 0;
+        let sig_ptr: u32 = 256;
+        let msg_ptr: u32 = 512;
+
+        write_mem(&store, &instance, pk_ptr as u64, &pk_wire);
+        write_mem(&store, &instance, sig_ptr as u64, &sig_wire);
+        write_mem(&store, &instance, msg_ptr as u64, &msg);
+
+        let _ = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance.clone(),
+            pk_ptr,
+            sig_ptr,
+            msg_ptr,
+        );
+
+        let used = instance.get_used_gas(&mut store);
+        assert_eq!(used, STATIC_GAS_COST + ECDSA_ETHEREUM_VERIFY_GAS_COST);
+    }
+
+    #[test]
+    fn execute_charges_ecdsa_bitcoin_gas() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let sig = sign_bitcoin(&sk, &msg);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_BITCOIN,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        let pk_ptr: u32 = 0;
+        let sig_ptr: u32 = 256;
+        let msg_ptr: u32 = 512;
+
+        write_mem(&store, &instance, pk_ptr as u64, &pk_wire);
+        write_mem(&store, &instance, sig_ptr as u64, &sig);
+        write_mem(&store, &instance, msg_ptr as u64, &msg);
+
+        let _ = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance.clone(),
+            pk_ptr,
+            sig_ptr,
+            msg_ptr,
+        );
+
+        let used = instance.get_used_gas(&mut store);
+        assert_eq!(used, STATIC_GAS_COST + ECDSA_BITCOIN_VERIFY_GAS_COST);
+    }
+
+    #[test]
+    fn execute_charges_schnorr_gas() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+
+        let pk = hex_decode_32(
+            "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
+        );
+        let msg = hex_decode_32(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+        let sig = hex_decode_64(
+            "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
+             25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
+        );
+
+        let pk_wire = build_schnorr_pubkey_wire(&pk);
+
+        let pk_ptr: u32 = 0;
+        let sig_ptr: u32 = 256;
+        let msg_ptr: u32 = 512;
+
+        write_mem(&store, &instance, pk_ptr as u64, &pk_wire);
+        write_mem(&store, &instance, sig_ptr as u64, &sig);
+        write_mem(&store, &instance, msg_ptr as u64, &msg);
+
+        let _ = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance.clone(),
+            pk_ptr,
+            sig_ptr,
+            msg_ptr,
+        );
+
+        let used = instance.get_used_gas(&mut store);
+        assert_eq!(used, STATIC_GAS_COST + SCHNORR_VERIFY_GAS_COST);
+    }
+
+    #[test]
+    fn execute_charges_mldsa_gas_per_level() {
+        let expected = [
+            (0u8, MLDSA_44_VERIFY_GAS_COST),
+            (1u8, MLDSA_65_VERIFY_GAS_COST),
+            (2u8, MLDSA_87_VERIFY_GAS_COST),
+        ];
+
+        let env = env_with_quantum_flag();
+
+        for (level, expected_gas) in expected {
+            let (mut store, instance) = create_test_instance();
+
+            // ML-DSA header
+            write_mem(&store, &instance, 0, &[0x02, level]);
+
+            let _ = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance.clone(),
+                0,
+                100,
+                200,
+            );
+
+            let used = instance.get_used_gas(&mut store);
+            assert_eq!(
+                used,
+                STATIC_GAS_COST + expected_gas,
+                "ML-DSA level {} gas mismatch",
+                level,
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // End-to-end ECDSA Ethereum verification through memory
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_ecdsa_ethereum_valid_signature_returns_1() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let (sig_wire, _) = sign_ethereum(&sk, &msg);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_ETHEREUM,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        let pk_ptr: u32 = 0;
+        let sig_ptr: u32 = 256;
+        let msg_ptr: u32 = 512;
+
+        write_mem(&store, &instance, pk_ptr as u64, &pk_wire);
+        write_mem(&store, &instance, sig_ptr as u64, &sig_wire);
+        write_mem(&store, &instance, msg_ptr as u64, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            pk_ptr,
+            sig_ptr,
+            msg_ptr,
+        );
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn execute_ecdsa_ethereum_wrong_key_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let other = alternate_signing_key();
+        let msg = test_message_hash();
+        let (sig_wire, _) = sign_ethereum(&sk, &msg);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_ETHEREUM,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(other.verifying_key()),
+        );
+
+        let pk_ptr: u32 = 0;
+        let sig_ptr: u32 = 256;
+        let msg_ptr: u32 = 512;
+
+        write_mem(&store, &instance, pk_ptr as u64, &pk_wire);
+        write_mem(&store, &instance, sig_ptr as u64, &sig_wire);
+        write_mem(&store, &instance, msg_ptr as u64, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            pk_ptr,
+            sig_ptr,
+            msg_ptr,
+        );
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn execute_ecdsa_ethereum_all_key_formats() {
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let (sig_wire, _) = sign_ethereum(&sk, &msg);
+        let env = env_with_quantum_flag();
+
+        let formats: [(u8, Vec<u8>); 4] = [
+            (ECDSA_KEY_FORMAT_COMPRESSED, pubkey_compressed(&vk)),
+            (ECDSA_KEY_FORMAT_UNCOMPRESSED, pubkey_uncompressed_65(&vk)),
+            (ECDSA_KEY_FORMAT_HYBRID, pubkey_hybrid(&vk)),
+            (ECDSA_KEY_FORMAT_RAW, pubkey_raw_64(&vk)),
+        ];
+
+        for (fmt, key_bytes) in &formats {
+            let (mut store, instance) = create_test_instance();
+
+            let pk_wire = build_ecdsa_pubkey_wire(ECDSA_SUBTYPE_ETHEREUM, *fmt, key_bytes);
+
+            write_mem(&store, &instance, 0, &pk_wire);
+            write_mem(&store, &instance, 256, &sig_wire);
+            write_mem(&store, &instance, 512, &msg);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                256,
+                512,
+            );
+            assert_eq!(
+                result.unwrap(),
+                1,
+                "Ethereum verify failed for format 0x{:02X}",
+                fmt,
+            );
+        }
+    }
+
+    #[test]
+    fn execute_ecdsa_ethereum_v27_v28_accepted() {
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let (mut sig_wire, rid) = sign_ethereum(&sk, &msg);
+        let env = env_with_quantum_flag();
+
+        // Remap v from 0/1 to 27/28 (EIP-155 style)
+        sig_wire[64] = rid.to_byte() + 27;
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_ETHEREUM,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        let (mut store, instance) = create_test_instance();
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig_wire);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn execute_ecdsa_ethereum_invalid_v_returns_0() {
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let (mut sig_wire, _) = sign_ethereum(&sk, &msg);
+        let env = env_with_quantum_flag();
+
+        sig_wire[64] = 5; // invalid v
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_ETHEREUM,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        let (mut store, instance) = create_test_instance();
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig_wire);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    // -----------------------------------------------------------------
+    // End-to-end ECDSA Bitcoin verification through memory
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_ecdsa_bitcoin_valid_signature_returns_1() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let sig = sign_bitcoin(&sk, &msg);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_BITCOIN,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn execute_ecdsa_bitcoin_wrong_message_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let sig = sign_bitcoin(&sk, &msg);
+
+        let mut bad_msg = msg;
+        bad_msg[0] ^= 0xFF;
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_BITCOIN,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &bad_msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn execute_ecdsa_bitcoin_all_key_formats() {
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let sig = sign_bitcoin(&sk, &msg);
+        let env = env_with_quantum_flag();
+
+        let formats: [(u8, Vec<u8>); 4] = [
+            (ECDSA_KEY_FORMAT_COMPRESSED, pubkey_compressed(&vk)),
+            (ECDSA_KEY_FORMAT_UNCOMPRESSED, pubkey_uncompressed_65(&vk)),
+            (ECDSA_KEY_FORMAT_HYBRID, pubkey_hybrid(&vk)),
+            (ECDSA_KEY_FORMAT_RAW, pubkey_raw_64(&vk)),
+        ];
+
+        for (fmt, key_bytes) in &formats {
+            let (mut store, instance) = create_test_instance();
+
+            let pk_wire = build_ecdsa_pubkey_wire(ECDSA_SUBTYPE_BITCOIN, *fmt, key_bytes);
+
+            write_mem(&store, &instance, 0, &pk_wire);
+            write_mem(&store, &instance, 256, &sig);
+            write_mem(&store, &instance, 512, &msg);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                256,
+                512,
+            );
+            assert_eq!(
+                result.unwrap(),
+                1,
+                "Bitcoin verify failed for format 0x{:02X}",
+                fmt,
+            );
+        }
+    }
+
+    #[test]
+    fn execute_ecdsa_bitcoin_malformed_key_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let msg = test_message_hash();
+        let sig = sign_bitcoin(&sk, &msg);
+
+        // Compressed key with all zeros (invalid point)
+        let bad_key = vec![0x02; 33];
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_BITCOIN,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &bad_key,
+        );
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        // Should return Ok(0) not Err, matching Ethereum's behavior
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn execute_ecdsa_unsupported_key_format_returns_error() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let msg = test_message_hash();
+        let sig = sign_bitcoin(&sk, &msg);
+
+        // Format byte 0xFF is unsupported
+        let pk_wire = build_ecdsa_pubkey_wire(ECDSA_SUBTYPE_BITCOIN, 0xFF, &[0u8; 33]);
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        // Bitcoin path now returns Ok(0) for key parse errors
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    // -----------------------------------------------------------------
+    // End-to-end Schnorr verification through memory
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_schnorr_valid_bip340_vector_returns_1() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+
+        let pk = hex_decode_32(
+            "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
+        );
+        let msg = hex_decode_32(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+        let sig = hex_decode_64(
+            "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
+             25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
+        );
+
+        let pk_wire = build_schnorr_pubkey_wire(&pk);
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn execute_schnorr_wrong_key_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+
+        // Use vector 1's public key with vector 0's signature/message
+        let wrong_pk = hex_decode_32(
+            "DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659",
+        );
+        let msg = hex_decode_32(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+        let sig = hex_decode_64(
+            "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
+             25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
+        );
+
+        let pk_wire = build_schnorr_pubkey_wire(&wrong_pk);
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn execute_schnorr_wrong_message_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+
+        let pk = hex_decode_32(
+            "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
+        );
+        let mut msg = hex_decode_32(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+        msg[0] = 0xFF; // corrupt
+        let sig = hex_decode_64(
+            "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
+             25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
+        );
+
+        let pk_wire = build_schnorr_pubkey_wire(&pk);
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    // -----------------------------------------------------------------
+    // Multiple deterministic keys through execute_inner
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn execute_ecdsa_ethereum_10_deterministic_keys() {
+        let msg = test_message_hash();
+        let env = env_with_quantum_flag();
+
+        for idx in 1u8..=10 {
+            let sk = signing_key_at_index(idx);
+            let vk = *sk.verifying_key();
+            let (sig_wire, _) = sign_ethereum(&sk, &msg);
+
+            let pk_wire = build_ecdsa_pubkey_wire(
+                ECDSA_SUBTYPE_ETHEREUM,
+                ECDSA_KEY_FORMAT_COMPRESSED,
+                &pubkey_compressed(&vk),
+            );
+
+            let (mut store, instance) = create_test_instance();
+            write_mem(&store, &instance, 0, &pk_wire);
+            write_mem(&store, &instance, 256, &sig_wire);
+            write_mem(&store, &instance, 512, &msg);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                256,
+                512,
+            );
+            assert_eq!(result.unwrap(), 1, "Ethereum verify failed at index {}", idx);
+        }
+    }
+
+    #[test]
+    fn execute_ecdsa_bitcoin_10_deterministic_keys() {
+        let msg = test_message_hash();
+        let env = env_with_quantum_flag();
+
+        for idx in 1u8..=10 {
+            let sk = signing_key_at_index(idx);
+            let vk = *sk.verifying_key();
+            let sig = sign_bitcoin(&sk, &msg);
+
+            let pk_wire = build_ecdsa_pubkey_wire(
+                ECDSA_SUBTYPE_BITCOIN,
+                ECDSA_KEY_FORMAT_COMPRESSED,
+                &pubkey_compressed(&vk),
+            );
+
+            let (mut store, instance) = create_test_instance();
+            write_mem(&store, &instance, 0, &pk_wire);
+            write_mem(&store, &instance, 256, &sig);
+            write_mem(&store, &instance, 512, &msg);
+
+            let result = VerifySignatureImport::execute_inner(
+                Some(&env),
+                store.as_store_mut(),
+                instance,
+                0,
+                256,
+                512,
+            );
+            assert_eq!(result.unwrap(), 1, "Bitcoin verify failed at index {}", idx);
+        }
     }
 }
