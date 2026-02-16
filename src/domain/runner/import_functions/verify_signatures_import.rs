@@ -118,13 +118,13 @@ impl VerifySignatureImport {
         let env_variables = env_variables
             .ok_or_else(|| RuntimeError::new("Environment variables not found"))?;
 
-        let unsafe_quantum_signatures_allowed =
-            env_variables.is_consensus_flag_set(ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED);
+        let classical_signatures_allowed =
+            env_variables.is_consensus_flag_set(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES);
 
         match key_type {
             // 0x00 = ECDSA (Ethereum or Bitcoin sub-type at byte 1)
             0 => {
-                if !unsafe_quantum_signatures_allowed {
+                if !classical_signatures_allowed {
                     return Err(RuntimeError::new(
                         "ECDSA signature verification is not allowed by consensus rules",
                     ));
@@ -161,7 +161,7 @@ impl VerifySignatureImport {
             }
             // 0x01 = Schnorr
             1 => {
-                if !unsafe_quantum_signatures_allowed {
+                if !classical_signatures_allowed {
                     return Err(RuntimeError::new(
                         "Schnorr signature verification is not allowed by consensus rules",
                     ));
@@ -1720,7 +1720,7 @@ mod tests {
             &[],
             &[],
             &[],
-            ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED,
+            ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES,
         )
     }
 
