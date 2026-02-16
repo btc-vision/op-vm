@@ -371,7 +371,9 @@ impl VerifySignatureImport {
 
         let signature = match EcdsaSignature::from_slice(&sig_bytes) {
             Ok(sig) => sig,
-            Err(_) => return Ok(0),
+            Err(_e) => {
+                return Ok(0);
+            },
         };
 
         // BIP-0062: enforce canonical low-S form. normalize_s() returns Self,
@@ -380,7 +382,9 @@ impl VerifySignatureImport {
 
         let verifying_key = match Self::read_ecdsa_public_key(&store, &instance, public_key_ptr) {
             Ok(key) => key,
-            Err(_) => return Ok(0),
+            Err(_e) => {
+                return Ok(0);
+            },
         };
 
         let result = verifying_key.verify_prehash(&message_hash, &signature);
@@ -493,7 +497,6 @@ mod tests {
         VerifyingKey,
     };
     use secp256k1::{schnorr, XOnlyPublicKey};
-
     // =========================================================================
     // Deterministic key generation from fixed seeds. No OsRng, no rand crate.
     // =========================================================================
@@ -2619,4 +2622,5 @@ mod tests {
             assert_eq!(result.unwrap(), 1, "Bitcoin verify failed at index {}", idx);
         }
     }
+
 }

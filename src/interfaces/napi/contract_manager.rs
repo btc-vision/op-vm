@@ -122,6 +122,13 @@ impl ContractManager {
 
         let is_debug_mode = cx.argument::<JsBoolean>(7)?.value(&mut cx);
 
+        // Optional 9th argument: bypassCache (defaults to false)
+        let bypass_cache = cx
+            .argument_opt(8)
+            .and_then(|v| v.downcast::<JsBoolean, _>(&mut cx).ok())
+            .map(|v| v.value(&mut cx))
+            .unwrap_or(false);
+
         let mut params = ContractParameter {
             bytecode: None,
             serialized: None,
@@ -133,15 +140,24 @@ impl ContractManager {
         };
 
         let mut should_cache = false;
-        if let Some(serialized) = manager.contract_cache.get(&address) {
-            params.serialized = Some(serialized.clone());
+        if !bypass_cache {
+            if let Some(serialized) = manager.contract_cache.get(&address) {
+                params.serialized = Some(serialized.clone());
+            } else {
+                let bc = bytecode
+                    .downcast::<JsBuffer, _>(&mut cx)
+                    .or_else(|e| cx.throw_error(e.to_string()))?
+                    .as_slice(&mut cx)
+                    .to_vec();
+                should_cache = true;
+                params.bytecode = Some(bc);
+            }
         } else {
             let bc = bytecode
                 .downcast::<JsBuffer, _>(&mut cx)
                 .or_else(|e| cx.throw_error(e.to_string()))?
                 .as_slice(&mut cx)
                 .to_vec();
-            should_cache = true;
             params.bytecode = Some(bc);
         }
 

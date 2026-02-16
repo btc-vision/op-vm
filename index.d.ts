@@ -104,6 +104,7 @@ export declare class ContractManager {
         memoryPagesUsed: bigint,
         network: BitcoinNetworkRequest,
         isDebugMode: boolean,
+        bypassCache?: boolean,
     ): void;
 
     destroyContract(id: bigint): boolean;
