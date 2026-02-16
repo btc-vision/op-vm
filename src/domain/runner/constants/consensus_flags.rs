@@ -5,7 +5,7 @@ pub struct ConsensusFlags(u64);
 impl ConsensusFlags {
     pub const NONE: Self = Self(0b00000000);
 
-    pub const UNSAFE_QUANTUM_SIGNATURES_ALLOWED: Self = Self(0b00000001);
+    pub const ALLOW_CLASSICAL_SIGNATURES: Self = Self(0b00000001);
 
     pub const UPDATE_CONTRACT_BY_ADDRESS: Self = Self(0b00000010);
 
@@ -163,10 +163,10 @@ mod tests {
 
     #[test]
     fn test_multiple_flags() {
-        let mut flags = ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED
+        let mut flags = ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES
             | ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS;
 
-        assert!(flags.contains(ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED));
+        assert!(flags.contains(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES));
         assert!(flags.contains(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS));
         assert!(!flags.contains(ConsensusFlags::RESERVED_FLAG_2));
 
@@ -176,7 +176,7 @@ mod tests {
         flags.remove(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS);
         assert!(!flags.contains(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS));
 
-        let combined = ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED
+        let combined = ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES
             | ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS
             | ConsensusFlags::RESERVED_FLAG_2;
 
@@ -186,13 +186,13 @@ mod tests {
     #[test]
     fn test_from_u64() {
         let flags = ConsensusFlags::from_u64(0b00000101);
-        assert!(flags.contains(ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED));
+        assert!(flags.contains(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES));
         assert!(flags.contains(ConsensusFlags::RESERVED_FLAG_2));
     }
 
     #[test]
     fn test_to_be_bytes() {
-        let flags = ConsensusFlags::UNSAFE_QUANTUM_SIGNATURES_ALLOWED;
+        let flags = ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES;
         let bytes = flags.to_be_bytes();
         assert_eq!(bytes, [0, 0, 0, 0, 0, 0, 0, 1]);
     }
