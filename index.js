@@ -64,10 +64,12 @@ export const BitcoinNetworkRequest = {
     Mainnet: 0,
     Testnet: 1,
     Regtest: 2,
+    OPNetTestnet: 3,
 
     0: 'Mainnet',
     1: 'Testnet',
     2: 'Regtest',
+    3: 'OPNetTestnet',
 };
 
 export const NEW_STORAGE_SLOT_GAS_COST = nativeModule.NEW_STORAGE_SLOT_GAS_COST;

@@ -9,6 +9,7 @@ pub enum BitcoinNetworkRequest {
     Mainnet = 0,
     Testnet = 1,
     Regtest = 2,
+    OPNetTestnet = 3,
 }
 
 impl Into<BitcoinNetwork> for BitcoinNetworkRequest {
@@ -17,6 +18,7 @@ impl Into<BitcoinNetwork> for BitcoinNetworkRequest {
             BitcoinNetworkRequest::Mainnet => BitcoinNetwork::Mainnet,
             BitcoinNetworkRequest::Testnet => BitcoinNetwork::Testnet,
             BitcoinNetworkRequest::Regtest => BitcoinNetwork::Regtest,
+            BitcoinNetworkRequest::OPNetTestnet => BitcoinNetwork::OPNetTestnet,
         }
     }
 }
@@ -40,6 +42,7 @@ impl TryFrom<u8> for BitcoinNetworkRequest {
             0 => Ok(Self::Mainnet),
             1 => Ok(Self::Testnet),
             2 => Ok(Self::Regtest),
+            3 => Ok(Self::OPNetTestnet),
             _ => Err(String::from("Unknown network")),
         }
     }
