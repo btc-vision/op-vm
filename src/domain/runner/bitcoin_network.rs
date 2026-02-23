@@ -3,6 +3,7 @@ pub enum BitcoinNetwork {
     Mainnet,
     Testnet,
     Regtest,
+    OPNetTestnet,
 }
 
 // TODO: Add chain_id so it can switch between chain too.
@@ -13,6 +14,7 @@ impl BitcoinNetwork {
             BitcoinNetwork::Mainnet => "bc",
             BitcoinNetwork::Testnet => "tb",
             BitcoinNetwork::Regtest => "bcrt",
+            BitcoinNetwork::OPNetTestnet => "opt",
         };
         prefix.to_string()
     }
@@ -23,6 +25,7 @@ impl BitcoinNetwork {
             BitcoinNetwork::Mainnet => false,
             BitcoinNetwork::Testnet => true,
             BitcoinNetwork::Regtest => true,
+            BitcoinNetwork::OPNetTestnet => true,
         }
     }
 }
