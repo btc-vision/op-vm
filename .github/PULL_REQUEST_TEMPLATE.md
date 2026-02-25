@@ -38,7 +38,7 @@
 - [ ] No new security vulnerabilities introduced
 - [ ] Gas metering considered for new VM operations
 
-### OPNet Specific
+### OP_NET Specific
 - [ ] Changes are compatible with existing smart contracts
 - [ ] WASM execution behavior is unchanged (or documented if changed)
 - [ ] Memory safety verified for any new external function calls

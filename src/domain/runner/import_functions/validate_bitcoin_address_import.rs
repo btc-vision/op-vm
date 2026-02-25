@@ -86,7 +86,7 @@ impl ValidateBitcoinAddressImport {
             }
 
             let (hrp, version, program) = bech32::segwit::decode(address)
-                .map_err(|e| format!("Invalid OPNet bech32 address: {}", e))?;
+                .map_err(|e| format!("Invalid OP_NET bech32 address: {}", e))?;
 
             if hrp != bech32::Hrp::parse_unchecked("opt") {
                 return Ok(false);
@@ -152,7 +152,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: valid p2wpkh (v0, 20-byte program, bech32)
+    // OP_NET testnet: valid p2wpkh (v0, 20-byte program, bech32)
     // =========================================================================
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: valid p2wsh (v0, 32-byte program, bech32)
+    // OP_NET testnet: valid p2wsh (v0, 32-byte program, bech32)
     // =========================================================================
 
     #[test]
@@ -182,7 +182,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: valid p2tr (v1, 32-byte program, bech32m)
+    // OP_NET testnet: valid p2tr (v1, 32-byte program, bech32m)
     // =========================================================================
 
     #[test]
@@ -198,7 +198,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: valid future witness versions (v2..v16, 32-byte, bech32m)
+    // OP_NET testnet: valid future witness versions (v2..v16, 32-byte, bech32m)
     // =========================================================================
 
     #[test]
@@ -226,7 +226,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: future witness version with minimum program length (2 bytes)
+    // OP_NET testnet: future witness version with minimum program length (2 bytes)
     // =========================================================================
 
     #[test]
@@ -242,7 +242,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: future witness version with maximum program length (40 bytes)
+    // OP_NET testnet: future witness version with maximum program length (40 bytes)
     // =========================================================================
 
     #[test]
@@ -258,7 +258,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject v0 with invalid program length (not 20 or 32)
+    // OP_NET testnet: reject v0 with invalid program length (not 20 or 32)
     // =========================================================================
 
     #[test]
@@ -273,7 +273,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject v1 (taproot) with program length != 32
+    // OP_NET testnet: reject v1 (taproot) with program length != 32
     // =========================================================================
 
     #[test]
@@ -291,7 +291,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject wrong HRP (tb1 address on OPNetTestnet)
+    // OP_NET testnet: reject wrong HRP (tb1 address on OPNetTestnet)
     // =========================================================================
 
     #[test]
@@ -304,7 +304,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject mainnet bc1 address
+    // OP_NET testnet: reject mainnet bc1 address
     // =========================================================================
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject regtest bcrt1 address
+    // OP_NET testnet: reject regtest bcrt1 address
     // =========================================================================
 
     #[test]
@@ -330,7 +330,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject mainnet p2pkh (starts with "1")
+    // OP_NET testnet: reject mainnet p2pkh (starts with "1")
     // =========================================================================
 
     #[test]
@@ -343,7 +343,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject mainnet p2sh (starts with "3")
+    // OP_NET testnet: reject mainnet p2sh (starts with "3")
     // =========================================================================
 
     #[test]
@@ -356,7 +356,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: accept testnet legacy p2pkh (starts with "m" or "n")
+    // OP_NET testnet: accept testnet legacy p2pkh (starts with "m" or "n")
     // =========================================================================
 
     #[test]
@@ -378,7 +378,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: accept testnet legacy p2sh (starts with "2")
+    // OP_NET testnet: accept testnet legacy p2sh (starts with "2")
     // =========================================================================
 
     #[test]
@@ -391,7 +391,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject empty string
+    // OP_NET testnet: reject empty string
     // =========================================================================
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject garbage input
+    // OP_NET testnet: reject garbage input
     // =========================================================================
 
     #[test]
@@ -417,7 +417,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject address exceeding 90 characters
+    // OP_NET testnet: reject address exceeding 90 characters
     // =========================================================================
 
     #[test]
@@ -431,7 +431,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject truncated opt1 address (invalid checksum)
+    // OP_NET testnet: reject truncated opt1 address (invalid checksum)
     // =========================================================================
 
     #[test]
@@ -444,7 +444,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject opt1 address with invalid bech32 characters
+    // OP_NET testnet: reject opt1 address with invalid bech32 characters
     // =========================================================================
 
     #[test]
@@ -457,7 +457,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject invalid base58 with valid-looking prefix
+    // OP_NET testnet: reject invalid base58 with valid-looking prefix
     // =========================================================================
 
     #[test]
@@ -470,7 +470,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: case insensitivity for opt1 prefix
+    // OP_NET testnet: case insensitivity for opt1 prefix
     // =========================================================================
 
     #[test]
@@ -485,7 +485,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject mixed case (BIP-173 requirement)
+    // OP_NET testnet: reject mixed case (BIP-173 requirement)
     // =========================================================================
 
     #[test]
@@ -508,7 +508,7 @@ mod tests {
     }
 
     // =========================================================================
-    // OPNet testnet: reject opt1 with corrupted checksum
+    // OP_NET testnet: reject opt1 with corrupted checksum
     // =========================================================================
 
     #[test]
