@@ -1,9 +1,9 @@
 use crate::application::contract::ContractService;
 use crate::domain::runner::{BitcoinNetwork, CustomEnv, ExitData, WasmerRunner, MAX_PAGES};
 use crate::domain::vm::log_time_diff;
-use crate::interfaces::napi::contract_manager::ContractManager;
-use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
-use crate::interfaces::napi::runtime_pool::RuntimePool;
+use crate::interfaces::neon::contract_manager::ContractManager;
+use crate::interfaces::neon::environment_variables_request::EnvironmentVariablesRequest;
+use crate::interfaces::neon::runtime_pool::RuntimePool;
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,

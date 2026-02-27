@@ -1,3 +1,3 @@
-pub use self::napi::*;
+pub use self::neon::*;
 
-mod napi;
+mod neon;

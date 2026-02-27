@@ -1,9 +1,9 @@
 use crate::domain::runner::ExitData;
-use crate::interfaces::napi::bitcoin_network_request::BitcoinNetworkRequest;
-use crate::interfaces::napi::contract::Contract;
-use crate::interfaces::napi::contract::ContractParameter;
-use crate::interfaces::napi::environment_variables_request::EnvironmentVariablesRequest;
-use crate::interfaces::napi::runtime_pool::RuntimePool;
+use crate::interfaces::neon::bitcoin_network_request::BitcoinNetworkRequest;
+use crate::interfaces::neon::contract::Contract;
+use crate::interfaces::neon::contract::ContractParameter;
+use crate::interfaces::neon::environment_variables_request::EnvironmentVariablesRequest;
+use crate::interfaces::neon::runtime_pool::RuntimePool;
 use bytes::Bytes;
 use neon::prelude::*;
 use neon::types::buffer::TypedArray;
