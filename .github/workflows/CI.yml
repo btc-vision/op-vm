@@ -99,7 +99,7 @@ jobs:
           fi
 
       - name: Generate build provenance
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: prebuilds/${{ matrix.settings.platform }}-${{ matrix.settings.arch }}/op-vm.node
 
