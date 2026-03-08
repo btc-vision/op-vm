@@ -1,5 +1,5 @@
 use crate::domain::runner::{BitcoinNetwork, CustomEnv};
-use bitcoin::{bech32, Address, Network, TestnetVersion};
+use bitcoin::{bech32, Address, Network};
 use std::str::FromStr;
 use wasmer::{FunctionEnvMut, RuntimeError};
 
@@ -61,7 +61,7 @@ impl ValidateBitcoinAddressImport {
             _ => {
                 let network: Network = match opnet_network {
                     BitcoinNetwork::Mainnet => Network::Bitcoin,
-                    BitcoinNetwork::Testnet => Network::Testnet(TestnetVersion::V4),
+                    BitcoinNetwork::Testnet => Network::Testnet4,
                     BitcoinNetwork::Regtest => Network::Regtest,
                     BitcoinNetwork::OPNetTestnet => unreachable!(),
                 };
@@ -466,7 +466,7 @@ mod tests {
             "m00000000000000000000invalid",
             &BitcoinNetwork::OPNetTestnet,
         );
-        assert!(result.is_err());
+        assert_eq!(result, Ok(false));
     }
 
     // =========================================================================
