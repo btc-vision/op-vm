@@ -4,6 +4,7 @@ use crate::domain::runner::{
 use k256::ecdsa::{
     signature::hazmat::PrehashVerifier, RecoveryId, Signature as EcdsaSignature, VerifyingKey,
 };
+use k256::elliptic_curve::scalar::IsHigh;
 use secp256k1::schnorr::verify;
 use secp256k1::{schnorr, XOnlyPublicKey};
 use wasmer::{FunctionEnvMut, RuntimeError, StoreMut};
@@ -288,9 +289,8 @@ impl VerifySignatureImport {
     /// v is the recovery identifier: 0/1 raw or 27/28 EIP-155.
     ///
     /// Recovers the signer public key from (hash, r, s, v) and compares
-    /// against the provided key material. Low-S normalization is NOT applied
-    /// before recovery because flipping S changes which key gets recovered,
-    /// breaking valid pre-EIP-2 signatures.
+    /// against the provided key material.
+    /// High-S signatures are rejected to prevent signature malleability.
     fn verify_ecdsa_ethereum(
         store: StoreMut,
         instance: InstanceWrapper,
@@ -314,6 +314,11 @@ impl VerifySignatureImport {
             Ok(sig) => sig,
             Err(_) => return Ok(0),
         };
+
+        // Reject high-S signatures.
+        if signature.s().is_high().into() {
+            return Ok(0);
+        }
 
         let v_byte = sig_bytes[64];
         let recovery_id_value = match v_byte {
@@ -346,10 +351,9 @@ impl VerifySignatureImport {
     /// Signature wire format: 64 bytes compact -> r (32) || s (32).
     /// No recovery id needed since we verify directly against the provided key.
     ///
-    /// Low-S normalization is enforced per BIP-0062 to prevent signature
-    /// malleability attacks that can mutate transaction IDs. normalize_s()
-    /// returns the signature with S replaced by (n - S) if S > n/2, or
-    /// returns the signature unchanged if S is already in the lower half.
+    /// Canonical low-S form is enforced per BIP-0062 to prevent signature
+    /// malleability attacks that can mutate transaction IDs. High-s signatures
+    /// are rejected.
     fn verify_ecdsa_bitcoin(
         store: StoreMut,
         instance: InstanceWrapper,
@@ -376,9 +380,10 @@ impl VerifySignatureImport {
             },
         };
 
-        // BIP-0062: enforce canonical low-S form. normalize_s() returns Self,
-        // always valid. If S was already low it returns an identical copy.
-        let signature = signature.normalize_s();
+        // BIP-0062: reject non-canonical high-S signatures.
+        if signature.s().is_high().into() {
+            return Ok(0);
+        }
 
         let verifying_key = match Self::read_ecdsa_public_key(&store, &instance, public_key_ptr) {
             Ok(key) => key,
@@ -496,6 +501,7 @@ mod tests {
         signature::hazmat::PrehashVerifier, RecoveryId, Signature as EcdsaSignature, SigningKey,
         VerifyingKey,
     };
+    use k256::elliptic_curve::scalar::IsHigh;
     use secp256k1::{schnorr, XOnlyPublicKey};
     // =========================================================================
     // Deterministic key generation from fixed seeds. No OsRng, no rand crate.
@@ -564,6 +570,51 @@ mod tests {
         let mut compact = [0u8; 64];
         compact.copy_from_slice(&normalized.to_bytes());
         compact
+    }
+
+    fn to_high_s_compact(sig: [u8; 64]) -> [u8; 64] {
+        // secp256k1 curve order:
+        // FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364141
+        const ORDER: [u8; 32] = [
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFE, 0xBA, 0xAE, 0xDC, 0xE6, 0xAF, 0x48, 0xA0, 0x3B, 0xBF, 0xD2, 0x5E, 0x8C,
+            0xD0, 0x36, 0x41, 0x41,
+        ];
+
+        let mut out = sig;
+        let mut borrow = 0u16;
+        for i in (0..32).rev() {
+            let n = ORDER[i] as i16;
+            let s = out[32 + i] as i16;
+            let diff = n - s - (borrow as i16);
+            if diff < 0 {
+                out[32 + i] = (diff + 256) as u8;
+                borrow = 1;
+            } else {
+                out[32 + i] = diff as u8;
+                borrow = 0;
+            }
+        }
+
+        out
+    }
+
+    fn to_high_s_ethereum_wire(mut sig_wire: [u8; 65]) -> [u8; 65] {
+        let mut compact = [0u8; 64];
+        compact.copy_from_slice(&sig_wire[..64]);
+        let high_s = to_high_s_compact(compact);
+        sig_wire[..64].copy_from_slice(&high_s);
+
+        // (r, s) -> (r, n-s) flips the correct recovery parity bit.
+        // Keep `v` in the same domain the caller used (0/1 or 27/28).
+        sig_wire[64] = match sig_wire[64] {
+            0 => 1,
+            1 => 0,
+            27 => 28,
+            28 => 27,
+            other => other,
+        };
+        sig_wire
     }
 
     // =========================================================================
@@ -2250,6 +2301,23 @@ mod tests {
     }
 
     #[test]
+    fn to_high_s_ethereum_wire_preserves_v27_v28_domain() {
+        let sk = default_signing_key();
+        let msg = test_message_hash();
+        let (mut sig_wire, rid) = sign_ethereum(&sk, &msg);
+        sig_wire[64] = rid.to_byte() + 27;
+
+        let high_s_wire = to_high_s_ethereum_wire(sig_wire);
+        assert!(
+            high_s_wire[64] == 27 || high_s_wire[64] == 28,
+            "high-S transform must keep legacy v in 27/28 domain"
+        );
+
+        let signature = EcdsaSignature::from_slice(&high_s_wire[..64]).unwrap();
+        assert!(bool::from(signature.s().is_high()));
+    }
+
+    #[test]
     fn execute_ecdsa_ethereum_invalid_v_returns_0() {
         let sk = default_signing_key();
         let vk = *sk.verifying_key();
@@ -2268,6 +2336,37 @@ mod tests {
         let (mut store, instance) = create_test_instance();
         write_mem(&store, &instance, 0, &pk_wire);
         write_mem(&store, &instance, 256, &sig_wire);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn execute_ecdsa_ethereum_high_s_signature_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let (sig_wire, _) = sign_ethereum(&sk, &msg);
+        let high_s_wire = to_high_s_ethereum_wire(sig_wire);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_ETHEREUM,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &high_s_wire);
         write_mem(&store, &instance, 512, &msg);
 
         let result = VerifySignatureImport::execute_inner(
@@ -2387,6 +2486,37 @@ mod tests {
                 fmt,
             );
         }
+    }
+
+    #[test]
+    fn execute_ecdsa_bitcoin_high_s_signature_returns_0() {
+        let (mut store, instance) = create_test_instance();
+        let env = env_with_quantum_flag();
+        let sk = default_signing_key();
+        let vk = *sk.verifying_key();
+        let msg = test_message_hash();
+        let low_s_sig = sign_bitcoin(&sk, &msg);
+        let high_s_sig = to_high_s_compact(low_s_sig);
+
+        let pk_wire = build_ecdsa_pubkey_wire(
+            ECDSA_SUBTYPE_BITCOIN,
+            ECDSA_KEY_FORMAT_COMPRESSED,
+            &pubkey_compressed(&vk),
+        );
+
+        write_mem(&store, &instance, 0, &pk_wire);
+        write_mem(&store, &instance, 256, &high_s_sig);
+        write_mem(&store, &instance, 512, &msg);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            store.as_store_mut(),
+            instance,
+            0,
+            256,
+            512,
+        );
+        assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
