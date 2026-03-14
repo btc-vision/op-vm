@@ -51,7 +51,7 @@
         "mocha": "^11.7.5"
     },
     "dependencies": {
-        "@neon-rs/cli": "^0.1.82",
+        "@neon-rs/cli": "^0.2.6",
         "prettier": "^3.8.1"
     }
 }
