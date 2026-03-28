@@ -414,6 +414,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpufeatures"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "cranelift-assembler-x64"
 version = "0.128.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1197,7 +1206,7 @@ dependencies = [
  "cpubits",
  "ecdsa",
  "elliptic-curve",
- "sha2 0.11.0-rc.5",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -1206,7 +1215,7 @@ version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
 dependencies = [
- "cpufeatures",
+ "cpufeatures 0.2.17",
 ]
 
 [[package]]
@@ -1509,7 +1518,7 @@ dependencies = [
  "once_cell",
  "ripemd",
  "secp256k1 0.32.0-beta.2",
- "sha2 0.11.0-rc.5",
+ "sha2 0.11.0",
  "thiserror",
  "tokio",
  "wasmer",
@@ -2083,18 +2092,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "digest 0.10.7",
 ]
 
 [[package]]
 name = "sha2"
-version = "0.11.0-rc.5"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c5f3b1e2dc8aad28310d8410bd4d7e180eca65fca176c52ab00d364475d0024"
+checksum = "446ba717509524cb3f22f17ecc096f10f4822d76ab5c0b9822c5f9c284e825f4"
 dependencies = [
  "cfg-if",
- "cpufeatures",
+ "cpufeatures 0.3.0",
  "digest 0.11.2",
 ]
 
@@ -2590,7 +2599,7 @@ dependencies = [
  "indexmap",
  "more-asserts",
  "rkyv",
- "sha2 0.11.0-rc.5",
+ "sha2 0.11.0",
  "target-lexicon",
  "thiserror",
 ]
