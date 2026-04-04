@@ -32,7 +32,7 @@ k256 = { version = "0.14.0-rc.8", default-features = false, features = ["ecdsa"]
 bech32 = "0.11.1"
 
 [dev-dependencies]
-wat = "1.245.1"
+wat = "1.246.2"
 k256 = { version = "0.14.0-rc.8", default-features = false, features = ["arithmetic"] }
 
 [features]
