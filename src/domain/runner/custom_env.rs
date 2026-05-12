@@ -1,5 +1,5 @@
 use crate::domain::runner::environment_variables::EnvironmentVariables;
-use crate::domain::runner::{BitcoinNetwork, CallResult, Calldata, ExitData, InstanceWrapper};
+use crate::domain::runner::{BitcoinNetwork, CallResult, Calldata, ExitData, HardFork, InstanceWrapper};
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
@@ -40,6 +40,7 @@ pub struct CustomEnv {
     pub is_running_start_function: bool,
     pub transient_storage: TransientStorage,
     pub max_pages: u32,
+    pub hard_fork: HardFork,
 
     #[allow(dead_code)]
     pub return_proofs: bool,
@@ -63,6 +64,7 @@ impl CustomEnv {
         mldsa_load_external: MLDSALoadExternalFunction,
         runtime: Arc<Runtime>,
         max_pages: u32,
+        hard_fork: HardFork,
         return_proofs: bool,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -88,6 +90,7 @@ impl CustomEnv {
             is_running_start_function: false,
             transient_storage: TransientStorage::new(),
             max_pages,
+            hard_fork,
 
             return_proofs,
             proofs: Vec::new(),

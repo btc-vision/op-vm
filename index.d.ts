@@ -4,6 +4,12 @@ export const enum BitcoinNetworkRequest {
     Regtest = 2,
     OPNetTestnet = 3,
 }
+
+export const enum HardForkRequest {
+    Roswell = 0,
+    Rachel = 1,
+}
+
 export interface EnvironmentVariablesRequest {
     readonly blockHash: Uint8Array;
     readonly blockNumber: bigint;
@@ -104,6 +110,7 @@ export declare class ContractManager {
         maxGas: bigint,
         memoryPagesUsed: bigint,
         network: BitcoinNetworkRequest,
+        hard_fork: HardForkRequest,
         isDebugMode: boolean,
         bypassCache?: boolean,
     ): void;

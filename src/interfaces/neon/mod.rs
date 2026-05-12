@@ -5,4 +5,5 @@ mod contract;
 mod contract_manager;
 mod environment_variables_request;
 mod external_functions;
+mod hard_fork_request;
 mod runtime_pool;

@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::INNER;
+use crate::interfaces::neon::hard_fork_request::HardForkRequest;
 
 pub struct ContractManager {
     contracts: HashMap<u64, Contract>,
@@ -120,11 +121,14 @@ impl ContractManager {
         let network =
             BitcoinNetworkRequest::try_from(network_number).or_else(|e| cx.throw_range_error(e))?;
 
-        let is_debug_mode = cx.argument::<JsBoolean>(7)?.value(&mut cx);
+        let hard_fork_number = cx.argument::<JsNumber>(7)?.value(&mut cx) as u8;
+        let hard_fork = HardForkRequest::try_from(hard_fork_number).or_else(|e| cx.throw_range_error(e))?;
+
+        let is_debug_mode = cx.argument::<JsBoolean>(8)?.value(&mut cx);
 
         // Optional 9th argument: bypassCache (defaults to false)
         let bypass_cache = cx
-            .argument_opt(8)
+            .argument_opt(9)
             .and_then(|v| v.downcast::<JsBoolean, _>(&mut cx).ok())
             .map(|v| v.value(&mut cx))
             .unwrap_or(false);
@@ -136,6 +140,7 @@ impl ContractManager {
             max_gas,
             memory_pages_used,
             network,
+            hard_fork,
             is_debug_mode,
         };
 
