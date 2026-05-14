@@ -1,5 +1,9 @@
-use crate::domain::runner::{CustomEnv, COLD_STORAGE_GAS_COST, WARM_STORAGE_GAS_COST};
+use crate::domain::runner::{
+    CustomEnv, HardFork, COLD_STORAGE_GAS_COST_RACHEL, WARM_STORAGE_GAS_COST_RACHEL,
+};
 use wasmer::{FunctionEnvMut, RuntimeError};
+
+const STORAGE_STORE_GAS_COST_ROSWELL: u64 = 1_000_000;
 
 #[derive(Default)]
 pub struct StorageStoreImport;
@@ -37,10 +41,15 @@ impl StorageStoreImport {
 
         let is_slot_warm = resp[0] == 1;
 
-        let gas_cost = if is_slot_warm {
-            WARM_STORAGE_GAS_COST
-        } else {
-            COLD_STORAGE_GAS_COST
+        let gas_cost: u64 = match env.hard_fork {
+            HardFork::Roswell => STORAGE_STORE_GAS_COST_ROSWELL,
+            HardFork::Rachel => {
+                if is_slot_warm {
+                    WARM_STORAGE_GAS_COST_RACHEL
+                } else {
+                    COLD_STORAGE_GAS_COST_RACHEL
+                }
+            }
         };
 
         instance.use_gas(&mut store, gas_cost);
