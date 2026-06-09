@@ -72,5 +72,13 @@ export const BitcoinNetworkRequest = {
     3: 'OPNetTestnet',
 };
 
+export const HardForkRequest = {
+    Roswell: 0,
+    Rachel: 1,
+
+    0: 'Roswell',
+    1: 'Rachel',
+};
+
 export const NEW_STORAGE_SLOT_GAS_COST = nativeModule.NEW_STORAGE_SLOT_GAS_COST;
 export const UPDATED_STORAGE_SLOT_GAS_COST = nativeModule.UPDATED_STORAGE_SLOT_GAS_COST;

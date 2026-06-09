@@ -1,5 +1,5 @@
 use crate::application::contract::ContractService;
-use crate::domain::runner::{BitcoinNetwork, CustomEnv, ExitData, WasmerRunner, MAX_PAGES};
+use crate::domain::runner::{BitcoinNetwork, CustomEnv, ExitData, HardFork, WasmerRunner, MAX_PAGES};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::neon::contract_manager::ContractManager;
 use crate::interfaces::neon::environment_variables_request::EnvironmentVariablesRequest;
@@ -17,7 +17,7 @@ use neon::prelude::*;
 
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
-
+use crate::interfaces::neon::hard_fork_request::HardForkRequest;
 use super::bitcoin_network_request::BitcoinNetworkRequest;
 
 pub struct ContractParameter {
@@ -27,6 +27,7 @@ pub struct ContractParameter {
     pub(crate) max_gas: u64,
     pub(crate) memory_pages_used: u32,
     pub(crate) network: BitcoinNetworkRequest,
+    pub(crate) hard_fork: HardForkRequest,
     pub(crate) is_debug_mode: bool,
 }
 
@@ -139,6 +140,7 @@ impl Contract {
 
         let max_pages = MAX_PAGES - params.memory_pages_used;
         let network_id: BitcoinNetwork = params.network.into();
+        let hard_fork: HardFork = params.hard_fork.into();
 
         let custom_env = CustomEnv::new(
             network_id,
@@ -156,6 +158,7 @@ impl Contract {
             mldsa_load_external,
             runtime.clone(),
             max_pages,
+            hard_fork,
             false,
         )
         .or_else(|err| cx.throw_error(err.to_string()))?;
