@@ -113,6 +113,7 @@ export declare class ContractManager {
         hard_fork: HardForkRequest,
         isDebugMode: boolean,
         bypassCache?: boolean,
+        consensusFlags?: bigint,
     ): void;
 
     destroyContract(id: bigint): boolean;

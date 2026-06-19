@@ -56,7 +56,7 @@ impl StorageLoadImport {
             }
         };
 
-        instance.use_gas(&mut store, gas_cost);
+        env.charge_gas(&instance, &mut store, gas_cost)?;
 
         instance
             .write_memory(&store, result_ptr as u64, value)

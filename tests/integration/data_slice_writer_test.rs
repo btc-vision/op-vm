@@ -1,5 +1,6 @@
 use crate::common::MockInstanceWrapper;
 use op_vm::domain::runner::import_functions::common::DataSliceWriter;
+use op_vm::domain::runner::MAX_MEMORY_COPY_SIZE;
 use wasmer::AsStoreMut;
 
 #[test]
@@ -403,6 +404,72 @@ fn test_offset_plus_length_overflow_behavior() {
     assert_eq!(writes[0].data.len(), 5);
     assert_eq!(writes[0].offset, 10);
     assert!(writes[0].data.iter().all(|&b| b == 0));
+}
+
+#[test]
+fn test_strict_copy_limit_rejects_large_padding_without_writes() {
+    let instance = MockInstanceWrapper::new(100, 10000);
+    let mut store = crate::common::create_mock_store();
+
+    let result = DataSliceWriter::write_data_and_padding_to_memory_with_limit(
+        &mut store.as_store_mut(),
+        &instance,
+        &[],
+        0,
+        MAX_MEMORY_COPY_SIZE + 1,
+        0,
+        true,
+    );
+
+    assert!(result.is_err());
+    assert_eq!(instance.write_call_count(), 0);
+}
+
+#[test]
+fn test_legacy_padding_path_allocated_requested_padding_before_write_failure() {
+    let instance = MockInstanceWrapper::new(16, 10000);
+    let mut store = crate::common::create_mock_store();
+    let requested_length = MAX_MEMORY_COPY_SIZE + 1;
+
+    let result = DataSliceWriter::write_data_and_padding_to_memory(
+        &mut store.as_store_mut(),
+        &instance,
+        &[],
+        0,
+        requested_length,
+        0,
+    );
+
+    assert!(result.is_err());
+    let writes = instance.get_write_calls();
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].data.len(), requested_length as usize);
+}
+
+#[test]
+fn test_strict_padding_uses_chunks_for_large_allowed_padding() {
+    let instance = MockInstanceWrapper::new(10_000, 10000);
+    let mut store = crate::common::create_mock_store();
+
+    let result = DataSliceWriter::write_data_and_padding_to_memory_with_limit(
+        &mut store.as_store_mut(),
+        &instance,
+        &[],
+        0,
+        9_000,
+        0,
+        true,
+    );
+
+    assert!(result.is_ok());
+    let writes = instance.get_write_calls();
+    assert_eq!(writes.len(), 3);
+    assert_eq!(writes[0].offset, 0);
+    assert_eq!(writes[0].data.len(), 4096);
+    assert_eq!(writes[1].offset, 4096);
+    assert_eq!(writes[1].data.len(), 4096);
+    assert_eq!(writes[2].offset, 8192);
+    assert_eq!(writes[2].data.len(), 808);
 }
 
 #[test]

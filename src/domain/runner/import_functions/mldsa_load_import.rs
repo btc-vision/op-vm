@@ -27,7 +27,7 @@ impl MLDSALoadImport {
 
         let response = env.mldsa_load_external.execute(&key, &env.runtime)?;
 
-        instance.use_gas(&mut store, LOAD_MLDSA_PUBLIC_KEY_GAS_COST);
+        env.charge_gas(&instance, &mut store, LOAD_MLDSA_PUBLIC_KEY_GAS_COST)?;
 
         instance
             .write_memory(&store, result_ptr as u64, &response)

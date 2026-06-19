@@ -9,7 +9,9 @@ impl ConsensusFlags {
 
     pub const UPDATE_CONTRACT_BY_ADDRESS: Self = Self(0b00000010);
 
-    pub const RESERVED_FLAG_2: Self = Self(0b00000100);
+    pub const STRICT_MEMORY_METERING: Self = Self(0b00000100);
+
+    pub const RESERVED_FLAG_2: Self = Self::STRICT_MEMORY_METERING;
 
     pub const fn new() -> Self {
         Self::NONE
@@ -163,8 +165,8 @@ mod tests {
 
     #[test]
     fn test_multiple_flags() {
-        let mut flags = ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES
-            | ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS;
+        let mut flags =
+            ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES | ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS;
 
         assert!(flags.contains(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES));
         assert!(flags.contains(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS));

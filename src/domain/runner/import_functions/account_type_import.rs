@@ -39,7 +39,7 @@ impl GetAccountTypeImport {
             COLD_ADDRESS_ACCESS_GAS_COST
         };
 
-        instance.use_gas(&mut store, address_access_cost);
+        env.charge_gas(&instance, &mut store, address_access_cost)?;
 
         Ok(result.account_type)
     }

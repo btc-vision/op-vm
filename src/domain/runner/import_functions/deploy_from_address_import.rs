@@ -29,7 +29,7 @@ impl DeployFromAddressImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         let origin_address = instance
             .read_memory(&store, origin_address_ptr as u64, 32)
@@ -77,7 +77,7 @@ impl DeployFromAddressImport {
         let bytecode_length = u32::from_be_bytes(*bytecode_length_bytes);
         let gas_for_bytecode = bytecode_length as u64 * GAS_COST_PER_CONTRACT_BYTES;
 
-        instance.use_gas(&mut store, gas_for_bytecode);
+        env.charge_gas(&instance, &mut store, gas_for_bytecode)?;
 
         let (call_execution_cost_bytes, result_remainder) = result_remainder
             .split_first_chunk::<8>()
@@ -94,7 +94,7 @@ impl DeployFromAddressImport {
         let call_execution_cost = u64::from_be_bytes(*call_execution_cost_bytes);
         let exit_status = u32::from_be_bytes(*exit_status_bytes);
 
-        instance.use_gas(&mut store, call_execution_cost);
+        env.charge_gas(&instance, &mut store, call_execution_cost)?;
 
         // Result from onDeploy
         let _exit_data =

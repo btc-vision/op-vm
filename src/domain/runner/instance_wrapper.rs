@@ -1,7 +1,10 @@
 use crate::domain::runner::MAX_MEMORY_SIZE;
 use crate::domain::vm::{get_remaining_points, set_remaining_points, MeteringPoints};
 use thiserror::Error;
-use wasmer::{AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError};
+use wasmer::{
+    AsStoreMut, AsStoreRef, ExportError, Function, Instance, Memory, MemoryAccessError,
+    RuntimeError,
+};
 use wasmer_types::Pages;
 
 use crate::domain::runner::common::MemoryWriter;
@@ -24,10 +27,7 @@ pub enum ExtendedMemoryAccessError {
 
 impl InstanceWrapper {
     pub fn new(instance: Instance, max_gas: u64) -> Self {
-        Self {
-            instance,
-            max_gas,
-        }
+        Self { instance, max_gas }
     }
 
     pub fn is_out_of_memory(
@@ -83,6 +83,21 @@ impl InstanceWrapper {
     pub fn use_gas(&self, store: &mut impl AsStoreMut, gas_cost: u64) {
         let remaining = self.get_remaining_gas(store);
         self.set_remaining_gas(store, remaining.saturating_sub(gas_cost));
+    }
+
+    pub fn try_use_gas(
+        &self,
+        store: &mut impl AsStoreMut,
+        gas_cost: u64,
+    ) -> Result<(), RuntimeError> {
+        let remaining = self.get_remaining_gas(store);
+        if remaining < gas_cost {
+            self.set_remaining_gas(store, 0);
+            return Err(RuntimeError::new("out of gas"));
+        }
+
+        self.set_remaining_gas(store, remaining - gas_cost);
+        Ok(())
     }
 
     pub fn get_remaining_gas(&self, store: &mut impl AsStoreMut) -> u64 {

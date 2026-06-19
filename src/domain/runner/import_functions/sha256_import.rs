@@ -32,13 +32,15 @@ impl Sha256Import {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.ensure_host_copy_length(data_length, "SHA256 input")?;
+
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         let data = instance
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
-        instance.use_gas(&mut store, Self::sha256_gas(data.len() as u64));
+        env.charge_gas(&instance, &mut store, Self::sha256_gas(data.len() as u64))?;
 
         let result = Self::sha256(&data)?;
 

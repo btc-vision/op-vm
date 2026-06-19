@@ -30,18 +30,20 @@ impl GetCallResultImport {
 
         let result_data = env.last_call_result.data.as_slice();
 
-        instance.use_gas(
+        env.charge_gas(
+            &instance,
             &mut store,
             STATIC_GAS_COST + result_data.len() as u64 * GAS_COST_PER_BYTE,
-        );
+        )?;
 
-        DataSliceWriter::write_data_and_padding_to_memory(
+        DataSliceWriter::write_data_and_padding_to_memory_with_limit(
             &mut store,
             &instance,
             result_data,
             offset,
             length,
             result_ptr,
+            env.is_strict_memory_metering_enabled(),
         )
     }
 }
