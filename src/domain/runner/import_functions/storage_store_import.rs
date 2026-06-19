@@ -52,7 +52,7 @@ impl StorageStoreImport {
             }
         };
 
-        instance.use_gas(&mut store, gas_cost);
+        env.charge_gas(&instance, &mut store, gas_cost)?;
 
         Ok(())
     }

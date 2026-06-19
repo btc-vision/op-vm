@@ -1,5 +1,7 @@
 use crate::application::contract::ContractService;
-use crate::domain::runner::{BitcoinNetwork, CustomEnv, ExitData, HardFork, WasmerRunner, MAX_PAGES};
+use crate::domain::runner::{
+    BitcoinNetwork, ConsensusFlags, CustomEnv, ExitData, HardFork, WasmerRunner, MAX_PAGES,
+};
 use crate::domain::vm::log_time_diff;
 use crate::interfaces::neon::contract_manager::ContractManager;
 use crate::interfaces::neon::environment_variables_request::EnvironmentVariablesRequest;
@@ -15,10 +17,10 @@ use bytes::Bytes;
 use chrono::Local;
 use neon::prelude::*;
 
+use super::bitcoin_network_request::BitcoinNetworkRequest;
+use crate::interfaces::neon::hard_fork_request::HardForkRequest;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
-use crate::interfaces::neon::hard_fork_request::HardForkRequest;
-use super::bitcoin_network_request::BitcoinNetworkRequest;
 
 pub struct ContractParameter {
     pub(crate) bytecode: Option<Vec<u8>>,
@@ -29,6 +31,7 @@ pub struct ContractParameter {
     pub(crate) network: BitcoinNetworkRequest,
     pub(crate) hard_fork: HardForkRequest,
     pub(crate) is_debug_mode: bool,
+    pub(crate) consensus_flags: ConsensusFlags,
 }
 
 #[derive(Clone)]
@@ -144,6 +147,7 @@ impl Contract {
 
         let custom_env = CustomEnv::new(
             network_id,
+            params.consensus_flags,
             storage_load_external,
             storage_store_external,
             call_other_contract_external,
@@ -170,6 +174,7 @@ impl Contract {
                 params.used_gas,
                 params.max_gas,
                 max_pages,
+                params.consensus_flags,
                 custom_env,
                 params.is_debug_mode,
             )
@@ -181,6 +186,7 @@ impl Contract {
                     params.used_gas,
                     params.max_gas,
                     max_pages,
+                    params.consensus_flags,
                     custom_env,
                     params.is_debug_mode,
                 )

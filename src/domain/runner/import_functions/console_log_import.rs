@@ -16,6 +16,8 @@ impl ConsoleLogImport {
             return Err(RuntimeError::new("Cannot log in start function"));
         }
 
+        env.ensure_host_copy_length(data_length, "Console log")?;
+
         let instance = &env
             .instance
             .clone()

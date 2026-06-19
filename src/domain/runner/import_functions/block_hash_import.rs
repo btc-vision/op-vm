@@ -17,9 +17,7 @@ impl GetBlockHashImport {
         let (env, mut store) = context.data_and_store_mut();
 
         if env.is_running_start_function {
-            return Err(RuntimeError::new(
-                "Cannot get block hash in start function",
-            ));
+            return Err(RuntimeError::new("Cannot get block hash in start function"));
         }
 
         let instance = &env
@@ -37,7 +35,7 @@ impl GetBlockHashImport {
             COLD_BLOCK_ACCESS_GAS_COST
         };
 
-        instance.use_gas(&mut store, block_access_cost);
+        env.charge_gas(&instance, &mut store, block_access_cost)?;
 
         instance
             .write_memory(&store, result_ptr as u64, &result.block_hash)

@@ -27,7 +27,7 @@ impl GetEnvironmentVariablesImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         let environment_variables = &env
             .environment_variables
@@ -35,13 +35,14 @@ impl GetEnvironmentVariablesImport {
             .ok_or(RuntimeError::new("Environment not found"))?
             .serialize_for_contract();
 
-        DataSliceWriter::write_data_and_padding_to_memory(
+        DataSliceWriter::write_data_and_padding_to_memory_with_limit(
             &mut store,
             &instance,
             environment_variables,
             offset,
             length,
             result_ptr,
+            env.is_strict_memory_metering_enabled(),
         )
     }
 }

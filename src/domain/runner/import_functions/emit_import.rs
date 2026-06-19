@@ -24,13 +24,15 @@ impl EmitImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.ensure_host_copy_length(data_length, "Event data")?;
+
+        env.charge_gas(instance, &mut store, STATIC_GAS_COST)?;
 
         let data = instance
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading data from memory"))?;
 
-        instance.use_gas(&mut store, data.len() as u64 * GAS_COST_PER_BYTES);
+        env.charge_gas(instance, &mut store, data.len() as u64 * GAS_COST_PER_BYTES)?;
 
         env.emit_external.execute_no_response(&data, &env.runtime)
     }
