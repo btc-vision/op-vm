@@ -11,7 +11,7 @@ use wasmer_types::{Features, SerializeError};
 use crate::domain::runner::constants::STACK_SIZE;
 #[allow(unused_imports)]
 use crate::domain::runner::{
-    CallOtherContractImport, Calldata, ConsoleLogImport, ContractRunner, CustomEnv,
+    CallOtherContractImport, Calldata, ConsensusFlags, ConsoleLogImport, ContractRunner, CustomEnv,
     DeployFromAddressImport, EmitImport, EnvironmentVariables, ExitData, ExitImport, ExitResult,
     ExtendedMemoryAccessError, GetAccountTypeImport, GetBlockHashImport, GetCallResultImport,
     GetCalldataImport, GetEnvironmentVariablesImport, GetInputsImport, GetInputsSizeImport,
@@ -24,7 +24,10 @@ use crate::domain::vm::{
     get_gas_cost, log_time_diff, LimitingTunables, Metering, RejectFPMiddleware,
 };
 
-use crate::domain::runner::{MLDSALoadImport, UpdateFromAddressImport, MAX_MEMORY_COPY_SIZE};
+use crate::domain::runner::MAX_TABLE_ELEMENTS;
+use crate::domain::runner::{
+    MLDSALoadImport, UpdateFromAddressImport, MAX_MEMORY_COPY_SIZE, MAX_MEMORY_SIZE,
+};
 
 const CONTRACT_ENTRYPOINT_FUNCTION_NAME: &'static str = "execute";
 const CONTRACT_ON_DEPLOY_FUNCTION_NAME: &'static str = "onDeploy";
@@ -43,13 +46,21 @@ impl WasmerRunner {
         used_gas: u64,
         max_gas: u64,
         max_pages: u32,
+        consensus_flags: ConsensusFlags,
         custom_env: CustomEnv,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
 
-        let store = Self::create_engine(max_pages)?;
+        if consensus_flags.contains(ConsensusFlags::STRICT_MEMORY_METERING) {
+            Self::validate_bytecode_for_strict_memory_metering(bytecode, max_pages)?;
+        }
+
+        let store = Self::create_engine_with_consensus_flags(max_pages, consensus_flags)?;
         let module = Module::from_binary(&store, &bytecode)?;
+        if consensus_flags.contains(ConsensusFlags::STRICT_MEMORY_METERING) {
+            Self::validate_module_for_strict_memory_metering(&module, max_pages)?;
+        }
         let instance =
             Self::create_instance(used_gas, max_gas, custom_env, store, module, is_debug_mode)?;
 
@@ -59,7 +70,21 @@ impl WasmerRunner {
     }
 
     pub fn create_engine(max_pages: u32) -> anyhow::Result<Store> {
-        let meter = Metering::new(MAX_GAS_WASM_INIT, get_gas_cost, MAX_MEMORY_COPY_SIZE);
+        Self::create_engine_with_consensus_flags(max_pages, ConsensusFlags::NONE)
+    }
+
+    pub fn create_engine_with_consensus_flags(
+        max_pages: u32,
+        consensus_flags: ConsensusFlags,
+    ) -> anyhow::Result<Store> {
+        let strict_memory_metering =
+            consensus_flags.contains(ConsensusFlags::STRICT_MEMORY_METERING);
+        let meter = Metering::new_with_strict_memory_metering(
+            MAX_GAS_WASM_INIT,
+            get_gas_cost,
+            MAX_MEMORY_COPY_SIZE,
+            strict_memory_metering,
+        );
         let metering = Arc::new(meter);
 
         let mut compiler = Singlepass::default();
@@ -74,7 +99,11 @@ impl WasmerRunner {
             .set_features(Option::from(Self::get_features()))
             .engine();
 
-        let store = Store::new(Self::create_tunable(engine, max_pages));
+        let store = Store::new(Self::create_tunable(
+            engine,
+            max_pages,
+            strict_memory_metering,
+        ));
         Ok(store)
     }
 
@@ -129,17 +158,27 @@ impl WasmerRunner {
         used_gas: u64,
         max_gas: u64,
         max_pages: u32,
+        consensus_flags: ConsensusFlags,
         custom_env: CustomEnv,
         is_debug_mode: bool,
     ) -> anyhow::Result<Self> {
         let time = Local::now();
+        let strict_memory_metering =
+            consensus_flags.contains(ConsensusFlags::STRICT_MEMORY_METERING);
 
         let engine = EngineBuilder::headless()
             .set_features(Option::from(Self::get_features()))
             .engine();
 
-        let store = Store::new(Self::create_tunable(engine, max_pages));
+        let store = Store::new(Self::create_tunable(
+            engine,
+            max_pages,
+            strict_memory_metering,
+        ));
         let module = Module::deserialize(&store, serialized)?;
+        if strict_memory_metering {
+            Self::validate_module_for_strict_memory_metering(&module, max_pages)?;
+        }
         let instance =
             Self::create_instance(used_gas, max_gas, custom_env, store, module, is_debug_mode)?;
 
@@ -148,13 +187,273 @@ impl WasmerRunner {
         Ok(instance)
     }
 
-    fn create_tunable(mut engine: Engine, max_pages: u32) -> Engine {
+    fn create_tunable(mut engine: Engine, max_pages: u32, strict_memory_metering: bool) -> Engine {
         let base = BaseTunables::for_target(&Target::default());
-        let tunables = LimitingTunables::new(base, max_pages, STACK_SIZE);
+        let tunables = LimitingTunables::new(base, max_pages, STACK_SIZE, strict_memory_metering);
 
         engine.set_tunables(tunables);
 
         engine
+    }
+
+    fn validate_bytecode_for_strict_memory_metering(
+        bytecode: &[u8],
+        max_pages: u32,
+    ) -> anyhow::Result<()> {
+        use wasmer::wasmparser::{ElementItems, Imports, Parser, Payload, TypeRef};
+
+        fn validate_memory_type(
+            memory: &wasmer::wasmparser::MemoryType,
+            max_pages: u32,
+        ) -> anyhow::Result<()> {
+            if memory.memory64 {
+                return Err(anyhow::anyhow!("memory64 is not allowed"));
+            }
+
+            if memory.initial > max_pages as u64 {
+                return Err(anyhow::anyhow!(
+                    "memory minimum exceeds the allowed memory limit"
+                ));
+            }
+
+            if let Some(maximum) = memory.maximum {
+                if maximum > max_pages as u64 {
+                    return Err(anyhow::anyhow!(
+                        "memory maximum exceeds the allowed memory limit"
+                    ));
+                }
+            }
+
+            Ok(())
+        }
+
+        fn validate_table_type(table: &wasmer::wasmparser::TableType) -> anyhow::Result<()> {
+            if table.table64 {
+                return Err(anyhow::anyhow!("table64 is not allowed"));
+            }
+
+            if table.initial > MAX_TABLE_ELEMENTS as u64 {
+                return Err(anyhow::anyhow!(
+                    "table minimum exceeds the allowed table limit"
+                ));
+            }
+
+            if let Some(maximum) = table.maximum {
+                if maximum > MAX_TABLE_ELEMENTS as u64 {
+                    return Err(anyhow::anyhow!(
+                        "table maximum exceeds the allowed table limit"
+                    ));
+                }
+            }
+
+            Ok(())
+        }
+
+        fn validate_type_ref(ty: TypeRef, max_pages: u32) -> anyhow::Result<()> {
+            match ty {
+                TypeRef::Memory(memory) => validate_memory_type(&memory, max_pages),
+                TypeRef::Table(table) => validate_table_type(&table),
+                _ => Ok(()),
+            }
+        }
+
+        for payload in Parser::new(0).parse_all(bytecode) {
+            match payload? {
+                Payload::ImportSection(section) => {
+                    for import in section {
+                        match import? {
+                            Imports::Single(_, import) => {
+                                validate_type_ref(import.ty, max_pages)?;
+                            }
+                            Imports::Compact1 { items, .. } => {
+                                for item in items {
+                                    validate_type_ref(item?.ty, max_pages)?;
+                                }
+                            }
+                            Imports::Compact2 { ty, .. } => {
+                                validate_type_ref(ty, max_pages)?;
+                            }
+                        }
+                    }
+                }
+                Payload::MemorySection(section) => {
+                    for memory in section {
+                        validate_memory_type(&memory?, max_pages)?;
+                    }
+                }
+                Payload::TableSection(section) => {
+                    for table in section {
+                        validate_table_type(&table?.ty)?;
+                    }
+                }
+                Payload::DataSection(section) => {
+                    let mut total_data_len = 0usize;
+                    for data in section {
+                        let data = data?;
+                        let data_len = data.data.len();
+                        if data_len > MAX_MEMORY_COPY_SIZE as usize {
+                            return Err(anyhow::anyhow!(
+                                "data segment exceeds the allowed memory initialization limit"
+                            ));
+                        }
+
+                        total_data_len = total_data_len.checked_add(data_len).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "data section exceeds the allowed memory initialization limit"
+                            )
+                        })?;
+                        if total_data_len > MAX_MEMORY_SIZE as usize {
+                            return Err(anyhow::anyhow!(
+                                "data section exceeds the allowed memory initialization limit"
+                            ));
+                        }
+                    }
+                }
+                Payload::ElementSection(section) => {
+                    let mut total_element_count = 0u64;
+                    for element in section {
+                        let element = element?;
+                        let count = u64::from(match element.items {
+                            ElementItems::Functions(functions) => functions.count(),
+                            ElementItems::Expressions(_, expressions) => expressions.count(),
+                        });
+
+                        if count > MAX_TABLE_ELEMENTS as u64 {
+                            return Err(anyhow::anyhow!(
+                                "element segment exceeds the allowed table initialization limit"
+                            ));
+                        }
+
+                        total_element_count =
+                            total_element_count.checked_add(count).ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "element sections exceed the allowed table initialization limit"
+                                )
+                            })?;
+                        if total_element_count > MAX_TABLE_ELEMENTS as u64 {
+                            return Err(anyhow::anyhow!(
+                                "element sections exceed the allowed table initialization limit"
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_module_for_strict_memory_metering(
+        module: &Module,
+        max_pages: u32,
+    ) -> anyhow::Result<()> {
+        let info = module.info();
+
+        for (_, memory) in info.memories.iter() {
+            if memory.minimum.0 > max_pages {
+                return Err(anyhow::anyhow!(
+                    "memory minimum exceeds the allowed memory limit"
+                ));
+            }
+
+            if let Some(maximum) = memory.maximum {
+                if maximum.0 > max_pages {
+                    return Err(anyhow::anyhow!(
+                        "memory maximum exceeds the allowed memory limit"
+                    ));
+                }
+            }
+        }
+
+        for (_, table) in info.tables.iter() {
+            if table.minimum > MAX_TABLE_ELEMENTS {
+                return Err(anyhow::anyhow!(
+                    "table minimum exceeds the allowed table limit"
+                ));
+            }
+
+            if let Some(maximum) = table.maximum {
+                if maximum > MAX_TABLE_ELEMENTS {
+                    return Err(anyhow::anyhow!(
+                        "table maximum exceeds the allowed table limit"
+                    ));
+                }
+            }
+        }
+
+        let mut total_table_elements = 0usize;
+        for initializer in &info.table_initializers {
+            let element_count = initializer.elements.len();
+            if element_count > MAX_TABLE_ELEMENTS as usize {
+                return Err(anyhow::anyhow!(
+                    "table initializer exceeds the allowed table initialization limit"
+                ));
+            }
+
+            total_table_elements =
+                total_table_elements
+                    .checked_add(element_count)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "table initializers exceed the allowed table initialization limit"
+                        )
+                    })?;
+            if total_table_elements > MAX_TABLE_ELEMENTS as usize {
+                return Err(anyhow::anyhow!(
+                    "table initializers exceed the allowed table initialization limit"
+                ));
+            }
+        }
+
+        for elements in info.passive_elements.values() {
+            let element_count = elements.len();
+            if element_count > MAX_TABLE_ELEMENTS as usize {
+                return Err(anyhow::anyhow!(
+                    "passive element segment exceeds the allowed table initialization limit"
+                ));
+            }
+
+            total_table_elements =
+                total_table_elements
+                    .checked_add(element_count)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "table initializers exceed the allowed table initialization limit"
+                        )
+                    })?;
+            if total_table_elements > MAX_TABLE_ELEMENTS as usize {
+                return Err(anyhow::anyhow!(
+                    "table initializers exceed the allowed table initialization limit"
+                ));
+            }
+        }
+
+        let mut total_passive_data_len = 0usize;
+        for data in info.passive_data.values() {
+            let data_len = data.len();
+            if data_len > MAX_MEMORY_COPY_SIZE as usize {
+                return Err(anyhow::anyhow!(
+                    "passive data segment exceeds the allowed memory initialization limit"
+                ));
+            }
+
+            total_passive_data_len =
+                total_passive_data_len
+                    .checked_add(data_len)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "passive data segments exceed the allowed memory initialization limit"
+                        )
+                    })?;
+            if total_passive_data_len > MAX_MEMORY_SIZE as usize {
+                return Err(anyhow::anyhow!(
+                    "passive data segments exceed the allowed memory initialization limit"
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     fn create_instance(
@@ -335,6 +634,7 @@ impl WasmerRunner {
 impl ContractRunner for WasmerRunner {
     fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables) {
         let env = self.env.as_mut(&mut self.store);
+        env.set_consensus_flags(environment_variables.consensus_flags());
         env.environment_variables = Some(environment_variables);
     }
 
@@ -497,5 +797,252 @@ impl ContractRunner for WasmerRunner {
 
     fn get_exit_data(&self) -> ExitData {
         self.env.as_ref(&self.store).exit_data.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::runner::MAX_PAGES;
+    use wasmer::{imports, Instance};
+
+    #[test]
+    fn strict_validation_rejects_table_minimum_above_limit() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (table {} funcref)
+            )
+            "#,
+            MAX_TABLE_ELEMENTS + 1
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("table minimum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_memory_minimum_above_limit() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (memory {} {})
+            )
+            "#,
+            MAX_PAGES + 1,
+            MAX_PAGES + 1
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("memory minimum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_memory_maximum_above_limit() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (memory 1 {})
+            )
+            "#,
+            MAX_PAGES + 1
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("memory maximum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_imported_memory_above_limit() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (import "env" "memory" (memory 1 {}))
+            )
+            "#,
+            MAX_PAGES + 1
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("memory maximum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_table_maximum_above_limit() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (table 1 {} funcref)
+            )
+            "#,
+            MAX_TABLE_ELEMENTS + 1
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("table maximum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_imported_table_above_limit() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (import "env" "table" (table 1 {} funcref))
+            )
+            "#,
+            MAX_TABLE_ELEMENTS + 1
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("table maximum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_accepts_memory_and_table_at_exact_limits() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (memory 1 {})
+              (table {} {} funcref)
+            )
+            "#,
+            MAX_PAGES, MAX_TABLE_ELEMENTS, MAX_TABLE_ELEMENTS
+        ))
+        .unwrap();
+
+        WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES).unwrap();
+    }
+
+    #[test]
+    fn strict_tunables_reject_large_table_instantiation_but_roswell_keeps_legacy_behavior() {
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (table {} funcref)
+            )
+            "#,
+            MAX_TABLE_ELEMENTS + 1
+        ))
+        .unwrap();
+
+        let mut roswell_store = WasmerRunner::create_engine(MAX_PAGES).unwrap();
+        let roswell_module = Module::new(&roswell_store, &wasm).unwrap();
+        assert!(Instance::new(&mut roswell_store, &roswell_module, &imports! {}).is_ok());
+
+        let strict_flags = ConsensusFlags::STRICT_MEMORY_METERING;
+        let mut strict_store =
+            WasmerRunner::create_engine_with_consensus_flags(MAX_PAGES, strict_flags).unwrap();
+        let strict_module = Module::new(&strict_store, &wasm).unwrap();
+        let err = Instance::new(&mut strict_store, &strict_module, &imports! {}).unwrap_err();
+
+        assert!(
+            err.to_string().contains("Table minimum exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_large_active_data_segment() {
+        let data = "x".repeat(MAX_MEMORY_COPY_SIZE as usize + 1);
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (memory 17)
+              (data (i32.const 0) "{data}")
+            )
+            "#
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("data segment exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_large_passive_data_segment() {
+        let data = "x".repeat(MAX_MEMORY_COPY_SIZE as usize + 1);
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (memory 17)
+              (data "{data}")
+            )
+            "#
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("data segment exceeds"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn strict_validation_rejects_aggregate_element_segments_above_limit() {
+        let first_segment = " $f".repeat((MAX_TABLE_ELEMENTS / 2) as usize);
+        let second_segment =
+            " $f".repeat((MAX_TABLE_ELEMENTS - (MAX_TABLE_ELEMENTS / 2) + 1) as usize);
+        let wasm = wat::parse_str(format!(
+            r#"
+            (module
+              (func $f)
+              (elem declare func{first_segment})
+              (elem declare func{second_segment})
+            )
+            "#
+        ))
+        .unwrap();
+
+        let err = WasmerRunner::validate_bytecode_for_strict_memory_metering(&wasm, MAX_PAGES)
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("element sections exceed"),
+            "unexpected error: {err}"
+        );
     }
 }

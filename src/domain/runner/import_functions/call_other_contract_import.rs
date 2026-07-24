@@ -28,6 +28,8 @@ impl CallOtherContractImport {
 
         let gas_used = instance.get_used_gas(&mut store);
 
+        env.ensure_host_copy_length(calldata_length, "Call calldata")?;
+
         let address = instance
             .read_memory(&store, address_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading address from memory"))?;
@@ -80,6 +82,8 @@ impl CallOtherContractImport {
                             "Invalid data received for 'Call contract'",
                         ))?;
 
+                env.ensure_host_copy_size(response.len(), "Call response")?;
+
                 let is_address_warm = *is_address_warm_byte != 0;
                 let call_execution_cost = u64::from_be_bytes(*call_execution_cost_bytes);
                 let exit_status = u32::from_be_bytes(*exit_status_bytes);
@@ -90,7 +94,11 @@ impl CallOtherContractImport {
                     COLD_ADDRESS_ACCESS_GAS_COST
                 };
 
-                instance.use_gas(&mut store, address_access_cost + call_execution_cost);
+                env.charge_gas(
+                    &instance,
+                    &mut store,
+                    address_access_cost + call_execution_cost,
+                )?;
 
                 env.last_call_result = CallResult::new(response);
 

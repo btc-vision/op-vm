@@ -26,7 +26,7 @@ impl TransientLoadImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         let data = instance
             .read_memory(&store, key_ptr as u64, 32)

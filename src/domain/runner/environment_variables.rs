@@ -72,4 +72,8 @@ impl EnvironmentVariables {
     pub fn is_consensus_flag_set(&self, flag: ConsensusFlags) -> bool {
         self.consensus_flags.contains(flag)
     }
+
+    pub const fn consensus_flags(&self) -> ConsensusFlags {
+        self.consensus_flags
+    }
 }

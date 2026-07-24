@@ -1,6 +1,6 @@
+use crate::domain::runner::HardFork;
 use neon::context::Context;
 use neon::prelude::{JsNumber, JsResult};
-use crate::domain::runner::HardFork;
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
@@ -28,7 +28,6 @@ impl HardForkRequest {
         Ok(cx.number(value))
     }
 }
-
 
 impl TryFrom<u8> for HardForkRequest {
     type Error = String;

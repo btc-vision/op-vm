@@ -21,7 +21,7 @@ impl GetInputsSizeImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         // TODO: Don't load all inputs for this
         let inputs = &env.inputs_external.execute_empty_request(&env.runtime)?;

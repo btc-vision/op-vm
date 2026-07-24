@@ -31,6 +31,8 @@ impl ExitImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
+        env.ensure_host_copy_length(data_length, "Exit data")?;
+
         let data = instance
             .read_memory(&store, data_ptr as u64, data_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading exit data from memory"))?;

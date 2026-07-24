@@ -23,13 +23,19 @@ impl ValidateBitcoinAddressImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.ensure_host_copy_length(address_length, "Bitcoin address")?;
+
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         let address_bytes = instance
             .read_memory(&store, address_ptr as u64, address_length as u64)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        instance.use_gas(&mut store, address_length as u64 * GAS_COST_PER_BYTE);
+        env.charge_gas(
+            &instance,
+            &mut store,
+            address_length as u64 * GAS_COST_PER_BYTE,
+        )?;
 
         let address_str = String::from_utf8(address_bytes)
             .map_err(|e| RuntimeError::new(format!("Error converting to string: {}", e)))?;

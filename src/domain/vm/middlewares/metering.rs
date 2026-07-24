@@ -10,8 +10,8 @@
 
 use crate::domain::vm::{
     MEMORY_COPY_BASE, MEMORY_COPY_PER_BLOCK, MEMORY_FILL_BASE, MEMORY_FILL_PER_BLOCK,
-    TABLE_COPY_BASE, TABLE_COPY_PER_ELEM, TABLE_FILL_BASE, TABLE_FILL_PER_ELEM, TABLE_GROW_BASE,
-    TABLE_GROW_PER_ELEM,
+    MEMORY_GROW_BASE, MEMORY_GROW_PER_PAGE, TABLE_COPY_BASE, TABLE_COPY_PER_ELEM, TABLE_FILL_BASE,
+    TABLE_FILL_PER_ELEM, TABLE_GROW_BASE, TABLE_GROW_PER_ELEM,
 };
 use std::convert::TryInto;
 use std::fmt;
@@ -109,6 +109,8 @@ pub struct Metering<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> {
     type_arities: Mutex<Option<Arc<Vec<(u32, u32)>>>>,
 
     clamp_max_len: u32,
+
+    strict_memory_metering: bool,
 }
 
 /// The function-level metering middleware.
@@ -128,6 +130,8 @@ pub struct FunctionMetering<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send +
     last_i32_const: Option<u32>,
 
     max_len: u32,
+
+    strict_memory_metering: bool,
 }
 
 /// Represents the type of the metering points, either `Remaining` or
@@ -162,6 +166,23 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> Metering<F> {
             global_indexes: Mutex::new(None),
             type_arities: Mutex::new(None),
             clamp_max_len,
+            strict_memory_metering: false,
+        }
+    }
+
+    pub fn new_with_strict_memory_metering(
+        initial_limit: u64,
+        cost_function: F,
+        clamp_max_len: u32,
+        strict_memory_metering: bool,
+    ) -> Self {
+        Self {
+            initial_limit,
+            cost_function: Arc::new(cost_function),
+            global_indexes: Mutex::new(None),
+            type_arities: Mutex::new(None),
+            clamp_max_len,
+            strict_memory_metering,
         }
     }
 }
@@ -174,6 +195,7 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync> fmt::Debug for M
             .field("global_indexes", &self.global_indexes)
             .field("type_arities", &self.type_arities)
             .field("clamp_max_len", &self.clamp_max_len)
+            .field("strict_memory_metering", &self.strict_memory_metering)
             .finish()
     }
 }
@@ -190,6 +212,7 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync + 'static> Module
             type_arities: self.type_arities.lock().unwrap().clone().unwrap(),
             last_i32_const: None,
             max_len: self.clamp_max_len,
+            strict_memory_metering: self.strict_memory_metering,
         })
     }
 
@@ -535,7 +558,6 @@ where
             }
 
             MemoryCopy { .. } => {
-                // | MemoryInit { .. } add it if we ever enable it.
                 state.extend(&[GlobalSet {
                     global_index: self.global_indexes.scratch_len.as_u32(),
                 }]);
@@ -548,6 +570,31 @@ where
                     MEMORY_COPY_PER_BLOCK,
                     LOG2_BYTE_BLOCK,
                 );
+            }
+
+            MemoryInit { .. } if self.strict_memory_metering => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                #[cfg(feature = "debug-metering")]
+                self.log_len_based("memory.init", MEMORY_COPY_PER_BLOCK, 16);
+                self.clamp_len(state);
+                self.charge_len_based(
+                    state,
+                    MEMORY_COPY_BASE,
+                    MEMORY_COPY_PER_BLOCK,
+                    LOG2_BYTE_BLOCK,
+                );
+            }
+
+            MemoryGrow { .. } if self.strict_memory_metering => {
+                state.extend(&[GlobalSet {
+                    global_index: self.global_indexes.scratch_len.as_u32(),
+                }]);
+                #[cfg(feature = "debug-metering")]
+                self.log_len_based("memory.grow", MEMORY_GROW_PER_PAGE, 1);
+                self.clamp_len(state);
+                self.charge_len_based(state, MEMORY_GROW_BASE, MEMORY_GROW_PER_PAGE, 0);
             }
 
             #[cfg(feature = "table-metering")]
@@ -591,7 +638,13 @@ where
             _ => None,
         };
 
-        let cost = (self.cost_function)(&operator, arity).min(MAX_ACCUM);
+        let cost = if self.strict_memory_metering
+            && matches!(operator, MemoryGrow { .. } | MemoryInit { .. })
+        {
+            0
+        } else {
+            (self.cost_function)(&operator, arity).min(MAX_ACCUM)
+        };
         self.accumulated_cost = self.accumulated_cost.saturating_add(cost);
 
         // micro-batch flush
@@ -739,8 +792,9 @@ mod tests {
     use wasmer::{
         imports,
         sys::{CompilerConfig, Cranelift},
-        wat2wasm, Module, Store, TypedFunction,
+        wat2wasm, Instance, Module, Store, TypedFunction,
     };
+    use wasmer_types::Features;
 
     fn cost_function(operator: &Operator, _: Option<(u32, u32)>) -> u64 {
         match operator {
@@ -1019,6 +1073,189 @@ mod tests {
         assert_eq!(
             get_remaining_points(&mut store, &instance),
             MeteringPoints::Remaining(2)
+        );
+    }
+
+    fn zero_cost(_: &Operator, _: Option<(u32, u32)>) -> u64 {
+        0
+    }
+
+    fn metered_instance(
+        wat: &[u8],
+        initial_limit: u64,
+        strict_memory_metering: bool,
+    ) -> (Store, Instance) {
+        let metering = Arc::new(Metering::new_with_strict_memory_metering(
+            initial_limit,
+            zero_cost,
+            MAX_MEMORY_COPY_SIZE,
+            strict_memory_metering,
+        ));
+
+        let mut compiler_config = Cranelift::default();
+        compiler_config.push_middleware(metering);
+
+        let mut features = Features::default();
+        features.bulk_memory = true;
+
+        let engine = EngineBuilder::new(compiler_config)
+            .set_features(Some(features))
+            .engine();
+        let mut store = Store::new(engine);
+        let wasm = wat2wasm(wat).unwrap().to_vec();
+        let module = Module::new(&store, wasm).unwrap();
+        let instance = Instance::new(&mut store, &module, &imports! {}).unwrap();
+
+        (store, instance)
+    }
+
+    fn read_memory_prefix(store: &Store, instance: &Instance, len: usize) -> Vec<u8> {
+        let memory = instance.exports.get_memory("memory").unwrap();
+        let mut bytes = vec![0; len];
+        memory.view(store).read(0, &mut bytes).unwrap();
+        bytes
+    }
+
+    #[test]
+    fn strict_memory_grow_traps_before_growing_when_growth_charge_is_unpaid() {
+        let wasm = br#"
+            (module
+              (memory (export "memory") 1 10)
+              (func (export "grow") (param i32) (result i32)
+                local.get 0
+                memory.grow))
+        "#;
+        let one_page_charge = MEMORY_GROW_BASE + MEMORY_GROW_PER_PAGE;
+        let (mut store, instance) = metered_instance(wasm, one_page_charge - 1, true);
+        let grow: TypedFunction<i32, i32> = instance
+            .exports
+            .get_function("grow")
+            .unwrap()
+            .typed(&store)
+            .unwrap();
+
+        assert!(grow.call(&mut store, 1).is_err());
+
+        let memory = instance.exports.get_memory("memory").unwrap();
+        assert_eq!(memory.view(&store).size().0, 1);
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Exhausted
+        );
+    }
+
+    #[test]
+    fn strict_memory_grow_charges_per_page_before_success() {
+        let wasm = br#"
+            (module
+              (memory (export "memory") 1 10)
+              (func (export "grow") (param i32) (result i32)
+                local.get 0
+                memory.grow))
+        "#;
+        let one_page_charge = MEMORY_GROW_BASE + MEMORY_GROW_PER_PAGE;
+        let (mut store, instance) = metered_instance(wasm, one_page_charge + 7, true);
+        let grow: TypedFunction<i32, i32> = instance
+            .exports
+            .get_function("grow")
+            .unwrap()
+            .typed(&store)
+            .unwrap();
+
+        assert_eq!(grow.call(&mut store, 1).unwrap(), 1);
+
+        let memory = instance.exports.get_memory("memory").unwrap();
+        assert_eq!(memory.view(&store).size().0, 2);
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Remaining(7)
+        );
+    }
+
+    #[test]
+    fn roswell_memory_grow_was_not_length_charged_by_the_new_strict_meter() {
+        let wasm = br#"
+            (module
+              (memory (export "memory") 1 10)
+              (func (export "grow") (param i32) (result i32)
+                local.get 0
+                memory.grow))
+        "#;
+        let (mut store, instance) = metered_instance(wasm, 1, false);
+        let grow: TypedFunction<i32, i32> = instance
+            .exports
+            .get_function("grow")
+            .unwrap()
+            .typed(&store)
+            .unwrap();
+
+        assert_eq!(grow.call(&mut store, 1).unwrap(), 1);
+
+        let memory = instance.exports.get_memory("memory").unwrap();
+        assert_eq!(memory.view(&store).size().0, 2);
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Remaining(1)
+        );
+    }
+
+    #[test]
+    fn strict_memory_init_traps_before_copying_when_copy_charge_is_unpaid() {
+        let wasm = br#"
+            (module
+              (memory (export "memory") 1)
+              (data $payload "abcdefghijklmnop")
+              (func (export "init") (param i32)
+                i32.const 0
+                i32.const 0
+                local.get 0
+                memory.init $payload))
+        "#;
+        let copy_charge = MEMORY_COPY_BASE + MEMORY_COPY_PER_BLOCK;
+        let (mut store, instance) = metered_instance(wasm, copy_charge - 1, true);
+        let init: TypedFunction<i32, ()> = instance
+            .exports
+            .get_function("init")
+            .unwrap()
+            .typed(&store)
+            .unwrap();
+
+        assert!(init.call(&mut store, 16).is_err());
+        assert_eq!(read_memory_prefix(&store, &instance, 16), vec![0; 16]);
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Exhausted
+        );
+    }
+
+    #[test]
+    fn roswell_memory_init_was_not_length_charged_by_the_new_strict_meter() {
+        let wasm = br#"
+            (module
+              (memory (export "memory") 1)
+              (data $payload "abcdefghijklmnop")
+              (func (export "init") (param i32)
+                i32.const 0
+                i32.const 0
+                local.get 0
+                memory.init $payload))
+        "#;
+        let (mut store, instance) = metered_instance(wasm, 1, false);
+        let init: TypedFunction<i32, ()> = instance
+            .exports
+            .get_function("init")
+            .unwrap()
+            .typed(&store)
+            .unwrap();
+
+        init.call(&mut store, 16).unwrap();
+        assert_eq!(
+            read_memory_prefix(&store, &instance, 16),
+            b"abcdefghijklmnop"
+        );
+        assert_eq!(
+            get_remaining_points(&mut store, &instance),
+            MeteringPoints::Remaining(1)
         );
     }
 }

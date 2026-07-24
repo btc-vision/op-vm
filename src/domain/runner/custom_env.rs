@@ -1,5 +1,8 @@
 use crate::domain::runner::environment_variables::EnvironmentVariables;
-use crate::domain::runner::{BitcoinNetwork, CallResult, Calldata, ExitData, HardFork, InstanceWrapper};
+use crate::domain::runner::{
+    BitcoinNetwork, CallResult, Calldata, ConsensusFlags, ExitData, HardFork, InstanceWrapper,
+    MAX_MEMORY_COPY_SIZE,
+};
 use crate::interfaces::{
     AccountTypeExternalFunction, BlockHashExternalFunction, CallOtherContractExternalFunction,
     ConsoleLogExternalFunction, DeployFromAddressExternalFunction, EmitExternalFunction,
@@ -8,6 +11,7 @@ use crate::interfaces::{
 };
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use wasmer::{AsStoreMut, RuntimeError};
 
 use super::TransientStorage;
 
@@ -20,6 +24,7 @@ pub struct ProvenState {
 pub struct CustomEnv {
     pub instance: Option<InstanceWrapper>,
     pub network: BitcoinNetwork,
+    pub consensus_flags: ConsensusFlags,
     pub exit_data: ExitData,
     pub storage_load_external: StorageLoadExternalFunction,
     pub storage_store_external: StorageStoreExternalFunction,
@@ -50,6 +55,7 @@ pub struct CustomEnv {
 impl CustomEnv {
     pub fn new(
         network: BitcoinNetwork,
+        consensus_flags: ConsensusFlags,
         storage_load_external: StorageLoadExternalFunction,
         storage_store_external: StorageStoreExternalFunction,
         call_other_contract_external: CallOtherContractExternalFunction,
@@ -70,6 +76,7 @@ impl CustomEnv {
         Ok(Self {
             instance: None,
             network,
+            consensus_flags,
             exit_data: ExitData::default(),
             storage_load_external,
             storage_store_external,
@@ -95,5 +102,51 @@ impl CustomEnv {
             return_proofs,
             proofs: Vec::new(),
         })
+    }
+
+    pub fn set_consensus_flags(&mut self, consensus_flags: ConsensusFlags) {
+        self.consensus_flags = consensus_flags;
+    }
+
+    pub fn is_strict_memory_metering_enabled(&self) -> bool {
+        self.consensus_flags
+            .contains(ConsensusFlags::STRICT_MEMORY_METERING)
+    }
+
+    pub fn charge_gas(
+        &self,
+        instance: &InstanceWrapper,
+        store: &mut impl AsStoreMut,
+        gas_cost: u64,
+    ) -> Result<(), RuntimeError> {
+        if self.is_strict_memory_metering_enabled() {
+            instance.try_use_gas(store, gas_cost)
+        } else {
+            instance.use_gas(store, gas_cost);
+            Ok(())
+        }
+    }
+
+    pub fn ensure_host_copy_length(
+        &self,
+        length: u32,
+        operation: &str,
+    ) -> Result<(), RuntimeError> {
+        self.ensure_host_copy_size(length as usize, operation)
+    }
+
+    pub fn ensure_host_copy_size(
+        &self,
+        length: usize,
+        operation: &str,
+    ) -> Result<(), RuntimeError> {
+        if self.is_strict_memory_metering_enabled() && length > MAX_MEMORY_COPY_SIZE as usize {
+            return Err(RuntimeError::new(format!(
+                "{} length exceeds maximum allowed size",
+                operation
+            )));
+        }
+
+        Ok(())
     }
 }

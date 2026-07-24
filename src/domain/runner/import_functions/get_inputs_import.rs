@@ -23,11 +23,17 @@ impl GetInputsImport {
             .clone()
             .ok_or(RuntimeError::new("Instance not found"))?;
 
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        env.charge_gas(&instance, &mut store, STATIC_GAS_COST)?;
 
         let result = &env.inputs_external.execute_empty_request(&env.runtime)?;
 
-        instance.use_gas(&mut store, result.len() as u64 * GAS_COST_PER_BYTE);
+        env.ensure_host_copy_size(result.len(), "Inputs response")?;
+
+        env.charge_gas(
+            &instance,
+            &mut store,
+            result.len() as u64 * GAS_COST_PER_BYTE,
+        )?;
 
         instance
             .write_memory(&store, result_ptr as u64, result)

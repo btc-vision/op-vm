@@ -28,13 +28,20 @@ impl GetCalldataImport {
 
         let calldata = &env.calldata.to_bytes();
 
-        instance.use_gas(
+        env.charge_gas(
+            &instance,
             &mut store,
             STATIC_GAS_COST + calldata.len() as u64 * GAS_COST_PER_BYTE,
-        );
+        )?;
 
-        DataSliceWriter::write_data_and_padding_to_memory(
-            &mut store, &instance, calldata, offset, length, result_ptr,
+        DataSliceWriter::write_data_and_padding_to_memory_with_limit(
+            &mut store,
+            &instance,
+            calldata,
+            offset,
+            length,
+            result_ptr,
+            env.is_strict_memory_metering_enabled(),
         )
     }
 }

@@ -85,6 +85,7 @@ impl VerifySignatureImport {
 
         Self::execute_inner(
             env.environment_variables.as_ref(),
+            env.is_strict_memory_metering_enabled(),
             store,
             instance,
             public_key_ptr,
@@ -96,6 +97,7 @@ impl VerifySignatureImport {
     /// Core dispatch logic, separated from FunctionEnvMut for testability.
     fn execute_inner(
         env_variables: Option<&crate::domain::runner::EnvironmentVariables>,
+        strict_memory_metering: bool,
         mut store: StoreMut,
         instance: InstanceWrapper,
         public_key_ptr: u32,
@@ -103,7 +105,12 @@ impl VerifySignatureImport {
         message_ptr: u32,
     ) -> Result<u32, RuntimeError> {
         // Base overhead: memory reads, header parsing, dispatch.
-        instance.use_gas(&mut store, STATIC_GAS_COST);
+        Self::charge_gas(
+            strict_memory_metering,
+            &instance,
+            &mut store,
+            STATIC_GAS_COST,
+        )?;
 
         // All key types use at least a 2-byte header. Schnorr only needs byte 0
         // but reading 2 bytes is harmless since byte 1 is just the first xonly byte.
@@ -116,8 +123,8 @@ impl VerifySignatureImport {
             .copied()
             .ok_or_else(|| RuntimeError::new("Error reading public key type byte"))?;
 
-        let env_variables = env_variables
-            .ok_or_else(|| RuntimeError::new("Environment variables not found"))?;
+        let env_variables =
+            env_variables.ok_or_else(|| RuntimeError::new("Environment variables not found"))?;
 
         let classical_signatures_allowed =
             env_variables.is_consensus_flag_set(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES);
@@ -138,7 +145,12 @@ impl VerifySignatureImport {
 
                 match ecdsa_subtype {
                     ECDSA_SUBTYPE_ETHEREUM => {
-                        instance.use_gas(&mut store, ECDSA_ETHEREUM_VERIFY_GAS_COST);
+                        Self::charge_gas(
+                            strict_memory_metering,
+                            &instance,
+                            &mut store,
+                            ECDSA_ETHEREUM_VERIFY_GAS_COST,
+                        )?;
                         Self::verify_ecdsa_ethereum(
                             store,
                             instance,
@@ -148,7 +160,12 @@ impl VerifySignatureImport {
                         )
                     }
                     ECDSA_SUBTYPE_BITCOIN => {
-                        instance.use_gas(&mut store, ECDSA_BITCOIN_VERIFY_GAS_COST);
+                        Self::charge_gas(
+                            strict_memory_metering,
+                            &instance,
+                            &mut store,
+                            ECDSA_BITCOIN_VERIFY_GAS_COST,
+                        )?;
                         Self::verify_ecdsa_bitcoin(
                             store,
                             instance,
@@ -168,7 +185,12 @@ impl VerifySignatureImport {
                     ));
                 }
 
-                instance.use_gas(&mut store, SCHNORR_VERIFY_GAS_COST);
+                Self::charge_gas(
+                    strict_memory_metering,
+                    &instance,
+                    &mut store,
+                    SCHNORR_VERIFY_GAS_COST,
+                )?;
 
                 Self::verify_schnorr_signature(
                     store,
@@ -195,7 +217,7 @@ impl VerifySignatureImport {
                     }
                 };
 
-                instance.use_gas(&mut store, mldsa_gas);
+                Self::charge_gas(strict_memory_metering, &instance, &mut store, mldsa_gas)?;
 
                 Self::verify_mldsa_signature(
                     store,
@@ -207,6 +229,20 @@ impl VerifySignatureImport {
                 )
             }
             _ => Err(RuntimeError::new("Unsupported public key type")),
+        }
+    }
+
+    fn charge_gas(
+        strict_memory_metering: bool,
+        instance: &InstanceWrapper,
+        store: &mut StoreMut,
+        gas_cost: u64,
+    ) -> Result<(), RuntimeError> {
+        if strict_memory_metering {
+            instance.try_use_gas(store, gas_cost)
+        } else {
+            instance.use_gas(store, gas_cost);
+            Ok(())
         }
     }
 
@@ -377,7 +413,7 @@ impl VerifySignatureImport {
             Ok(sig) => sig,
             Err(_e) => {
                 return Ok(0);
-            },
+            }
         };
 
         // BIP-0062: reject non-canonical high-S signatures.
@@ -389,7 +425,7 @@ impl VerifySignatureImport {
             Ok(key) => key,
             Err(_e) => {
                 return Ok(0);
-            },
+            }
         };
 
         let result = verifying_key.verify_prehash(&message_hash, &signature);
@@ -1746,15 +1782,20 @@ mod tests {
     /// use_gas / get_remaining_gas work correctly.
     fn create_test_instance() -> (wasmer::Store, InstanceWrapper) {
         let mut store = WasmerRunner::create_engine(MAX_PAGES).unwrap();
-        let wasm = wat::parse_str(
-            "(module (memory (export \"memory\") 1) (func (export \"noop\") nop))",
-        )
-        .unwrap();
+        let wasm =
+            wat::parse_str("(module (memory (export \"memory\") 1) (func (export \"noop\") nop))")
+                .unwrap();
         let module = Module::new(&store, &wasm).unwrap();
         let instance = Instance::new(&mut store, &module, &imports! {}).unwrap();
         let wrapper = InstanceWrapper::new(instance, TEST_GAS_LIMIT);
         wrapper.set_remaining_gas(&mut store, TEST_GAS_LIMIT);
         (store, wrapper)
+    }
+
+    fn create_test_instance_with_remaining_gas(gas: u64) -> (wasmer::Store, InstanceWrapper) {
+        let (mut store, instance) = create_test_instance();
+        instance.set_remaining_gas(&mut store, gas);
+        (store, instance)
     }
 
     fn env_with_quantum_flag() -> EnvironmentVariables {
@@ -1812,6 +1853,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -1835,6 +1877,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -1861,6 +1904,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -1888,6 +1932,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             None, // no environment variables
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -1916,6 +1961,7 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
@@ -1942,6 +1988,7 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
@@ -1968,6 +2015,7 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
@@ -1997,6 +2045,7 @@ mod tests {
 
         let _ = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance.clone(),
             0,
@@ -2006,6 +2055,109 @@ mod tests {
 
         let used = instance.get_used_gas(&mut store);
         assert_eq!(used, STATIC_GAS_COST);
+    }
+
+    #[test]
+    fn strict_verify_signature_traps_before_memory_read_when_static_gas_unpaid() {
+        let (mut store, instance) = create_test_instance_with_remaining_gas(STATIC_GAS_COST - 1);
+        let env = env_with_quantum_flag();
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            true,
+            store.as_store_mut(),
+            instance.clone(),
+            u32::MAX,
+            100,
+            200,
+        );
+
+        let err = result.unwrap_err();
+        assert!(
+            err.message().contains("out of gas"),
+            "expected out of gas before memory read, got: {}",
+            err.message()
+        );
+        assert_eq!(instance.get_remaining_gas(&mut store), 0);
+    }
+
+    #[test]
+    fn roswell_verify_signature_saturates_gas_and_continues_after_static_charge() {
+        let (mut store, instance) = create_test_instance_with_remaining_gas(STATIC_GAS_COST - 1);
+        let env = env_with_quantum_flag();
+
+        write_mem(&store, &instance, 0, &[0xFF, 0x00]);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            false,
+            store.as_store_mut(),
+            instance.clone(),
+            0,
+            100,
+            200,
+        );
+
+        let err = result.unwrap_err();
+        assert!(
+            err.message().contains("Unsupported public key type"),
+            "expected Roswell to continue past saturated gas, got: {}",
+            err.message()
+        );
+        assert_eq!(instance.get_remaining_gas(&mut store), 0);
+    }
+
+    #[test]
+    fn strict_verify_signature_traps_before_ecdsa_crypto_when_algorithm_gas_unpaid() {
+        let gas = STATIC_GAS_COST + ECDSA_ETHEREUM_VERIFY_GAS_COST - 1;
+        let (mut store, instance) = create_test_instance_with_remaining_gas(gas);
+        let env = env_with_quantum_flag();
+
+        write_mem(&store, &instance, 0, &[0x00, ECDSA_SUBTYPE_ETHEREUM]);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            true,
+            store.as_store_mut(),
+            instance.clone(),
+            0,
+            100,
+            200,
+        );
+
+        let err = result.unwrap_err();
+        assert!(
+            err.message().contains("out of gas"),
+            "expected out of gas before ECDSA verification, got: {}",
+            err.message()
+        );
+        assert_eq!(instance.get_remaining_gas(&mut store), 0);
+    }
+
+    #[test]
+    fn roswell_verify_signature_continues_to_ecdsa_memory_reads_after_algorithm_gas_saturates() {
+        let gas = STATIC_GAS_COST + ECDSA_ETHEREUM_VERIFY_GAS_COST - 1;
+        let (mut store, instance) = create_test_instance_with_remaining_gas(gas);
+        let env = env_with_quantum_flag();
+
+        write_mem(&store, &instance, 0, &[0x00, ECDSA_SUBTYPE_ETHEREUM]);
+
+        let result = VerifySignatureImport::execute_inner(
+            Some(&env),
+            false,
+            store.as_store_mut(),
+            instance.clone(),
+            0,
+            100,
+            200,
+        );
+
+        assert_eq!(
+            result.unwrap(),
+            0,
+            "expected Roswell to continue into ECDSA verification and fail normally"
+        );
+        assert_eq!(instance.get_remaining_gas(&mut store), 0);
     }
 
     #[test]
@@ -2033,6 +2185,7 @@ mod tests {
 
         let _ = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance.clone(),
             pk_ptr,
@@ -2069,6 +2222,7 @@ mod tests {
 
         let _ = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance.clone(),
             pk_ptr,
@@ -2085,12 +2239,8 @@ mod tests {
         let (mut store, instance) = create_test_instance();
         let env = env_with_quantum_flag();
 
-        let pk = hex_decode_32(
-            "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
-        );
-        let msg = hex_decode_32(
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        );
+        let pk = hex_decode_32("F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9");
+        let msg = hex_decode_32("0000000000000000000000000000000000000000000000000000000000000000");
         let sig = hex_decode_64(
             "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
              25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
@@ -2108,6 +2258,7 @@ mod tests {
 
         let _ = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance.clone(),
             pk_ptr,
@@ -2137,6 +2288,7 @@ mod tests {
 
             let _ = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance.clone(),
                 0,
@@ -2183,6 +2335,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             pk_ptr,
@@ -2217,6 +2370,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             pk_ptr,
@@ -2252,6 +2406,7 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
@@ -2291,6 +2446,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2340,6 +2496,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2371,6 +2528,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2405,6 +2563,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2438,6 +2597,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2473,6 +2633,7 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
@@ -2510,6 +2671,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2529,11 +2691,8 @@ mod tests {
 
         // Compressed key with all zeros (invalid point)
         let bad_key = vec![0x02; 33];
-        let pk_wire = build_ecdsa_pubkey_wire(
-            ECDSA_SUBTYPE_BITCOIN,
-            ECDSA_KEY_FORMAT_COMPRESSED,
-            &bad_key,
-        );
+        let pk_wire =
+            build_ecdsa_pubkey_wire(ECDSA_SUBTYPE_BITCOIN, ECDSA_KEY_FORMAT_COMPRESSED, &bad_key);
 
         write_mem(&store, &instance, 0, &pk_wire);
         write_mem(&store, &instance, 256, &sig);
@@ -2541,6 +2700,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2568,6 +2728,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2587,12 +2748,8 @@ mod tests {
         let (mut store, instance) = create_test_instance();
         let env = env_with_quantum_flag();
 
-        let pk = hex_decode_32(
-            "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
-        );
-        let msg = hex_decode_32(
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        );
+        let pk = hex_decode_32("F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9");
+        let msg = hex_decode_32("0000000000000000000000000000000000000000000000000000000000000000");
         let sig = hex_decode_64(
             "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
              25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
@@ -2606,6 +2763,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2621,12 +2779,9 @@ mod tests {
         let env = env_with_quantum_flag();
 
         // Use vector 1's public key with vector 0's signature/message
-        let wrong_pk = hex_decode_32(
-            "DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659",
-        );
-        let msg = hex_decode_32(
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        );
+        let wrong_pk =
+            hex_decode_32("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659");
+        let msg = hex_decode_32("0000000000000000000000000000000000000000000000000000000000000000");
         let sig = hex_decode_64(
             "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
              25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0",
@@ -2640,6 +2795,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2654,12 +2810,9 @@ mod tests {
         let (mut store, instance) = create_test_instance();
         let env = env_with_quantum_flag();
 
-        let pk = hex_decode_32(
-            "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9",
-        );
-        let mut msg = hex_decode_32(
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        );
+        let pk = hex_decode_32("F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9");
+        let mut msg =
+            hex_decode_32("0000000000000000000000000000000000000000000000000000000000000000");
         msg[0] = 0xFF; // corrupt
         let sig = hex_decode_64(
             "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215\
@@ -2674,6 +2827,7 @@ mod tests {
 
         let result = VerifySignatureImport::execute_inner(
             Some(&env),
+            false,
             store.as_store_mut(),
             instance,
             0,
@@ -2710,13 +2864,19 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
                 256,
                 512,
             );
-            assert_eq!(result.unwrap(), 1, "Ethereum verify failed at index {}", idx);
+            assert_eq!(
+                result.unwrap(),
+                1,
+                "Ethereum verify failed at index {}",
+                idx
+            );
         }
     }
 
@@ -2743,6 +2903,7 @@ mod tests {
 
             let result = VerifySignatureImport::execute_inner(
                 Some(&env),
+                false,
                 store.as_store_mut(),
                 instance,
                 0,
@@ -2752,5 +2913,4 @@ mod tests {
             assert_eq!(result.unwrap(), 1, "Bitcoin verify failed at index {}", idx);
         }
     }
-
 }

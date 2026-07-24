@@ -1,4 +1,4 @@
-use crate::domain::runner::ExitData;
+use crate::domain::runner::{ConsensusFlags, ExitData};
 use crate::interfaces::neon::bitcoin_network_request::BitcoinNetworkRequest;
 use crate::interfaces::neon::contract::Contract;
 use crate::interfaces::neon::contract::ContractParameter;
@@ -11,8 +11,8 @@ use neon::types::JsBigInt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::INNER;
 use crate::interfaces::neon::hard_fork_request::HardForkRequest;
+use crate::INNER;
 
 pub struct ContractManager {
     contracts: HashMap<u64, Contract>,
@@ -122,7 +122,8 @@ impl ContractManager {
             BitcoinNetworkRequest::try_from(network_number).or_else(|e| cx.throw_range_error(e))?;
 
         let hard_fork_number = cx.argument::<JsNumber>(7)?.value(&mut cx) as u8;
-        let hard_fork = HardForkRequest::try_from(hard_fork_number).or_else(|e| cx.throw_range_error(e))?;
+        let hard_fork =
+            HardForkRequest::try_from(hard_fork_number).or_else(|e| cx.throw_range_error(e))?;
 
         let is_debug_mode = cx.argument::<JsBoolean>(8)?.value(&mut cx);
 
@@ -133,6 +134,16 @@ impl ContractManager {
             .map(|v| v.value(&mut cx))
             .unwrap_or(false);
 
+        // Optional 10th argument: consensusFlags (defaults to Roswell / none)
+        let consensus_flags = cx
+            .argument_opt(9)
+            .and_then(|v| v.downcast::<JsBigInt, _>(&mut cx).ok())
+            .map(|v| v.to_u64(&mut cx))
+            .transpose()
+            .or_else(|e| cx.throw_range_error(e.to_string()))?
+            .map(ConsensusFlags::from_u64)
+            .unwrap_or(ConsensusFlags::NONE);
+
         let mut params = ContractParameter {
             bytecode: None,
             serialized: None,
@@ -142,11 +153,13 @@ impl ContractManager {
             network,
             hard_fork,
             is_debug_mode,
+            consensus_flags,
         };
 
+        let cache_key = Self::contract_cache_key(&address, consensus_flags);
         let mut should_cache = false;
         if !bypass_cache {
-            if let Some(serialized) = manager.contract_cache.get(&address) {
+            if let Some(serialized) = manager.contract_cache.get(&cache_key) {
                 params.serialized = Some(serialized.clone());
             } else {
                 let bc = bytecode
@@ -171,7 +184,7 @@ impl ContractManager {
             let serialized = contract
                 .serialize()
                 .or_else(|err| cx.throw_error(err.to_string()))?;
-            manager.contract_cache.insert(address, serialized);
+            manager.contract_cache.insert(cache_key, serialized);
         }
 
         manager.add_contract(reserved_id, contract);
@@ -588,6 +601,15 @@ impl ContractManager {
         id
     }
 
+    fn contract_cache_key(address: &str, consensus_flags: ConsensusFlags) -> String {
+        let metering_version = if consensus_flags.contains(ConsensusFlags::STRICT_MEMORY_METERING) {
+            "strict-memory"
+        } else {
+            "roswell"
+        };
+        format!("{address}:{metering_version}")
+    }
+
     pub fn get_contract(&self, id: u64) -> anyhow::Result<&Contract> {
         self.contracts
             .get(&id)
@@ -660,5 +682,33 @@ impl ContractManager {
         self.contracts.clear();
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contract_cache_key_separates_roswell_and_strict_memory_metering_artifacts() {
+        let address = "010203";
+
+        let roswell_key = ContractManager::contract_cache_key(address, ConsensusFlags::NONE);
+        let strict_key =
+            ContractManager::contract_cache_key(address, ConsensusFlags::STRICT_MEMORY_METERING);
+
+        assert_eq!(roswell_key, "010203:roswell");
+        assert_eq!(strict_key, "010203:strict-memory");
+        assert_ne!(roswell_key, strict_key);
+    }
+
+    #[test]
+    fn contract_cache_key_uses_strict_bucket_when_strict_flag_is_combined_with_other_flags() {
+        let flags =
+            ConsensusFlags::STRICT_MEMORY_METERING | ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES;
+
+        let key = ContractManager::contract_cache_key("abcdef", flags);
+
+        assert_eq!(key, "abcdef:strict-memory");
     }
 }
