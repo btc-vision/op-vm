@@ -1,6 +1,9 @@
 use crate::domain::runner::{EnvironmentVariables, ExitData, ExtendedMemoryAccessError};
 
-pub trait ContractRunner: Send + Sync {
+// `Send` only: runners are always reached through `Arc<Mutex<..>>`, and `Mutex<T>: Sync`
+// already follows from `T: Send`. Requiring `Sync` here would force implementors to claim
+// shared cross-thread access to a wasmer `Store`, which is not sound (see `WasmerRunner`).
+pub trait ContractRunner: Send {
     fn set_environment_variables(&mut self, environment_variables: EnvironmentVariables);
     fn on_deploy(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData>;
     fn on_update(&mut self, calldata: Vec<u8>, max_gas: u64) -> anyhow::Result<ExitData>;

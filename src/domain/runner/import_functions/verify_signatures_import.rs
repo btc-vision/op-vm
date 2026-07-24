@@ -583,9 +583,7 @@ mod tests {
     // =========================================================================
 
     fn sign_ethereum(sk: &SigningKey, hash: &[u8; 32]) -> ([u8; 65], RecoveryId) {
-        let (sig, rid) = sk
-            .sign_prehash_recoverable(hash)
-            .expect("signing must succeed");
+        let (sig, rid) = sk.sign_prehash_recoverable(hash);
 
         let mut wire = [0u8; 65];
         wire[..64].copy_from_slice(&sig.to_bytes());
@@ -598,9 +596,7 @@ mod tests {
     // =========================================================================
 
     fn sign_bitcoin(sk: &SigningKey, hash: &[u8; 32]) -> [u8; 64] {
-        let (sig, _) = sk
-            .sign_prehash_recoverable(hash)
-            .expect("signing must succeed");
+        let (sig, _) = sk.sign_prehash_recoverable(hash);
 
         let normalized = sig.normalize_s();
         let mut compact = [0u8; 64];
@@ -1054,7 +1050,7 @@ mod tests {
         let vk = *sk.verifying_key();
         let msg = test_message_hash();
 
-        let (raw_sig, _) = sk.sign_prehash_recoverable(&msg).unwrap();
+        let (raw_sig, _) = sk.sign_prehash_recoverable(&msg);
         let normalized = raw_sig.normalize_s();
         assert!(vk.verify_prehash(&msg, &normalized).is_ok());
     }
@@ -1081,7 +1077,7 @@ mod tests {
         let msg = test_message_hash();
         for idx in 1u8..=50 {
             let sk = signing_key_at_index(idx);
-            let (sig, _) = sk.sign_prehash_recoverable(&msg).unwrap();
+            let (sig, _) = sk.sign_prehash_recoverable(&msg);
             let normalized = sig.normalize_s();
             let double = normalized.normalize_s();
 

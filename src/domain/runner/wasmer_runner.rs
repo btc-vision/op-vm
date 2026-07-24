@@ -40,6 +40,25 @@ pub struct WasmerRunner {
     env: FunctionEnv<CustomEnv>,
 }
 
+// SAFETY: wasmer 7.1 provided `unsafe impl Send for Store` (and `Sync`) directly;
+// 7.2.0 removed both, so we re-assert the narrower half we actually rely on here.
+//
+// This is sound for how the runner is used:
+//   * A `WasmerRunner` exclusively owns its `Store`, `Module`, `InstanceWrapper` and
+//     `FunctionEnv`. None of them are shared with another runner, so moving the runner
+//     moves the whole VM state as one unit, leaving no references behind.
+//   * Every access goes through `Arc<Mutex<..>>` (see `ContractService` and `Contract`),
+//     so at most one thread ever touches the store at a time. The neon layer moves a
+//     `Contract` into a worker thread per call; the store is transferred between threads
+//     but never used from two concurrently.
+//   * wasmer's sys backend installs its trap handler process-wide and keeps the per-call
+//     unwind state in thread-locals set up inside `catch_traps`, so running a store on a
+//     different thread than the one that created it is supported.
+//
+// We deliberately do NOT assert `Sync`: nothing here needs shared cross-thread access to
+// a store, and `Mutex<T>: Sync` already follows from `T: Send`.
+unsafe impl Send for WasmerRunner {}
+
 impl WasmerRunner {
     pub fn from_bytecode(
         bytecode: &[u8],

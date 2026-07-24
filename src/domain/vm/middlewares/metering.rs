@@ -204,7 +204,10 @@ impl<F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync + 'static> Module
     for Metering<F>
 {
     /// Generates a `FunctionMiddleware` for a given function.
-    fn generate_function_middleware(&self, _: LocalFunctionIndex) -> Box<dyn FunctionMiddleware> {
+    fn generate_function_middleware<'a>(
+        &self,
+        _: LocalFunctionIndex,
+    ) -> Box<dyn FunctionMiddleware<'a> + 'a> {
         Box::new(FunctionMetering {
             cost_function: self.cost_function.clone(),
             global_indexes: self.global_indexes.lock().unwrap().clone().unwrap(),
@@ -526,11 +529,11 @@ where
 const LOG2_BYTE_BLOCK: i32 = 4; // 2⁴ = 16 bytes
 const LOG2_ELEM_BLOCK: i32 = 0; // 1 element
 
-impl<F> FunctionMiddleware for FunctionMetering<F>
+impl<'a, F> FunctionMiddleware<'a> for FunctionMetering<F>
 where
     F: Fn(&Operator, Option<(u32, u32)>) -> u64 + Send + Sync,
 {
-    fn feed<'a>(
+    fn feed(
         &mut self,
         operator: Operator<'a>,
         state: &mut MiddlewareReaderState<'a>,

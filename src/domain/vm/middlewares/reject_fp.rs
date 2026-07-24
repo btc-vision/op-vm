@@ -13,8 +13,8 @@ impl Debug for RejectFP {
     }
 }
 
-impl FunctionMiddleware for RejectFP {
-    fn feed<'a>(
+impl<'a> FunctionMiddleware<'a> for RejectFP {
+    fn feed(
         &mut self,
         op: Operator<'a>,
         state: &mut MiddlewareReaderState<'a>,
@@ -152,7 +152,10 @@ impl Debug for RejectFPMiddleware {
 }
 
 impl ModuleMiddleware for RejectFPMiddleware {
-    fn generate_function_middleware(&self, _: LocalFunctionIndex) -> Box<dyn FunctionMiddleware> {
+    fn generate_function_middleware<'a>(
+        &self,
+        _: LocalFunctionIndex,
+    ) -> Box<dyn FunctionMiddleware<'a> + 'a> {
         Box::<RejectFP>::default()
     }
 }
