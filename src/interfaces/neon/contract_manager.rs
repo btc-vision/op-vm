@@ -641,14 +641,18 @@ impl ContractManager {
         self.get_contract(contract_id)?.read_memory(offset, length)
     }
 
+    pub fn get_contract_mut(&mut self, id: u64) -> anyhow::Result<&mut Contract> {
+        self.contracts
+            .get_mut(&id)
+            .ok_or(anyhow::anyhow!("Contract not found"))
+    }
+
     pub fn set_environment_variables(
         &mut self,
         contract_id: u64,
         environment_variables: EnvironmentVariablesRequest,
     ) -> anyhow::Result<()> {
-        self.contracts
-            .get_mut(&contract_id)
-            .unwrap()
+        self.get_contract_mut(contract_id)?
             .set_environment_variables(environment_variables)?;
 
         Ok(())
