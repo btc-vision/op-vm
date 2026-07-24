@@ -3,7 +3,7 @@ name = "op-vm"
 version = "1.0.0"
 edition = "2021"
 build = "build.rs"
-rust-version = "1.93.1"
+rust-version = "1.97.1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
