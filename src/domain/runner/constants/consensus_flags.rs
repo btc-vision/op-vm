@@ -11,8 +11,6 @@ impl ConsensusFlags {
 
     pub const STRICT_MEMORY_METERING: Self = Self(0b00000100);
 
-    pub const RESERVED_FLAG_2: Self = Self::STRICT_MEMORY_METERING;
-
     pub const fn new() -> Self {
         Self::NONE
     }
@@ -170,17 +168,17 @@ mod tests {
 
         assert!(flags.contains(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES));
         assert!(flags.contains(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS));
-        assert!(!flags.contains(ConsensusFlags::RESERVED_FLAG_2));
+        assert!(!flags.contains(ConsensusFlags::STRICT_MEMORY_METERING));
 
-        flags.insert(ConsensusFlags::RESERVED_FLAG_2);
-        assert!(flags.contains(ConsensusFlags::RESERVED_FLAG_2));
+        flags.insert(ConsensusFlags::STRICT_MEMORY_METERING);
+        assert!(flags.contains(ConsensusFlags::STRICT_MEMORY_METERING));
 
         flags.remove(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS);
         assert!(!flags.contains(ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS));
 
         let combined = ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES
             | ConsensusFlags::UPDATE_CONTRACT_BY_ADDRESS
-            | ConsensusFlags::RESERVED_FLAG_2;
+            | ConsensusFlags::STRICT_MEMORY_METERING;
 
         assert_eq!(combined.as_u64(), 0b00000111);
     }
@@ -189,7 +187,7 @@ mod tests {
     fn test_from_u64() {
         let flags = ConsensusFlags::from_u64(0b00000101);
         assert!(flags.contains(ConsensusFlags::ALLOW_CLASSICAL_SIGNATURES));
-        assert!(flags.contains(ConsensusFlags::RESERVED_FLAG_2));
+        assert!(flags.contains(ConsensusFlags::STRICT_MEMORY_METERING));
     }
 
     #[test]

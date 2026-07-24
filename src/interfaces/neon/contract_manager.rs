@@ -136,7 +136,7 @@ impl ContractManager {
 
         // Optional 10th argument: consensusFlags (defaults to Roswell / none)
         let consensus_flags = cx
-            .argument_opt(9)
+            .argument_opt(10)
             .and_then(|v| v.downcast::<JsBigInt, _>(&mut cx).ok())
             .map(|v| v.to_u64(&mut cx))
             .transpose()
