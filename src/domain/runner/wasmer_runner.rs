@@ -76,7 +76,7 @@ impl WasmerRunner {
         }
 
         let store = Self::create_engine_with_consensus_flags(max_pages, consensus_flags)?;
-        let module = Module::from_binary(&store, &bytecode)?;
+        let module = Self::compile_module_catch_panic(&store, &bytecode)?;
         if consensus_flags.contains(ConsensusFlags::STRICT_MEMORY_METERING) {
             Self::validate_module_for_strict_memory_metering(&module, max_pages)?;
         }
@@ -158,12 +158,47 @@ impl WasmerRunner {
         features.module_linking = false; // https://github.com/WebAssembly/module-linking/blob/main/proposals/module-linking/Explainer.md
         features.bulk_memory = true;
 
-        // Ok
-        features.simd = true;
+        // DoS: singlepass 7.2.0 is NOT SIMD-complete. `emit_call_native`
+        // (wasmer-compiler-singlepass/src/codegen.rs:702) hits `unimplemented!()` for any
+        // `WpType::V128` operand, so a module that routes a v128 through a native/host call path
+        // panics *during compilation* (`Module::from_binary`). That panic unwinds across the neon
+        // FFI boundary and kills the whole node process, taking every RPC sub-worker with it — a
+        // trivial remote DoS reachable by any deploy/call. Advertising `simd = false` makes the
+        // validator reject every v128 type/opcode deterministically before codegen ever runs, so
+        // the panic path is unreachable. Re-enable ONLY once singlepass fully implements SIMD.
+        features.simd = false;
         features.multi_value = true;
         features.extended_const = true;
 
         features
+    }
+
+    /// Compile untrusted bytecode while treating a compiler panic as a normal error.
+    ///
+    /// `Module::from_binary` runs the singlepass codegen, which still contains `unimplemented!()`
+    /// / `panic!()` paths (e.g. `emit_call_native` on `V128`). Without this guard such a panic
+    /// unwinds across the neon FFI boundary and aborts the whole node process. Turning it into an
+    /// `Err` keeps the failure scoped to the offending transaction, deterministically, on every
+    /// node. This is defense-in-depth behind the feature gating in `get_features`.
+    fn compile_module_catch_panic(store: &Store, bytecode: &[u8]) -> anyhow::Result<Module> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Module::from_binary(store, bytecode)
+        }))
+        .map_err(|_| anyhow::anyhow!("wasm compilation panicked (rejected bytecode)"))?
+        .map_err(Into::into)
+    }
+
+    /// Deserialize a previously compiled module, guarding against a panic in the deserializer/loader
+    /// the same way `compile_module_catch_panic` guards `from_binary`.
+    unsafe fn deserialize_module_catch_panic(
+        store: &Store,
+        serialized: Bytes,
+    ) -> anyhow::Result<Module> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            Module::deserialize(store, serialized)
+        }))
+        .map_err(|_| anyhow::anyhow!("wasm module deserialization panicked (rejected module)"))?
+        .map_err(Into::into)
     }
 
     pub fn serialize(&self) -> anyhow::Result<Bytes, SerializeError> {
@@ -194,7 +229,7 @@ impl WasmerRunner {
             max_pages,
             strict_memory_metering,
         ));
-        let module = Module::deserialize(&store, serialized)?;
+        let module = Self::deserialize_module_catch_panic(&store, serialized)?;
         if strict_memory_metering {
             Self::validate_module_for_strict_memory_metering(&module, max_pages)?;
         }
@@ -824,6 +859,42 @@ mod tests {
     use super::*;
     use crate::domain::runner::MAX_PAGES;
     use wasmer::{imports, Instance};
+
+    /// Root-cause guard for the singlepass V128 codegen panic (codegen.rs:702 `unimplemented!()`).
+    /// With `simd = false`, a module whose function signature uses `v128` must be rejected at
+    /// validation inside `Module::from_binary` — it must NOT reach codegen and must NOT panic.
+    #[test]
+    fn rejects_simd_v128_module_without_panicking() {
+        // A function that takes a v128 param; this is exactly the shape that drove
+        // `emit_call_native` into `unimplemented!()` when simd was enabled.
+        let wasm = wat::parse_str(
+            r#"
+            (module
+              (func $sink (param v128))
+              (func (export "execute")
+                v128.const i32x4 0 0 0 0
+                call $sink)
+            )
+            "#,
+        )
+        .unwrap();
+
+        let store = WasmerRunner::create_engine(MAX_PAGES).unwrap();
+
+        // Wrap in catch_unwind so a regression (panic instead of clean error) fails the test
+        // loudly instead of aborting the test binary.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Module::from_binary(&store, &wasm)
+        }));
+
+        let compile = result.expect("compiling a v128 module must not panic");
+        let err = compile.expect_err("a v128 module must be rejected when simd is disabled");
+        // wasmparser rejects the v128 valtype at validation; assert it never reached codegen.
+        assert!(
+            !err.to_string().to_lowercase().contains("unimplemented"),
+            "reached singlepass codegen instead of failing validation: {err}"
+        );
+    }
 
     #[test]
     fn strict_validation_rejects_table_minimum_above_limit() {

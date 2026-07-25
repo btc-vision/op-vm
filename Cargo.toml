@@ -47,4 +47,4 @@ reference-types = ["table-metering"]
 
 [profile.release]
 strip = "symbols"
-panic = "abort"
+panic = "unwind"
