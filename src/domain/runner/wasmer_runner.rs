@@ -170,6 +170,15 @@ impl WasmerRunner {
         features.multi_value = true;
         features.extended_const = true;
 
+        // Experimental "Wide Arithmetic" proposal (i64.add128 / i64.mul_wide128 / ...). Non-standard
+        // and not covered by the metering middleware's opcode gas table, so it must not be reachable
+        // by untrusted contracts. `Features::default()` currently leaves it off, but pin it
+        // explicitly so a future wasmer default flip can't silently enable an unmetered opcode class.
+        features.wide_arithmetic = false;
+
+        // INVARIANT: every field of `wasmer_types::Features` (13 total) is now set explicitly above.
+        // Do NOT rely on `Features::default()` for any of them — a new proposal added upstream must
+        // be reviewed and explicitly gated here before it can ever be accepted from contract bytecode.
         features
     }
 

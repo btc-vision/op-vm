@@ -74,8 +74,15 @@ pub trait ExternalFunction<R: Sized + Send + Sync> {
                 })?;
 
                 let failure = JsFunction::new(&mut cx, move |mut cx| {
-                    let result = cx.argument::<JsError>(0)?;
-                    let msg = result.to_string(&mut cx).unwrap().value(&mut cx);
+                    let result = cx.argument::<JsValue>(0)?;
+                    // The rejection reason is arbitrary JS; its `toString` can itself throw (thrown
+                    // object / Proxy / getter). `try_catch` contains that so a hostile rejection
+                    // can't panic this closure and abort the whole node on the event-loop thread.
+                    let msg = cx
+                        .try_catch(|cx| Ok(result.to_string(cx)?.value(cx)))
+                        .unwrap_or_else(|_| {
+                            "Host callback rejected with a non-stringifiable error".to_string()
+                        });
                     let _ = failure.send(Err(RuntimeError::new(msg)));
                     Ok(cx.undefined())
                 })?;

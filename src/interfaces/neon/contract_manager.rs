@@ -385,22 +385,30 @@ impl ContractManager {
         let channel = cx.channel();
 
         // Call task on background
-        let contract = inner
+        let manager = inner
             .lock()
-            .unwrap()
+            .or_else(|err| cx.throw_error(err.to_string()))?;
+        let contract = manager
             .get_contract(contract_id)
-            .unwrap()
+            .or_else(|err| cx.throw_error(err.to_string()))?
             .clone();
+        drop(manager);
 
         std::thread::spawn(move || {
             let result = contract.on_deploy(calldata);
 
             // Sync with main JS thread
             channel.send(move |mut cx| match result {
-                Ok(exit_data) => {
-                    let result = exit_data.to_js_object(&mut cx).unwrap();
-                    Ok(deferred.resolve(&mut cx, result))
-                }
+                // Building the JS object can throw (e.g. buffer allocation for large exit data).
+                // This closure runs on the Node event-loop thread, so an `.unwrap()` panic here
+                // would abort the whole process. `try_catch` turns a throw into a promise rejection.
+                Ok(exit_data) => match cx.try_catch(|cx| exit_data.to_js_object(cx)) {
+                    Ok(result) => Ok(deferred.resolve(&mut cx, result)),
+                    Err(err) => {
+                        deferred.reject(&mut cx, err);
+                        Ok(())
+                    }
+                },
                 Err(err) => {
                     let error = cx.string(err.to_string());
                     deferred.reject(&mut cx, error);
@@ -427,22 +435,30 @@ impl ContractManager {
         let channel = cx.channel();
 
         // Call task on background
-        let contract = inner
+        let manager = inner
             .lock()
-            .unwrap()
+            .or_else(|err| cx.throw_error(err.to_string()))?;
+        let contract = manager
             .get_contract(contract_id)
-            .unwrap()
+            .or_else(|err| cx.throw_error(err.to_string()))?
             .clone();
+        drop(manager);
 
         std::thread::spawn(move || {
             let result = contract.on_update(calldata);
 
             // Sync with main JS thread
             channel.send(move |mut cx| match result {
-                Ok(exit_data) => {
-                    let result = exit_data.to_js_object(&mut cx).unwrap();
-                    Ok(deferred.resolve(&mut cx, result))
-                }
+                // Building the JS object can throw (e.g. buffer allocation for large exit data).
+                // This closure runs on the Node event-loop thread, so an `.unwrap()` panic here
+                // would abort the whole process. `try_catch` turns a throw into a promise rejection.
+                Ok(exit_data) => match cx.try_catch(|cx| exit_data.to_js_object(cx)) {
+                    Ok(result) => Ok(deferred.resolve(&mut cx, result)),
+                    Err(err) => {
+                        deferred.reject(&mut cx, err);
+                        Ok(())
+                    }
+                },
                 Err(err) => {
                     let error = cx.string(err.to_string());
                     deferred.reject(&mut cx, error);
@@ -467,22 +483,30 @@ impl ContractManager {
         let calldata = cx.argument::<JsBuffer>(1)?.as_slice(&mut cx).to_vec();
         let (deferred, promise) = cx.promise();
         let channel = cx.channel();
-        let contract = inner
+        let manager = inner
             .lock()
-            .unwrap()
+            .or_else(|err| cx.throw_error(err.to_string()))?;
+        let contract = manager
             .get_contract(contract_id)
-            .unwrap()
+            .or_else(|err| cx.throw_error(err.to_string()))?
             .clone();
+        drop(manager);
 
         std::thread::spawn(move || {
             let result = contract.execute(calldata);
 
             // Sync with main JS thread
             channel.send(move |mut cx| match result {
-                Ok(exit_data) => {
-                    let result = exit_data.to_js_object(&mut cx).unwrap();
-                    Ok(deferred.resolve(&mut cx, result))
-                }
+                // Building the JS object can throw (e.g. buffer allocation for large exit data).
+                // This closure runs on the Node event-loop thread, so an `.unwrap()` panic here
+                // would abort the whole process. `try_catch` turns a throw into a promise rejection.
+                Ok(exit_data) => match cx.try_catch(|cx| exit_data.to_js_object(cx)) {
+                    Ok(result) => Ok(deferred.resolve(&mut cx, result)),
+                    Err(err) => {
+                        deferred.reject(&mut cx, err);
+                        Ok(())
+                    }
+                },
                 Err(err) => {
                     let string = err.to_string();
                     let error = cx.error(string.clone())?;

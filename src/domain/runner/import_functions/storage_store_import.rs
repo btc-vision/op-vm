@@ -39,7 +39,9 @@ impl StorageStoreImport {
             .storage_store_external
             .execute(&[key, value].concat(), &env.runtime)?;
 
-        let is_slot_warm = resp[0] == 1;
+        // Bounds-check before indexing so an empty/malformed host response is a scoped error
+        // instead of an out-of-bounds panic that unwinds the VM.
+        let is_slot_warm = resp.first().copied().unwrap_or(0) == 1;
 
         let gas_cost: u64 = match env.hard_fork {
             HardFork::Roswell => STORAGE_STORE_GAS_COST_ROSWELL,

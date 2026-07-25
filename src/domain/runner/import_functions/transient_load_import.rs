@@ -32,10 +32,13 @@ impl TransientLoadImport {
             .read_memory(&store, key_ptr as u64, 32)
             .map_err(|_e| RuntimeError::new("Error reading storage key from memory"))?;
 
-        // Get method
-        let result = env
-            .transient_storage
-            .get(data.as_slice().try_into().unwrap());
+        // Get method. `read_memory(.., 32)` returns exactly 32 bytes today, but bounds-check the
+        // conversion anyway so a future change can never turn this into an unwrap panic.
+        let key: &[u8; 32] = data
+            .as_slice()
+            .try_into()
+            .map_err(|_e| RuntimeError::new("Invalid transient storage key length"))?;
+        let result = env.transient_storage.get(key);
 
         instance
             .write_memory(&store, result_ptr as u64, &result)

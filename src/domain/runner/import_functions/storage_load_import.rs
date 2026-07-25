@@ -34,6 +34,13 @@ impl StorageLoadImport {
 
         let response = env.storage_load_external.execute(&key, &env.runtime)?;
 
+        // The host response must be 32 value bytes + 1 warm flag. Bounds-check before indexing so a
+        // short/malformed response is a scoped error, not an out-of-bounds panic that unwinds the VM.
+        if response.len() < 33 {
+            return Err(RuntimeError::new(
+                "Invalid storage load response: expected at least 33 bytes",
+            ));
+        }
         let value = response[0..32]
             .try_into()
             .map_err(|e| RuntimeError::new(format!("Cannot map result to data: {:?}", e)))?;
